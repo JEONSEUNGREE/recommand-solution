@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+*.log
+
+# HuggingFace cache (모델 파일 큼)
+.cache/
+models/
