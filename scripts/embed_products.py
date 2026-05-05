@@ -1,6 +1,7 @@
 """상품 텍스트 → 벡터 임베딩 → product_embeddings 테이블 upsert.
 
-로컬 sentence-transformers (한국어 지원, 384차원).
+기본 모델: BAAI/bge-m3 (한국어 강력, 1024차원, 다국어)
+허깅페이스에서 자동 다운로드됨 (~2.3GB).
 """
 import os
 import time
@@ -11,8 +12,9 @@ from pgvector.psycopg import register_vector
 from sentence_transformers import SentenceTransformer
 
 DB_DSN = os.getenv("DB_DSN", "postgresql://app:app@localhost:5433/recommend")
-MODEL_NAME = os.getenv("EMBED_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-BATCH = int(os.getenv("BATCH", "128"))
+MODEL_NAME = os.getenv("EMBED_MODEL", "BAAI/bge-m3")
+BATCH = int(os.getenv("BATCH", "32"))
+EXPECTED_DIM = int(os.getenv("EXPECTED_DIM", "1024"))
 
 
 def build_text(row) -> str:
@@ -44,7 +46,7 @@ def main():
     model = SentenceTransformer(MODEL_NAME)
     dim = model.get_sentence_embedding_dimension()
     print(f"  → embedding dim = {dim}")
-    assert dim == 384, "schema expects vector(384)"
+    assert dim == EXPECTED_DIM, f"schema expects vector({EXPECTED_DIM}), model dim={dim}"
 
     print(f"Connecting → {DB_DSN}")
     with psycopg.connect(DB_DSN, autocommit=False) as conn:

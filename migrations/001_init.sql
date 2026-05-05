@@ -33,7 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_products_stock      ON products(stock) WHERE stoc
 
 CREATE TABLE IF NOT EXISTS product_embeddings (
     product_id      BIGINT PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
-    embedding       vector(384),
+    embedding       vector(1024),
     embedded_text   TEXT NOT NULL,
     model           TEXT NOT NULL,
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()

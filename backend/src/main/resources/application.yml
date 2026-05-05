@@ -1,0 +1,27 @@
+server:
+  port: 8090
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/recommend
+    username: app
+    password: app
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+
+app:
+  embedder:
+    base-url: http://127.0.0.1:8001
+    timeout-ms: 30000
+  llm:
+    # OpenAI 호환 Chat Completions 형식. Groq / OpenAI / Together / OpenRouter 등.
+    base-url: ${LLM_BASE_URL:https://api.groq.com/openai/v1}
+    api-key: ${LLM_API_KEY:${GROQ_API_KEY:}}
+    model: ${LLM_MODEL:llama-3.3-70b-versatile}
+    timeout-ms: 60000
+
+logging:
+  level:
+    com.example.recommend: DEBUG
+    org.springframework.jdbc.core.JdbcTemplate: DEBUG

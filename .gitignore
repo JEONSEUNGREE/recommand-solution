@@ -2,9 +2,27 @@
 __pycache__/
 *.pyc
 .env
+.env.local
 .DS_Store
 *.log
 
-# HuggingFace cache (모델 파일 큼)
+# HuggingFace 모델 캐시
 .cache/
 models/
+
+# Gradle / Spring Boot
+backend/.gradle/
+backend/build/
+backend/bin/
+backend/out/
+
+# Next.js
+frontend/.next/
+frontend/node_modules/
+frontend/out/
+frontend/.turbo/
+
+# IDE
+.idea/
+.vscode/
+*.iml

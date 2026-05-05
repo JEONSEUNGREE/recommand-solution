@@ -4,7 +4,8 @@ from sentence_transformers import SentenceTransformer
 from .db import get_conn
 
 _model: SentenceTransformer | None = None
-EMBED_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+import os
+EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-m3")
 
 
 def embedder() -> SentenceTransformer:

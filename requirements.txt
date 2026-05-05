@@ -1,6 +1,14 @@
 psycopg[binary]==3.2.3
 pgvector==0.3.6
+
+# Embedding stack
+# Intel Mac 호환: torch 2.2.2 가 마지막 → transformers<4.50, numpy<2 로 고정
+# Apple Silicon / Linux 면 위 핀 풀고 최신으로 가도 OK
+numpy<2
+torch==2.2.2
+transformers<4.50
 sentence-transformers==3.3.1
+
 fastapi==0.115.5
 uvicorn==0.32.1
 pydantic==2.10.3
