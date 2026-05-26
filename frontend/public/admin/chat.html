@@ -1245,17 +1245,36 @@
         total_duration_ms: log.total_duration_ms,
         result_count: cnt,
       });
-      // backend 라벨에서 hybrid 모드/융합/α 파싱 (예: "bge+sparse:rrf(a=0.5)")
-      // → 이력 클릭 시에도 메타가 살아있어 사유 팝업의 단어 상세보기가 가능해짐.
+      // backend 라벨에서 hybrid 모드/융합/가중치 파싱.
+      // 신규 포맷: "bge+ds:rrf(d=0.5,s=0.5)" / "bge+dsm:alpha(d=0.33,s=0.33,m=0.33)"
+      // 구 포맷(하위호환): "bge+sparse:rrf(a=0.5)"
+      // → 이력 클릭 시에도 메타가 살아있어 사유 팝업의 분해/단어 상세가 동작.
       let histMeta = null;
       const be = String(log.backend || '');
-      const m = be.match(/sparse:(\w+)\(a=([\d.]+)\)/);
-      if (m) histMeta = { mode: 'hybrid', fusion: m[1], alpha: parseFloat(m[2]), query: log.query || '' };
+      let mm = be.match(/\+(dsm?):(\w+)\(([^)]*)\)/);   // 신규 ds / dsm
+      if (mm) {
+        const sig = mm[1], fusion = mm[2], wstr = mm[3];
+        const wd = (wstr.match(/d=([\d.]+)/) || [])[1];
+        const ws = (wstr.match(/s=([\d.]+)/) || [])[1];
+        const wmm = (wstr.match(/m=([\d.]+)/) || [])[1];
+        histMeta = {
+          mode: 'hybrid', fusion,
+          alpha: wd != null ? parseFloat(wd) : 0.5,
+          use_morpheme: sig === 'dsm',
+          weights: { dense: wd ? +wd : null, sparse: ws ? +ws : null, morpheme: wmm ? +wmm : null },
+          query: log.query || '',
+        };
+      } else {
+        const m = be.match(/sparse:(\w+)\(a=([\d.]+)\)/);  // 구 포맷
+        if (m) histMeta = { mode: 'hybrid', fusion: m[1], alpha: parseFloat(m[2]),
+                            use_morpheme: false, query: log.query || '' };
+      }
 
       recoStore.set(pId, { items, query_coord3d: data.query_coord3d || null,
                             mode: histMeta ? 'hybrid' : 'dense',
                             fusion: histMeta ? histMeta.fusion : null,
-                            alpha:  histMeta ? histMeta.alpha  : null });
+                            alpha:  histMeta ? histMeta.alpha  : null,
+                            use_morpheme: histMeta ? histMeta.use_morpheme : false });
 
       let bubbleHtml;
       if (items.length > 0) {

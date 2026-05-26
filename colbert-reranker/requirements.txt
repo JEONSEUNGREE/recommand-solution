@@ -1,0 +1,20 @@
+# colbert-reranker — sparse-embedder(.venv-sparse)와 동일 환경 공유 가능
+# 별도 venv 생성 시 아래로 설치:
+#   python -m venv .venv-colbert
+#   .venv-colbert/Scripts/pip install -r requirements.txt
+
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.0.0
+
+# BGE-M3 ColBERT 추출 (transformers 5.x 필요)
+FlagEmbedding>=1.4.0
+transformers>=5.0.0
+torch>=2.0.0
+
+# DB
+psycopg2-binary>=2.9.0
+
+# 수치 연산
+numpy>=1.24.0
+pyarrow>=14.0.0

@@ -27,6 +27,9 @@ SPARSE_BASE = os.environ.get("SPARSE_EMBEDDER_BASE", "http://localhost:8002")
 # 내적은 곱셈이라 한쪽만 0이면 기여 0 → 쿼리만 필터해도 동일 효과(DB 재백필 불필요).
 # 0 또는 1 = 필터 없음. env 로 조정 가능. 기본 2 (단음절 노이즈 컷).
 SPARSE_MIN_TOKEN_CHARS = int(os.environ.get("SPARSE_MIN_TOKEN_CHARS", "2"))
+# ColBERT reranker(:8003) — dense top-K를 ColBERT MaxSim으로 재정렬.
+# 미설정 또는 서비스 미기동 시 dense 순서 유지(graceful fallback).
+COLBERT_BASE = os.environ.get("COLBERT_BASE", "http://localhost:8003")
 
 router = APIRouter()
 
@@ -82,8 +85,11 @@ def _log_search(
                            (log_id, rank, rv_product_id, product_name, product_code,
                             image_url, product_url, price, sale_price,
                             category, brand, distance, perspective, description,
-                            tags, desc_persona)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s)""",
+                            tags, desc_persona,
+                            dense_dist, sparse_ip, morph_ip, fusion_score,
+                            rank_dense, rank_sparse, rank_morph)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,
+                                   %s,%s,%s,%s,%s,%s,%s)""",
                         (
                             log_id, rank,
                             item.get("rv_product_id"), item.get("product_name"), item.get("product_code"),
@@ -94,6 +100,10 @@ def _log_search(
                             item.get("perspective"), item.get("description"),
                             json.dumps(tags, ensure_ascii=False) if tags is not None else None,
                             item.get("desc_persona"),
+                            # 하이브리드 신호별 점수 (dense 모드면 전부 None)
+                            item.get("dense_dist"), item.get("sparse_ip"), item.get("morph_ip"),
+                            item.get("score"),
+                            item.get("rank_dense"), item.get("rank_sparse"), item.get("rank_morph"),
                         ),
                     )
         conn.commit()
@@ -157,6 +167,82 @@ def _embed_morpheme(text: str) -> Optional[str]:
         import sys
         print(f"[search_rv] morpheme embed 실패 (해당 신호 생략): {e}", file=sys.stderr)
         return None
+
+
+def _embed_colbert(text: str) -> list[list[float]] | None:
+    """colbert-reranker(:8003)에 쿼리 텍스트를 보내 ColBERT 토큰 벡터 획득.
+
+    서비스 미기동/오류 시 None → 호출부가 dense 순서 유지(graceful fallback).
+    """
+    try:
+        r = requests.post(
+            f"{COLBERT_BASE}/embed-colbert",
+            json={"text": text},
+            timeout=15,
+        )
+        r.raise_for_status()
+        return r.json().get("colbert_vecs")
+    except Exception as e:
+        import sys
+        print(f"[search_rv] colbert embed 실패 (dense 순서 유지): {e}", file=sys.stderr)
+        return None
+
+
+def _colbert_rerank(
+    query_colbert: list[list[float]],
+    items: list[dict],
+    conn,
+) -> list[dict]:
+    """dense 결과를 ColBERT MaxSim으로 재정렬.
+
+    product_descriptions.colbert_vecs(jsonb)를 top-K 후보에 대해서만 조회해
+    MaxSim 점수를 계산한다. colbert_vecs가 없는 행은 dense 점수(-distance)로 대체.
+    """
+    import numpy as np
+
+    if not query_colbert or not items:
+        return items
+
+    pairs_pid = [it.get("rv_product_id") for it in items]
+    pairs_psp = [it.get("perspective") for it in items]
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT rv_product_id, perspective, colbert_vecs
+                  FROM product_descriptions
+                 WHERE (rv_product_id, perspective) IN (
+                       SELECT unnest(%s::int[]), unnest(%s::text[]))
+                   AND colbert_vecs IS NOT NULL
+                """,
+                (pairs_pid, pairs_psp),
+            )
+            vecs_map = {
+                (r["rv_product_id"], r["perspective"]): r["colbert_vecs"]
+                for r in cur.fetchall()
+            }
+    except Exception as e:
+        import sys
+        print(f"[colbert_rerank] colbert_vecs 조회 실패: {e}", file=sys.stderr)
+        return items
+
+    q = np.array(query_colbert, dtype=np.float32)
+    scored = []
+    for it in items:
+        d_vecs = vecs_map.get((it.get("rv_product_id"), it.get("perspective")))
+        if d_vecs:
+            d = np.array(d_vecs, dtype=np.float32)
+            sims = q @ d.T           # Q×K
+            score = float(sims.max(axis=1).sum())
+        else:
+            # ColBERT 벡터 없으면 dense 거리를 부호 반전(거리 작을수록 유사)
+            score = -float(it.get("distance", 1.0))
+        it["colbert_score"] = round(score, 5)
+        scored.append((score, it))
+
+    scored.sort(key=lambda x: -x[0])
+    return [item for _, item in scored]
 
 
 def _project_for_viz(qvec: list[float], item_vecs: list[list[float]],
@@ -968,6 +1054,13 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
             finally:
                 for it in items:
                     it.pop("emb", None)
+
+        # ColBERT 리랭킹 — dense(+hybrid) top-K를 MaxSim으로 재정렬.
+        # colbert-reranker(:8003) 미기동 시 graceful fallback(dense 순서 유지).
+        if items:
+            q_colbert = _embed_colbert(semantic_query or req.query)
+            if q_colbert:
+                items = _colbert_rerank(q_colbert, items, conn)
 
         debug_sql = _build_debug_sql(active_where, active_params, qvec)
         _usage = parsed.get("_usage") or {}

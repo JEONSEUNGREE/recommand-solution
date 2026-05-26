@@ -460,7 +460,9 @@ def get_log_results(log_id: int):
             SELECT rank, rv_product_id, product_name, product_code,
                    image_url, product_url, price, sale_price,
                    category, brand, distance, perspective, description,
-                   tags, desc_persona
+                   tags, desc_persona,
+                   dense_dist, sparse_ip, morph_ip, fusion_score AS score,
+                   rank_dense, rank_sparse, rank_morph
               FROM search_log_results
              WHERE log_id = %s
              ORDER BY rank
