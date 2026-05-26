@@ -28,10 +28,23 @@ dependencies {
 	// HTTP client — 임베딩 사이드카 + Anthropic API 호출
 	implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 
+	// Flyway — backend 부팅 시 ../migrations/*.sql 자동 적용 (VIT-4)
+	implementation 'org.flywaydb:flyway-core'
+	implementation 'org.flywaydb:flyway-database-postgresql'
+
 	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// 루트 ../migrations/*.sql 을 backend 의 classpath:db/migration 으로 복사.
+// Flyway 가 jar 안의 db/migration 을 읽도록 만들기 위함 (VIT-4).
+processResources {
+	from('../migrations') {
+		into 'db/migration'
+		include '*.sql'
+	}
 }
 
 tasks.named('test') {

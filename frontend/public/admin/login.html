@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIRA · 광고주 선택</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="styles.css">
+<style>
+  :root {
+    --primary:   #2563EB;
+    --primary-h: #1D4ED8;
+    --surface-2: #F5F5F5;
+    --line:      #E4E4E4;
+    --text:      #0A0A0A;
+    --text-3:    #888;
+    --text-4:    #bbb;
+    --ok:        #16A34A;
+    --warn:      #A16207;
+    --err:       #DC2626;
+  }
+
+  body {
+    background: var(--bg, #FAFAFA);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    padding: 48px 16px 64px;
+  }
+
+  /* ---- current advertiser banner ---- */
+  .current-banner {
+    width: 100%;
+    max-width: 520px;
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: #1E40AF;
+  }
+  .current-banner .cb-label { font-weight: 600; flex: 1; }
+  .current-banner .cb-id {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    color: #3B82F6;
+    margin-left: 6px;
+    font-weight: 400;
+  }
+  .current-banner .btn-go {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 5px;
+    font-size: 12.5px;
+    font-weight: 600;
+    border: 1px solid #2563EB;
+    background: #2563EB;
+    color: #fff;
+    cursor: pointer;
+    transition: background 160ms ease, transform 120ms ease;
+    white-space: nowrap;
+  }
+  .current-banner .btn-go:hover { background: #1D4ED8; transform: scale(0.98); }
+
+  /* ---- logo / header ---- */
+  .login-logo {
+    font-family: "Source Serif 4", "Source Serif Pro", Georgia, serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .login-logo .logo-mark {
+    width: 34px; height: 34px;
+    background: #2563EB;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-style: italic;
+    font-size: 17px;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(37,99,235,0.35);
+  }
+  .login-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.018em;
+    margin-bottom: 4px;
+  }
+  .login-sub {
+    font-size: 12.5px;
+    color: var(--text-3);
+    margin-bottom: 22px;
+  }
+
+  .login-wrap {
+    width: 100%;
+    max-width: 520px;
+  }
+
+  /* ---- state helpers ---- */
+  .state-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 32px 20px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    font-size: 13px;
+    color: var(--text-3);
+  }
+  .state-box.err-box {
+    color: var(--err);
+    border-color: #FECACA;
+    background: #FEF2F2;
+  }
+  .state-box svg {
+    width: 16px; height: 16px;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+  }
+
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid var(--line);
+    border-top-color: #2563EB;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---- advertiser grid ---- */
+  .adv-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .adv-card {
+    background: #fff;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .adv-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--card-accent, #E4E4E4);
+    transition: background 180ms ease;
+  }
+  .adv-card:hover {
+    border-color: #2563EB;
+    box-shadow: 0 4px 20px -6px rgba(37,99,235,0.22);
+    transform: translateY(-2px);
+  }
+  .adv-card:hover::before { background: #2563EB; }
+  .adv-card:active { transform: scale(0.98) translateY(0); }
+
+  .adv-id {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10.5px;
+    color: var(--text-4);
+    margin-bottom: 4px;
+    letter-spacing: 0.01em;
+  }
+  .adv-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .adv-url {
+    font-size: 11.5px;
+    color: var(--text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 8px;
+  }
+
+  /* host_type badges */
+  .host-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10.5px;
+    font-weight: 600;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+  }
+  .host-badge.makeshop { background: #EFF6FF; color: #1D4ED8; }
+  .host-badge.cafe24   { background: #F0FDF4; color: #15803D; }
+  .host-badge.godo     { background: #FEF3C7; color: #92400E; }
+  .host-badge.custom   { background: #F5F5F5; color: #525252; }
+
+  /* ---- section label ---- */
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-4);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    margin-top: 24px;
+  }
+  .section-label:first-of-type { margin-top: 0; }
+
+  /* row fade-in for cards */
+  .adv-card {
+    opacity: 0;
+    animation: cardIn 300ms ease forwards;
+  }
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+  <div class="login-wrap">
+
+    <!-- Current advertiser banner (hidden until populated) -->
+    <div class="current-banner" id="current-banner" style="display:none;">
+      <div style="flex:1;">
+        <div class="cb-label">
+          현재 선택된 광고주: <span id="banner-name">—</span>
+          <span class="cb-id" id="banner-id"></span>
+        </div>
+        <div style="font-size:11.5px;color:#3B82F6;margin-top:2px;">아래에서 다른 광고주를 선택하거나, 대시보드로 이동하세요.</div>
+      </div>
+      <button class="btn-go" onclick="location.href='dashboard.html'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12h18M13 6l6 6-6 6"/></svg>
+        대시보드로 이동
+      </button>
+    </div>
+
+    <!-- Logo -->
+    <div class="login-logo">
+      <div class="logo-mark">A</div>
+      AIRA
+    </div>
+    <div class="login-title">광고주 선택</div>
+    <div class="login-sub">관리할 광고주를 선택하면 대시보드로 이동합니다.</div>
+
+    <!-- List area -->
+    <div class="section-label">광고주 목록</div>
+    <div id="list-area">
+      <div class="state-box" id="state-loading">
+        <div class="spinner"></div>
+        광고주 목록을 불러오는 중...
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+  (function () {
+    const API = 'http://192.168.101.27:8001';
+
+    /* ---------- current advertiser banner ---------- */
+    const raw = localStorage.getItem('aira_adv');
+    if (raw) {
+      try {
+        const adv = JSON.parse(raw);
+        if (adv && adv.id) {
+          const banner = document.getElementById('current-banner');
+          document.getElementById('banner-name').textContent = adv.name || '(이름 없음)';
+          document.getElementById('banner-id').textContent = '#' + adv.id;
+          banner.style.display = 'flex';
+        }
+      } catch (_) { /* ignore */ }
+    }
+
+    /* ---------- fetch advertisers ---------- */
+    function hostBadgeClass(type) {
+      const t = (type || '').toLowerCase();
+      if (t === 'makeshop') return 'makeshop';
+      if (t === 'cafe24')   return 'cafe24';
+      if (t === 'godo')     return 'godo';
+      return 'custom';
+    }
+
+    function hostLabel(type) {
+      const t = (type || '').toLowerCase();
+      if (t === 'makeshop') return 'MakeShop';
+      if (t === 'cafe24')   return 'Cafe24';
+      if (t === 'godo')     return 'Godo';
+      return type || 'custom';
+    }
+
+    function selectAdvertiser(id, name) {
+      localStorage.setItem('aira_adv', JSON.stringify({ id, name }));
+      location.href = 'dashboard.html';
+    }
+
+    function renderCard(adv, delay) {
+      const cls = hostBadgeClass(adv.host_type);
+      const card = document.createElement('div');
+      card.className = 'adv-card';
+      card.style.animationDelay = delay + 'ms';
+      card.innerHTML = `
+        <div class="adv-id">#${adv.id}</div>
+        <div class="adv-name" title="${adv.name || ''}">${adv.name || '(이름 없음)'}</div>
+        <div class="adv-url" title="${adv.shop_url || ''}">${adv.shop_url || '—'}</div>
+        <span class="host-badge ${cls}">${hostLabel(adv.host_type)}</span>
+      `;
+      card.addEventListener('click', () => selectAdvertiser(adv.id, adv.name || ''));
+      return card;
+    }
+
+    function renderError(msg) {
+      const area = document.getElementById('list-area');
+      area.innerHTML = `
+        <div class="state-box err-box">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+          ${msg}
+        </div>
+      `;
+    }
+
+    fetch(`${API}/advertisers-rv`)
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        const list = Array.isArray(data) ? data : (data.content || data.data || []);
+        const area = document.getElementById('list-area');
+
+        if (list.length === 0) {
+          area.innerHTML = `
+            <div class="state-box">
+              <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8M12 8v8"/></svg>
+              등록된 광고주가 없습니다.
+            </div>
+          `;
+          return;
+        }
+
+        const grid = document.createElement('div');
+        grid.className = 'adv-grid';
+        list.forEach(function (adv, i) {
+          grid.appendChild(renderCard(adv, i * 50));
+        });
+        area.innerHTML = '';
+        area.appendChild(grid);
+      })
+      .catch(function (err) {
+        console.error('[login] fetch advertisers failed:', err);
+        renderError('광고주 목록을 불러오지 못했습니다. (' + err.message + ')');
+      });
+  })();
+  </script>
+</body>
+</html>

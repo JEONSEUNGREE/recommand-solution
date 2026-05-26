@@ -1,0 +1,15 @@
+# BGE-M3 GPU 임베더 의존성
+# torch는 Dockerfile에서 cu118 휠로 별도 설치한다(여기 넣지 않음).
+#
+# ⚠️ 버전 핀 이유:
+#   FlagEmbedding의 BGEM3FlagModel은 transformers>=4.48 과 조합 시
+#   "XLMRobertaModel.__init__() got an unexpected keyword argument 'dtype'"
+#   로 깨진다. 아래 조합(transformers 4.44.x + FlagEmbedding 1.2.x)은 검증된 안정 세트.
+numpy<2
+transformers==4.44.2
+FlagEmbedding==1.2.11
+sentence-transformers==3.3.1
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pyarrow>=14,<18

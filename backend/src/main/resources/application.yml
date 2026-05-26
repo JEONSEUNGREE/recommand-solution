@@ -1,25 +1,59 @@
 server:
   port: 8090
+  error:
+    # 운영 노출 시 stacktrace/message가 응답 본문에 박혀 정보 누출 위험 — dev profile만 verbose, prod는 application-prod.yml에서 모두 차단.
+    include-message: always
+    include-stacktrace: always
+    include-exception: true
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5433/recommend
+    url: jdbc:postgresql://[::1]:5433/recommend
     username: app
     password: app
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
+  flyway:
+    # backend 부팅 시 db/migration/*.sql 자동 적용 (build.gradle processResources 가 루트 migrations/ 를 복사).
+    # 기존 환경(이미 스키마가 들어가 있음)에서도 안전하게 채택할 수 있도록 baseline-on-migrate + IF NOT EXISTS 조합.
+    enabled: true
+    locations: classpath:db/migration
+    sql-migration-prefix: ""
+    sql-migration-separator: "_"
+    sql-migration-suffixes: .sql
+    baseline-on-migrate: true
+    baseline-version: 0
+    # 기존 마이그레이션은 IF NOT EXISTS 로 멱등하게 작성됨 — 체크섬 변경 시 재실행을 막지 않기 위해 검증 완화.
+    validate-on-migrate: false
+    out-of-order: false
 
 app:
   embedder:
     base-url: http://127.0.0.1:8001
     timeout-ms: 30000
+    # embedder 사이드카 호출 시 첨부할 Bearer 토큰. backend 와 embedder 가 동일 secret 을 공유하면
+    # APP_API_TOKEN 하나만 설정해도 작동. 별도 분리하려면 EMBEDDER_API_TOKEN 으로 override.
+    api-token: ${EMBEDDER_API_TOKEN:${APP_API_TOKEN:}}
   llm:
     # OpenAI 호환 Chat Completions 형식. Groq / OpenAI / Together / OpenRouter 등.
     base-url: ${LLM_BASE_URL:https://api.groq.com/openai/v1}
     api-key: ${LLM_API_KEY:${GROQ_API_KEY:}}
     model: ${LLM_MODEL:llama-3.3-70b-versatile}
     timeout-ms: 60000
+  security:
+    # /healthz · /admin/login · 광고주 이미지 정적 path 를 제외한 모든 endpoint를 Bearer 토큰 게이트로 보호.
+    # 토큰 미설정 시 fail-closed (503). dev 편의를 위해 unauthenticated-when-missing 옵션 제공.
+    api-token: ${APP_API_TOKEN:}
+    allow-unauthenticated-when-token-missing: ${APP_ALLOW_UNAUTHENTICATED:true}
+    # advertisers.{license_key,shop_key,cafe24_*_token} 컬럼을 AES-GCM 으로 application-layer 암호화.
+    # 32-byte (base64) 키. 미설정이면 plaintext passthrough + WARN. 프로덕션 필수.
+    encryption-key: ${APP_SECRET_KEY:}
+    admin:
+      username: ${ADMIN_USERNAME:}
+      password: ${ADMIN_PASSWORD:}
+    # CSV. 빈 값이면 dev 폴백 (loopback/사설 대역).
+    cors-origins: ${APP_CORS_ORIGINS:http://localhost:*,http://127.0.0.1:*,http://192.168.*.*:*,http://10.*.*.*:*,http://172.16.*.*:*}
 
 logging:
   level:

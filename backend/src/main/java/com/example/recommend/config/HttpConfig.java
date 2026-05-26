@@ -1,6 +1,5 @@
 package com.example.recommend.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.OkHttpClient;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -32,8 +31,5 @@ public class HttpConfig {
                 .build();
     }
 
-    @Bean
-    public ObjectMapper objectMapper() {
-        return new ObjectMapper();
-    }
+    // ObjectMapper는 Spring Boot가 자동 구성한 걸 사용 (JavaTimeModule 포함 — OffsetDateTime 직렬화 OK)
 }

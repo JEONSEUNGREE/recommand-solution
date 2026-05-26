@@ -1,0 +1,18 @@
+# 프로덕션 오버레이. `SPRING_PROFILES_ACTIVE=prod` 로 활성화.
+server:
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-exception: false
+
+app:
+  security:
+    # 프로덕션은 fail-closed. 토큰/키 미설정이면 보호 endpoint가 503/401만 응답.
+    allow-unauthenticated-when-token-missing: false
+    # CSV. 비워두면 CORS 사실상 막힘 — 실 도메인으로 반드시 override (APP_CORS_ORIGINS).
+    cors-origins: ${APP_CORS_ORIGINS:}
+
+logging:
+  level:
+    com.example.recommend: INFO
+    org.springframework.jdbc.core.JdbcTemplate: WARN

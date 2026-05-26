@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIRA · 광고주 목록</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  .adv-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:10px; margin-top:16px; }
+  .adv-card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:18px 20px; cursor:pointer;
+    transition:box-shadow var(--dur-2) var(--ease), transform var(--dur-2) var(--ease); position:relative; overflow:hidden; }
+  .adv-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--primary); opacity:0; transition:opacity var(--dur) var(--ease); }
+  .adv-card:hover { box-shadow:0 6px 24px -8px rgba(10,10,10,0.14); transform:translateY(-2px); }
+  .adv-card:hover::before { opacity:1; }
+  .adv-card .id { font-size:11px; color:var(--text-4); font-family:"JetBrains Mono",monospace; margin-bottom:6px; }
+  .adv-card .name { font-size:16px; font-weight:700; color:var(--text); margin-bottom:4px; letter-spacing:-0.015em; }
+  .adv-card .url { font-size:11.5px; color:var(--text-3); margin-bottom:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .adv-card .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+  .adv-card .chip { font-size:11px; padding:2px 8px; border-radius:4px; font-weight:600; border:1px solid var(--line); background:var(--surface-2); color:var(--text-3); }
+  .adv-card .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:0; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+  .adv-card .metric { padding:10px 12px; border-right:1px solid var(--line); }
+  .adv-card .metric:last-child { border-right:none; }
+  .adv-card .metric .mv { font-size:18px; font-weight:700; font-family:"Source Serif 4",serif; color:var(--text); font-variant-numeric:tabular-nums; }
+  .adv-card .metric .ml { font-size:10.5px; color:var(--text-4); margin-top:1px; }
+  .adv-card .metric .mv.ok { color:var(--ok); }
+  .adv-card .metric .mv.warn { color:var(--warn); }
+  .adv-card .metric .mv.purple { color:var(--purple); }
+  .adv-card .go { position:absolute; top:18px; right:18px; width:28px; height:28px; border-radius:6px; background:var(--surface-2);
+    display:grid; place-items:center; color:var(--text-3); transition:all var(--dur) var(--ease); }
+  .adv-card:hover .go { background:var(--primary); color:#fff; }
+  .adv-card .go svg { width:14px; height:14px; stroke-width:2; fill:none; stroke:currentColor; }
+  .empty { text-align:center; padding:60px 20px; color:var(--text-4); }
+  .spin { display:inline-block; width:16px; height:16px; border:2px solid var(--line); border-top-color:var(--text-3); border-radius:50%; animation:spin 0.7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .err-box { background:var(--err-soft); border:1px solid #f0c0c0; border-radius:6px; padding:12px 16px; color:var(--err); font-size:12.5px; margin-top:12px; }
+</style>
+</head>
+<body data-route="sync-advertisers" data-depth="1">
+  <div class="shell">
+    <div id="side-mount"></div>
+    <main class="main">
+      <div id="top-mount"></div>
+      <div class="page">
+
+        <div class="page-head">
+          <div>
+            <h1>광고주 목록</h1>
+            <div class="sub">스크랩·정제 파이프라인을 운영할 광고주를 선택합니다. Spring Boot <code>localhost:8090</code> 연동.</div>
+          </div>
+          <div class="actions">
+            <button class="btn" id="btn-refresh">
+              <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>
+              새로고침
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI -->
+        <div class="stat-row" id="stats-row">
+          <div class="stat"><div class="l info"><span class="d"></span>광고주 수</div><div class="v" id="st-adv">—</div><div class="delta">등록된 전체 광고주</div></div>
+          <div class="stat"><div class="l"><span class="d"></span>총 상품</div><div class="v" id="st-prod">—</div><div class="delta">전체 rv_products</div></div>
+          <div class="stat"><div class="l ok"><span class="d"></span>스크랩 완료</div><div class="v" id="st-scraped">—</div><div class="delta">scrape_status = scraped</div></div>
+          <div class="stat"><div class="l purple"><span class="d"></span>LLM 정제</div><div class="v" id="st-enrich">—</div><div class="delta">product_enriched 행 수</div></div>
+        </div>
+
+        <div id="err-box" class="err-box" style="display:none;"></div>
+        <div id="loading" style="text-align:center;padding:40px;color:var(--text-3);"><span class="spin"></span> 광고주 목록 로딩 중…</div>
+        <div class="adv-grid" id="adv-grid" style="display:none;"></div>
+        <div class="empty" id="empty" style="display:none;">광고주가 없습니다.</div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="../partials.js"></script>
+  <script src="../enhance.js"></script>
+  <script>
+    const API = 'http://localhost:8090';
+    const EMBEDDER = 'http://192.168.101.27:8001';
+
+    const grid = document.getElementById('adv-grid');
+    const loading = document.getElementById('loading');
+    const empty = document.getElementById('empty');
+    const errBox = document.getElementById('err-box');
+
+    function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
+
+    function hostBadge(t) {
+      const map = { makeshop:'#2C4C70', cafe24:'#237A47', godo:'#8A6A1A', imweb:'#4E4078', custom:'#555' };
+      return `<span class="chip" style="background:${map[t]||'#555'}1a;border-color:${map[t]||'#555'}40;color:${map[t]||'#555'};">${t}</span>`;
+    }
+
+    function renderCard(a) {
+      const total = a.total ?? 0;
+      const scraped = a.scraped ?? 0;
+      const enriched = a.llm_enriched ?? 0;
+      const pct = total > 0 ? Math.round(scraped / total * 100) : 0;
+      return `
+        <div class="adv-card" onclick="location.href='products.html?adv=${a.id}'">
+          <div class="go"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          <div class="id">#${a.id}</div>
+          <div class="name">${a.name}</div>
+          <div class="url">${a.shop_url || ''}</div>
+          <div class="chips">
+            ${hostBadge(a.host_type)}
+            ${a.shop_key ? `<span class="chip">key 등록됨</span>` : ''}
+          </div>
+          <div class="metrics">
+            <div class="metric">
+              <div class="mv">${fmt(total)}</div>
+              <div class="ml">전체 상품</div>
+            </div>
+            <div class="metric">
+              <div class="mv ${pct >= 90 ? 'ok' : pct >= 50 ? '' : 'warn'}">${fmt(scraped)}</div>
+              <div class="ml">스크랩 (${pct}%)</div>
+            </div>
+            <div class="metric">
+              <div class="mv purple">${fmt(enriched)}</div>
+              <div class="ml">LLM 정제</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    async function load() {
+      loading.style.display = 'block';
+      grid.style.display = 'none';
+      empty.style.display = 'none';
+      errBox.style.display = 'none';
+
+      try {
+        const res = await fetch(`${API}/advertisers`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const list = await res.json();
+
+        // Fetch per-advertiser counts from the products endpoint
+        const enriched = await Promise.allSettled(
+          list.map(a => fetch(`${API}/advertisers/${a.id}/products?page=0&size=1`).then(r => r.ok ? r.json() : null))
+        );
+
+        let totalProds = 0, totalScraped = 0, totalEnrich = 0;
+        list.forEach((a, i) => {
+          const d = enriched[i].status === 'fulfilled' ? enriched[i].value : null;
+          if (d && d.counts) {
+            a.total = d.counts.total;
+            a.scraped = d.counts.total - d.counts.pending;
+            a.llm_enriched = d.counts.llm_enriched;
+            totalProds += d.counts.total || 0;
+            totalScraped += a.scraped || 0;
+            totalEnrich += d.counts.llm_enriched || 0;
+          }
+        });
+
+        document.getElementById('st-adv').textContent = list.length;
+        document.getElementById('st-prod').textContent = fmt(totalProds);
+        document.getElementById('st-scraped').textContent = fmt(totalScraped);
+        document.getElementById('st-enrich').textContent = fmt(totalEnrich);
+
+        if (list.length === 0) { empty.style.display = 'block'; }
+        else {
+          grid.innerHTML = list.map(renderCard).join('');
+          grid.style.display = 'grid';
+        }
+      } catch (e) {
+        errBox.textContent = `API 연결 실패: ${e.message} — Spring Boot(8090)가 실행 중인지 확인하세요.`;
+        errBox.style.display = 'block';
+      } finally {
+        loading.style.display = 'none';
+      }
+    }
+
+    document.getElementById('btn-refresh').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>

@@ -26,3 +26,20 @@ frontend/.turbo/
 .idea/
 .vscode/
 *.iml
+
+# Sparse embedder isolated venv (수백 MB)
+.venv-sparse/
+sparse-embedder/.venv-sparse/
+
+# Local gradle caches (root level)
+/.gradle/
+/.gradle-home/
+
+# 임시/스크래치
+_llm.json
+_llmresp.json
+_*.log
+bench.txt
+
+# Frontend public docs cache (Next 커스텀 빌드 산출물)
+frontend/public/.next-prerender-cache/

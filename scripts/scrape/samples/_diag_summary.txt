@@ -1,0 +1,29 @@
+### andar
+  platform        = cafe24  scores={'cafe24': 496}
+  used_selector   = #prdDetail
+  method          = whitelist
+  container_label = div#prdDetail.ec-base-tab.grid5.tab-item-1
+  stripped_nodes  = 5
+  warnings        = (none)
+  body_text_len   = 5029
+  body_preview    = 상품 설명 실키한 촉감과 탄탄한 보정력, 물 안팎을 넘나드는 쾌적함으로 더욱 편안한 워터 스포츠 SET 한층 유연한 신축성과 텍스처로 업그레이드된 NEW 풀앤비치 집업 래쉬가드 2종과 압도적 보정력의 시그니처 에어쿨링 레깅스. 물 안팎에서도 쾌적한 워터 전용 기능성으로 어디서나 거침없는 워터 액티비티를 즐겨 보세요. 집업 래쉬가드 technical prod
+
+### pippin
+  platform        = makeshop  scores={'makeshop': 61}
+  used_selector   = #productDetail
+  method          = whitelist
+  container_label = div#productDetail
+  stripped_nodes  = 15
+  warnings        = (none)
+  body_text_len   = 699
+  body_preview    = [메르시마리에] 데님 셔츠 #49920 군살 가려주는 여유로운 핏과 뒷패치 디테일 상품 옵션 판매가 35,900원 할인가 32,310 원 10% 기본옵션 color 옵션 선택 연청 진청 총 상품금액 : 0 (상품금액 + 기본옵션 ) 장바구니 바로구매 여기서만 선착순 할인 중! 바로구매 상세정보 배송/교환/환불 상품후기 ( ) 상품문의 (0) TREND PI
+
+### xexymix
+  platform        = makeshop  scores={'makeshop': 52}
+  used_selector   = #productDetail
+  method          = whitelist
+  container_label = div#productDetail
+  stripped_nodes  = 18
+  warnings        = (none)
+  body_text_len   = 8543
+  body_preview    = 홈 우먼즈 이너웨어 SET 11,550회 조회된 상품이에요 상품 후기 상품 설명 COLOR CHOICE 원하는 컬러를 클릭해보세요. 뉴트럴아이보리 페탈핑크 소프트라벤더 토스티드버터 파우더크림 포그스킨 파스텔피치 로즈블라썸 밀키블루 슈가그레이 쿨그레이 블랙 쉐입 메로우 기법 퓨징 마감 클러치 속바지 대용으로 추천하는 사각 팬티 봉제선을 최소화한 메로우 기법 

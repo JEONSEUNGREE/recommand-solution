@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIRA · 상품 상세</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .pd-head {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 18px;
+    align-items: center;
+    margin-bottom: 14px;
+    padding: 14px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  .pd-gallery .main {
+    width: 180px; height: 180px;
+    border-radius: 6px;
+    background: repeating-linear-gradient(135deg, var(--surface-2) 0 10px, var(--surface-3) 10px 20px);
+    border: 1px solid var(--line);
+    display: grid; place-items: center;
+    color: var(--text-4);
+    font-family: ui-monospace, monospace; font-size: 11px;
+    margin-bottom: 6px;
+  }
+  .pd-gallery .thumbs {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  }
+  .pd-gallery .thumbs .t {
+    aspect-ratio: 1;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, var(--surface-3) 6px 12px);
+    display: grid; place-items: center;
+    color: var(--text-4);
+    font-family: ui-monospace, monospace; font-size: 9px;
+    cursor: pointer;
+  }
+  .pd-gallery .thumbs .t:hover { border-color: var(--primary); }
+
+  .pd-info .pcat {
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--primary);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .pd-info h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+  .pd-info .price {
+    font-family: ui-monospace, monospace;
+    font-size: 16px;
+    color: var(--text);
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .pd-meta {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+  }
+  .pd-meta .pm-l { font-size: 11px; color: var(--text-4); margin-bottom: 2px; }
+  .pd-meta .pm-v { color: var(--text); font-family: ui-monospace, monospace; }
+
+  .pill-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .pill {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .pill .ic {
+    width: 28px; height: 28px;
+    border-radius: 5px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .pill.ok   .ic { background: var(--ok-soft);   color: var(--ok); }
+  .pill.info .ic { background: var(--primary-soft); color: var(--primary); }
+  .pill.warm .ic { background: var(--warn-soft); color: var(--warn); }
+  .pill.purple .ic { background: var(--purple-soft); color: var(--purple); }
+  .pill .l { font-size: 11px; color: var(--text-3); line-height: 1.2; margin-bottom: 1px; }
+  .pill .v { font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+
+  .persp-block { border-left: 3px solid var(--p-color, var(--primary)); padding-left: 12px; }
+  .persp-block .ph { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .persp-block .pl {
+    font-size: 11px; font-weight: 700;
+    color: var(--p-color, var(--primary));
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .persp-block .pe { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-4); display: inline-flex; align-items: center; gap: 5px; }
+  .persp-block .pe .ok-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ok); }
+  .persp-block .pt { font-size: 13px; color: var(--text-2); line-height: 1.65; margin-bottom: 6px; }
+  .persp-block .pv {
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--text-3);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 5px 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .persp-block + .persp-block { margin-top: 12px; }
+</style>
+</head>
+<body data-route="product" data-crumbs="홈 / 상품 데이터 / 상품 목록 / 지젯시믹스 바람막이">
+  <div class="shell">
+    <div id="side-mount"></div>
+    <main class="main">
+      <div id="top-mount"></div>
+
+      <div class="page" style="max-width:1180px;margin:0 auto;">
+
+        <!-- HEAD -->
+        <div class="page-head">
+          <div>
+            <h1>상품 상세</h1>
+            <div class="sub">저장된 상품 정보와 4관점 임베딩(1,536d) 검증 결과를 확인합니다.</div>
+          </div>
+          <div class="actions">
+            <button class="btn" onclick="location.href='products.html'">목록으로</button>
+            <button class="btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              재임베딩
+            </button>
+            <button class="btn btn-primary" onclick="location.href='chat.html'">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              추천 테스트
+            </button>
+          </div>
+        </div>
+
+        <!-- PRODUCT HEAD -->
+        <div class="pd-head">
+          <div class="pd-gallery">
+            <div class="main">img_0.jpg</div>
+            <div class="thumbs">
+              <div class="t">#1</div>
+              <div class="t">#2</div>
+              <div class="t">#3</div>
+              <div class="t" style="color:var(--text-3);">+1</div>
+            </div>
+          </div>
+          <div class="pd-info">
+            <div class="pcat">APPAREL › ACTIVEWEAR</div>
+            <h1>지젯시믹스 바람막이</h1>
+            <div class="price">₩189,000</div>
+            <div class="pd-meta">
+              <div>
+                <div class="pm-l">상품 ID</div>
+                <div class="pm-v">12345</div>
+              </div>
+              <div>
+                <div class="pm-l">external_id</div>
+                <div class="pm-v">prod_…a1b2</div>
+              </div>
+              <div>
+                <div class="pm-l">옵션</div>
+                <div class="pm-v">검정 / M</div>
+              </div>
+              <div>
+                <div class="pm-l">생성일</div>
+                <div class="pm-v">2026-05-18 14:32</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STATUS PILLS -->
+        <div class="pill-row">
+          <div class="pill ok">
+            <div class="ic">✓</div>
+            <div>
+              <div class="l">상태</div>
+              <div class="v">active</div>
+            </div>
+          </div>
+          <div class="pill ok">
+            <div class="ic">✓</div>
+            <div>
+              <div class="l">신뢰도 (trust score)</div>
+              <div class="v">0.87</div>
+            </div>
+          </div>
+          <div class="pill info">
+            <div class="ic">⬣</div>
+            <div>
+              <div class="l">임베딩</div>
+              <div class="v">1,536d · 4관점</div>
+            </div>
+          </div>
+          <div class="pill warm">
+            <div class="ic">τ</div>
+            <div>
+              <div class="l">토큰 · 비용</div>
+              <div class="v">14,380 · $0.0065</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ATTRS -->
+        <div class="row-gap-10">
+
+          <div class="card">
+            <div class="card-head">
+              <span style="display:inline-flex;align-items:center;gap:8px;">
+                <span style="width:8px;height:8px;border-radius:2px;background:var(--primary);"></span>
+                공통 속성
+              </span>
+              <span class="right mono" style="color:var(--text-3);font-size:11.5px;font-weight:500;">common_attributes</span>
+            </div>
+            <div class="card-body">
+              <div class="kv-list">
+                <div class="kv"><div class="k">색상</div><div class="v"><span class="chip">검정</span><span class="chip">네이비</span><span class="chip">카키</span></div></div>
+                <div class="kv"><div class="k">소재</div><div class="v">나일론 100%</div></div>
+                <div class="kv"><div class="k">핏</div><div class="v">스탠다드핏</div></div>
+                <div class="kv"><div class="k">사이즈</div><div class="v"><span class="chip">S</span><span class="chip">M</span><span class="chip">L</span><span class="chip">XL</span></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span style="display:inline-flex;align-items:center;gap:8px;">
+                <span style="width:8px;height:8px;border-radius:2px;background:var(--amber);"></span>
+                카테고리 속성
+              </span>
+              <span class="right mono" style="color:var(--text-3);font-size:11.5px;font-weight:500;">category_attributes</span>
+            </div>
+            <div class="card-body">
+              <div class="kv-list">
+                <div class="kv"><div class="k">원단 특성</div><div class="v"><span class="chip">발수</span><span class="chip">신축성</span><span class="chip">통기성</span></div></div>
+                <div class="kv"><div class="k">디자인</div><div class="v"><span class="chip">집업</span><span class="chip">포켓</span><span class="chip">후드</span></div></div>
+                <div class="kv"><div class="k">시즌</div><div class="v">가을</div></div>
+                <div class="kv"><div class="k">용도</div><div class="v"><span class="chip">등산</span><span class="chip">일상 외출</span><span class="chip">야외활동</span></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span style="display:inline-flex;align-items:center;gap:8px;">
+                <span style="width:8px;height:8px;border-radius:2px;background:var(--teal);"></span>
+                자유 태그
+              </span>
+              <span class="right mono" style="color:var(--text-3);font-size:11.5px;font-weight:500;">product_tags</span>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                <span class="chip" style="display:inline-flex;align-items:center;gap:6px;margin:0;"><span style="font-size:9.5px;text-transform:uppercase;color:var(--text-4);letter-spacing:0.05em;">style</span>캐주얼<b class="mono tnum" style="color:var(--ok);font-size:11px;">0.88</b></span>
+                <span class="chip" style="display:inline-flex;align-items:center;gap:6px;margin:0;"><span style="font-size:9.5px;text-transform:uppercase;color:var(--text-4);letter-spacing:0.05em;">feature</span>방한<b class="mono tnum" style="color:var(--ok);font-size:11px;">0.92</b></span>
+                <span class="chip" style="display:inline-flex;align-items:center;gap:6px;margin:0;"><span style="font-size:9.5px;text-transform:uppercase;color:var(--text-4);letter-spacing:0.05em;">mood</span>활동성<b class="mono tnum" style="color:var(--ok);font-size:11px;">0.85</b></span>
+                <span class="chip" style="display:inline-flex;align-items:center;gap:6px;margin:0;"><span style="font-size:9.5px;text-transform:uppercase;color:var(--text-4);letter-spacing:0.05em;">feature</span>경량<b class="mono tnum" style="color:var(--ok);font-size:11px;">0.90</b></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span style="display:inline-flex;align-items:center;gap:8px;">
+                <span style="width:8px;height:8px;border-radius:2px;background:var(--purple);"></span>
+                다관점 설명문 + 임베딩
+              </span>
+              <span class="right mono" style="color:var(--text-3);font-size:11.5px;font-weight:500;">product_descriptions</span>
+            </div>
+            <div class="card-body">
+              <div class="persp-block" style="--p-color: #2563EB;">
+                <div class="ph">
+                  <span class="pl">situation · 상황</span>
+                  <span class="pe"><span class="ok-dot"></span>embedding 1,536d</span>
+                </div>
+                <div class="pt">캐주얼한 일상 외출부터 등산까지 다양한 활동에서 활용 가능한 바람막이. 가벼운 무게로 휴대성이 좋아 어디든 챙겨가기 편하다.</div>
+                <div class="pv">[0.0231, -0.0517, 0.0892, 0.0143, -0.0334, 0.0721, … ]</div>
+              </div>
+              <div class="persp-block" style="--p-color: #0D9488;">
+                <div class="ph">
+                  <span class="pl">material · 소재</span>
+                  <span class="pe"><span class="ok-dot"></span>embedding 1,536d</span>
+                </div>
+                <div class="pt">나일론 100% 소재에 발수 가공을 더해 가벼운 비나 바람을 막아준다. 신축성과 통기성을 갖춰 활동 시 쾌적함을 유지한다.</div>
+                <div class="pv">[-0.0142, 0.0683, -0.0291, 0.0517, 0.0228, -0.0419, … ]</div>
+              </div>
+              <div class="persp-block" style="--p-color: #D97706;">
+                <div class="ph">
+                  <span class="pl">style · 스타일</span>
+                  <span class="pe"><span class="ok-dot"></span>embedding 1,536d</span>
+                </div>
+                <div class="pt">모던한 라인의 집업 디자인으로 어떤 옷과도 매치하기 쉽다. 후드와 포켓 디테일이 실용성과 캐주얼한 무드를 동시에 잡았다.</div>
+                <div class="pv">[0.0394, 0.0127, -0.0556, -0.0203, 0.0671, 0.0312, … ]</div>
+              </div>
+              <div class="persp-block" style="--p-color: #7C3AED;">
+                <div class="ph">
+                  <span class="pl">persona · 페르소나</span>
+                  <span class="pe"><span class="ok-dot"></span>embedding 1,536d</span>
+                </div>
+                <div class="pt">활동적인 라이프스타일을 선호하는 20~40대. 등산이나 야외 활동을 즐기며 기능성과 스타일을 모두 중시하는 사용자에게 적합.</div>
+                <div class="pv">[-0.0228, 0.0445, 0.0719, -0.0134, -0.0382, 0.0593, … ]</div>
+              </div>
+
+              <div style="margin-top:14px;padding:10px 14px;background:var(--ok-soft);border:1px solid rgba(35,122,71,0.22);border-radius:4px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ok);font-family:ui-monospace,monospace;">
+                <span style="width:6px;height:6px;border-radius:50%;background:var(--ok);"></span>
+                4개 관점 모두 임베딩 생성 완료 (1,536차원) · 벡터 검색 준비 완료
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="note">
+          <b>참고</b> · Phase 7 — <code>GET /api/products/{id}?tenant_id=test_tenant</code>.
+          product_descriptions.embedding 존재 = 검색 가능. 갤러리는 product_images (display_order 순).
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="partials.js"></script>
+  <script src="enhance.js"></script>
+</body>
+</html>

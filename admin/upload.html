@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIRA · 상품 업로드</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-route="upload">
+  <div class="shell">
+    <div id="side-mount"></div>
+    <main class="main">
+      <div id="top-mount"></div>
+
+      <div class="page" style="max-width:1000px;margin:0 auto;">
+
+        <!-- HEAD -->
+        <div class="page-head">
+          <div>
+            <h1>상품 업로드</h1>
+            <div class="sub">상품 페이지 텍스트와 이미지를 입력하면 4관점 1,536차원 임베딩이 자동 생성됩니다. (Phase 1~3)</div>
+          </div>
+          <div class="actions">
+            <button class="btn" onclick="location.href='extractions.html'">취소</button>
+          </div>
+        </div>
+
+        <!-- FORM -->
+        <div class="card" style="margin-bottom:10px;">
+          <div class="card-head">
+            <span style="display:inline-flex;align-items:center;gap:8px;">
+              <span style="width:18px;height:18px;border-radius:3px;background:var(--primary);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;">1</span>
+              상품 텍스트
+            </span>
+            <span class="right" style="font-size:11.5px;color:var(--text-3);font-weight:500;">필수</span>
+          </div>
+          <div class="card-body">
+            <div class="fld">
+              <div class="fld-lbl">
+                상품 페이지 텍스트
+                <span class="req">*</span>
+                <span class="right tnum" id="char-count">0 / 500자</span>
+              </div>
+              <textarea class="input" id="ta" placeholder="상품 페이지의 HTML 텍스트나 상품 설명을 그대로 붙여넣어 주세요.&#10;예) 지젯시믹스 바람막이&#10;나일론 100% 소재의 경량 바람막이입니다. 발수 가공으로...&#10;색상: 검정 / 네이비 / 카키&#10;사이즈: S / M / L / XL"></textarea>
+              <div class="bar" style="margin-top:8px;"><i id="bar"></i></div>
+              <div class="fld-help" id="char-help">최소 500자 이상 입력해주세요. 길수록 정확도가 올라갑니다.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- IMAGES -->
+        <div class="card" style="margin-bottom:10px;">
+          <div class="card-head">
+            <span style="display:inline-flex;align-items:center;gap:8px;">
+              <span style="width:18px;height:18px;border-radius:3px;background:var(--primary);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;">2</span>
+              상품 이미지
+            </span>
+            <span class="right" style="font-size:11.5px;color:var(--text-3);font-weight:500;" id="img-count">0 / 20장</span>
+          </div>
+          <div class="card-body">
+            <div class="fld" style="margin-bottom:0;">
+              <div class="fld-lbl">
+                이미지 파일 업로드
+                <span class="req">*</span>
+                <span class="right" style="color:var(--text-3);font-weight:400;">JPG · PNG · 각 200KB 이하 · 최대 20장</span>
+              </div>
+              <div class="dropzone" id="drop">
+                <div class="dz-ic">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <circle cx="9" cy="9" r="2"/>
+                    <path d="m21 15-3.5-3.5a2 2 0 0 0-2.83 0L5 21"/>
+                  </svg>
+                </div>
+                <div class="dz-main">이미지를 끌어다 놓거나 <b>클릭해서 선택</b></div>
+                <div class="dz-sub">JPG / PNG · 각 200KB 이하 · 최대 20장 · 추가 순서가 display_order</div>
+              </div>
+              <div class="img-grid" id="grid">
+                <div class="empty">추가된 이미지가 없습니다</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PIPELINE PREVIEW -->
+        <div class="card" id="pipeline-card" style="margin-bottom:10px;display:none;">
+          <div class="card-head">
+            <span style="display:inline-flex;align-items:center;gap:8px;">
+              <span style="width:18px;height:18px;border-radius:3px;background:var(--primary);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;">3</span>
+              분석 진행 상황
+            </span>
+          </div>
+          <div class="card-body">
+            <div class="steps" id="steps">
+              <div class="step done">
+                <span>Step 1 · 분류 (Classification)</span>
+                <span class="step-meta">category: Activewear (0.92)</span>
+              </div>
+              <div class="step active">
+                <span>Step 2 · 속성 추출 (Extraction)</span>
+                <span class="step-meta" id="s2meta">이미지 처리 중...</span>
+              </div>
+              <div class="step">
+                <span>Step 3 · 검증 (Validation)</span>
+                <span class="step-meta">대기 중</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FOOTER ACTIONS -->
+        <div style="display:flex;align-items:center;gap:8px;padding:14px;background:#fff;border:1px solid var(--line);border-radius:6px;position:sticky;bottom:14px;box-shadow:0 -4px 14px rgba(0,0,0,0.04);">
+          <div style="font-size:12.5px;color:var(--text-3);">
+            예상 비용 <b class="tnum" style="color:var(--text);font-size:14px;font-weight:700;margin-left:6px;">$0.0065</b>
+            <span style="margin-left:6px;">≈ 38원 · gpt-4o</span>
+          </div>
+          <div style="flex:1;"></div>
+          <button class="btn" onclick="clearAll()">전체 삭제</button>
+          <button class="btn btn-primary btn-lg" id="go" onclick="startAnalyze()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg>
+            분석 시작
+          </button>
+        </div>
+
+        <div class="note">
+          <b>참고</b> · 이 페이지는 Phase 1~3 담당.
+          <ul>
+            <li>분석 시작 → <code>POST /api/upload</code> (files 배열) → <code>POST /api/extract</code></li>
+            <li>입력 검증(클라이언트): 텍스트 ≥ 500자 · 이미지 JPG/PNG ≤ 200KB · 개수 ≤ 20</li>
+            <li>완료 시 <code>/result</code>로 이동하며 extraction 결과 전달</li>
+          </ul>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="partials.js"></script>
+  <script src="enhance.js"></script>
+  <script>
+    const ta = document.getElementById('ta');
+    const bar = document.getElementById('bar');
+    const cc = document.getElementById('char-count');
+    const ch = document.getElementById('char-help');
+    ta.addEventListener('input', () => {
+      const n = ta.value.length;
+      cc.textContent = n.toLocaleString() + ' / 500자';
+      bar.style.width = Math.min(100, (n / 500) * 100) + '%';
+      if (n >= 500) {
+        ch.textContent = '✓ 최소 길이 충족 — 분석 가능합니다.';
+        ch.style.color = 'var(--ok)';
+      } else {
+        ch.textContent = '최소 500자 이상 입력해주세요. 길수록 정확도가 올라갑니다.';
+        ch.style.color = 'var(--text-3)';
+      }
+    });
+
+    const MAX = 20;
+    let images = [];
+    const grid = document.getElementById('grid');
+    const imgCount = document.getElementById('img-count');
+    const palette = ['#DBEAFE','#DCFCE7','#FEF3C7','#FCE7F3','#E0E7FF','#FEE2E2'];
+
+    function render() {
+      grid.innerHTML = '';
+      if (images.length === 0) {
+        grid.innerHTML = '<div class="empty">추가된 이미지가 없습니다</div>';
+      } else {
+        images.forEach((img, i) => {
+          const t = document.createElement('div');
+          t.className = 'it';
+          t.style.background = img.color;
+          t.innerHTML = `<div class="idx">#${i}</div><div class="rm" onclick="removeImg(${i});event.stopPropagation();">×</div>`;
+          grid.appendChild(t);
+        });
+      }
+      imgCount.textContent = images.length + ' / 20장';
+    }
+
+    function addImages(n) {
+      const add = Math.min(n, MAX - images.length);
+      for (let i = 0; i < add; i++) {
+        images.push({ color: palette[images.length % palette.length] });
+      }
+      render();
+    }
+    function removeImg(i) { images.splice(i, 1); render(); }
+    function clearAll() { ta.value = ''; ta.dispatchEvent(new Event('input')); images = []; render(); document.getElementById('pipeline-card').style.display = 'none'; }
+    window.removeImg = removeImg; window.clearAll = clearAll;
+
+    const dz = document.getElementById('drop');
+    dz.addEventListener('click', () => addImages(Math.floor(Math.random()*3)+2));
+    ['dragenter','dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('over'); }));
+    ['dragleave','drop'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('over'); }));
+    dz.addEventListener('drop', (e) => { e.preventDefault(); addImages(Math.floor(Math.random()*3)+2); });
+
+    function startAnalyze() {
+      document.getElementById('pipeline-card').style.display = 'block';
+      document.getElementById('s2meta').textContent = '이미지 ' + images.length + '개 처리 중...';
+      const btn = document.getElementById('go');
+      btn.disabled = true;
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> 분석 중...';
+      setTimeout(() => location.href = 'result.html', 1500);
+    }
+    window.startAnalyze = startAnalyze;
+  </script>
+</body>
+</html>

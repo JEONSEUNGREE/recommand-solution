@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIRA · 토큰·비용</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* ── token breakdown bar ── */
+  .tok-bar-wrap { padding: 16px 20px 20px; }
+  .tok-bar-track {
+    height: 28px;
+    border-radius: 5px;
+    overflow: hidden;
+    display: flex;
+    gap: 2px;
+    background: var(--surface-2);
+    margin-bottom: 14px;
+  }
+  .tok-bar-track .seg {
+    height: 100%;
+    transition: width 600ms cubic-bezier(.22,1,.36,1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10.5px; font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    white-space: nowrap; overflow: hidden;
+    min-width: 0;
+  }
+  .tok-legend {
+    display: flex; flex-wrap: wrap; gap: 12px 20px;
+    font-size: 12px;
+  }
+  .tok-legend-item { display: flex; align-items: center; gap: 6px; color: var(--text-3); }
+  .tok-legend-item .dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .tok-legend-item .val { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; margin-left: 4px; }
+
+  /* ── bar chart ── */
+  .chart-wrap { padding: 16px; overflow: hidden; }
+  .h-bar-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 7px;
+    animation: rowIn 360ms var(--ease) both;
+  }
+  .h-bar-label {
+    width: 160px; flex-shrink: 0;
+    font-size: 12px; color: var(--text-2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    text-align: right;
+  }
+  .h-bar-outer {
+    flex: 1; height: 20px;
+    background: var(--surface-2);
+    border-radius: 3px; overflow: hidden;
+    position: relative;
+  }
+  .h-bar-inner {
+    height: 100%; border-radius: 3px;
+    background: var(--primary);
+    transition: width 500ms cubic-bezier(.22,1,.36,1);
+    display: flex; align-items: center; padding: 0 6px;
+  }
+  .h-bar-inner.accent { background: var(--amber); }
+  .h-bar-val {
+    width: 80px; flex-shrink: 0;
+    font-size: 11.5px; font-weight: 700; color: var(--text);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  /* ── cost-per-product scatter dots ── */
+  .cost-grid {
+    padding: 16px 20px;
+    display: flex; flex-wrap: wrap; gap: 3px;
+    max-height: 200px; overflow-y: auto;
+  }
+  .cost-dot {
+    width: 14px; height: 14px; border-radius: 2px;
+    cursor: pointer;
+    transition: transform 120ms ease, box-shadow 120ms ease;
+    position: relative;
+  }
+  .cost-dot:hover { transform: scale(1.6); z-index: 2; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+
+  /* ── section state ── */
+  .section-state {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; padding: 36px 20px;
+    color: var(--text-4); font-size: 13px;
+  }
+  .section-state.err { color: var(--err); }
+  .mini-spinner {
+    width: 14px; height: 14px;
+    border: 2px solid var(--line);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin .7s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── skel ── */
+  .skel {
+    display: inline-block; border-radius: 3px;
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease infinite;
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ── 2-col layout ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .full-card { margin-bottom: 10px; }
+
+  /* ── tooltip ── */
+  #dot-tooltip {
+    position: fixed; z-index: 999; pointer-events: none;
+    background: var(--text); color: #fff;
+    font-size: 11.5px; border-radius: 5px;
+    padding: 6px 10px; line-height: 1.5;
+    max-width: 220px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    display: none;
+  }
+  #dot-tooltip.show { display: block; }
+</style>
+</head>
+<body data-route="cost">
+<div class="shell">
+  <div id="side-mount"></div>
+  <main class="main">
+    <div id="top-mount"></div>
+
+    <div class="page" style="max-width:1280px;margin:0 auto;">
+
+      <!-- HEAD -->
+      <div class="page-head">
+        <div>
+          <h1>토큰 · 비용</h1>
+          <div class="sub">상품 LLM 정제 및 검색 추론에 사용된 토큰과 비용을 분석합니다.</div>
+        </div>
+        <div class="actions">
+          <button class="btn" id="btn-refresh">
+            <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>
+            새로고침
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI -->
+      <div class="stat-row" id="kpi-row">
+        <div class="stat"><div class="l warn"><span class="d"></span>누적 비용 (정제)</div><div class="v" id="k-cost"><span class="skel" style="width:80px;height:28px;">&nbsp;</span></div><div class="delta" id="k-cost-d">—</div></div>
+        <div class="stat"><div class="l info"><span class="d"></span>정제 완료 상품</div><div class="v" id="k-total"><span class="skel" style="width:60px;height:28px;">&nbsp;</span></div><div class="delta" id="k-total-d">—</div></div>
+        <div class="stat"><div class="l purple"><span class="d"></span>상품당 평균 비용</div><div class="v" id="k-avg"><span class="skel" style="width:60px;height:28px;">&nbsp;</span></div><div class="delta" id="k-avg-d">—</div></div>
+        <div class="stat"><div class="l"><span class="d"></span>평균 처리 시간</div><div class="v" id="k-dur"><span class="skel" style="width:60px;height:28px;">&nbsp;</span></div><div class="delta" id="k-dur-d">—</div></div>
+      </div>
+
+      <!-- TOKEN BREAKDOWN -->
+      <div class="card full-card">
+        <div class="card-head">
+          <span style="display:inline-flex;align-items:center;gap:8px;">
+            <span style="width:8px;height:8px;border-radius:2px;background:var(--info);"></span>
+            토큰 유형 분포 (상품 정제 기준)
+          </span>
+          <span class="right" style="font-size:12px;font-weight:400;color:var(--text-3);" id="tok-total-label">—</span>
+        </div>
+        <div id="tok-breakdown-body">
+          <div class="section-state"><div class="mini-spinner"></div>불러오는 중…</div>
+        </div>
+      </div>
+
+      <!-- CHARTS ROW -->
+      <div class="two-col">
+
+        <!-- top 20 most expensive products (horizontal bar) -->
+        <div class="card">
+          <div class="card-head">
+            <span style="display:inline-flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:2px;background:var(--amber);"></span>
+              비용 상위 20개 상품
+            </span>
+            <span class="right" style="font-size:11.5px;font-weight:400;color:var(--text-4);">cost_usd 기준</span>
+          </div>
+          <div id="top-chart-body" style="max-height:520px;overflow-y:auto;">
+            <div class="section-state"><div class="mini-spinner"></div>불러오는 중…</div>
+          </div>
+        </div>
+
+        <!-- model + search log breakdown -->
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div class="card" style="flex:0 0 auto;">
+            <div class="card-head">
+              <span style="display:inline-flex;align-items:center;gap:8px;">
+                <span style="width:8px;height:8px;border-radius:2px;background:var(--purple);"></span>
+                모델별 사용 현황
+              </span>
+            </div>
+            <div id="model-body">
+              <div class="section-state"><div class="mini-spinner"></div>불러오는 중…</div>
+            </div>
+          </div>
+
+          <div class="card" style="flex:0 0 auto;">
+            <div class="card-head">
+              <span style="display:inline-flex;align-items:center;gap:8px;">
+                <span style="width:8px;height:8px;border-radius:2px;background:var(--ok);"></span>
+                검색 쿼리 LLM 비용
+              </span>
+            </div>
+            <div id="search-cost-body">
+              <div class="section-state"><div class="mini-spinner"></div>불러오는 중…</div>
+            </div>
+          </div>
+
+          <div class="card" style="flex:1;">
+            <div class="card-head">
+              <span style="display:inline-flex;align-items:center;gap:8px;">
+                <span style="width:8px;height:8px;border-radius:2px;background:var(--teal);"></span>
+                비용 분포 히트맵
+              </span>
+              <span class="right" style="font-size:11px;color:var(--text-4);">각 점 = 1개 상품</span>
+            </div>
+            <div id="heatmap-body" class="cost-grid">
+              <div class="section-state"><div class="mini-spinner"></div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- PRODUCT COST TABLE -->
+      <div class="card full-card">
+        <div class="card-head">
+          <span style="display:inline-flex;align-items:center;gap:8px;">
+            <span style="width:8px;height:8px;border-radius:2px;background:var(--primary);"></span>
+            상품별 비용 목록
+          </span>
+          <div class="right">
+            <select id="sort-select" style="border:1px solid var(--line);border-radius:4px;padding:4px 8px;font-size:12px;background:#fff;">
+              <option value="cost_usd">비용 높은 순</option>
+              <option value="output_tokens">출력 토큰 순</option>
+              <option value="input_tokens">입력 토큰 순</option>
+              <option value="duration_ms">처리 시간 순</option>
+              <option value="cache_read_input_tokens">캐시 히트 순</option>
+            </select>
+          </div>
+        </div>
+        <div class="filters" style="grid-template-columns:1fr auto;gap:8px;padding:10px 16px;">
+          <div class="field">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input type="text" id="q-input" placeholder="상품명 검색…" style="flex:1;border:none;background:transparent;outline:none;font-size:12.5px;">
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-search">검색</button>
+        </div>
+        <div class="list-head">
+          <span class="total">총 <b id="tbl-total">—</b>건</span>
+          <span class="sp" style="flex:1;"></span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:44px;">이미지</th>
+              <th>상품명</th>
+              <th>카테고리</th>
+              <th>모델</th>
+              <th class="num">입력 tok</th>
+              <th class="num">출력 tok</th>
+              <th class="num">캐시 히트</th>
+              <th class="num">비용</th>
+              <th class="num">처리 시간</th>
+            </tr>
+          </thead>
+          <tbody id="cost-tbody">
+            <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-4);">로딩 중…</td></tr>
+          </tbody>
+        </table>
+        <div class="list-foot">
+          <span id="page-info">—</span>
+          <div class="pgn">
+            <button id="btn-prev">‹</button>
+            <span id="page-num" style="padding:0 12px;font-size:12px;color:var(--text-3);"></span>
+            <button id="btn-next">›</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /page -->
+  </main>
+</div>
+
+<!-- tooltip -->
+<div id="dot-tooltip"></div>
+
+<script src="auth.js"></script>
+<script src="partials.js"></script>
+<script src="enhance.js"></script>
+<script>
+(function () {
+  const API = 'http://localhost:8001';
+  const KRW = 1380;
+
+  // ── advertiser from localStorage ──────────────────────────
+  let advId = null;
+  try {
+    const raw = localStorage.getItem('aira_adv');
+    if (raw) { const a = JSON.parse(raw); advId = a?.id ?? null; }
+  } catch (_) {}
+
+  // ── helpers ───────────────────────────────────────────────
+  function fmt(n)   { return Number(n).toLocaleString('ko-KR'); }
+  function fmtK(n)  { return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(0)+'K' : String(n); }
+  function esc(s)   { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function $$(id)   { return document.getElementById(id); }
+
+  function setKpi(id, val, unit, delta) {
+    const el = $$(id);
+    if (!el) return;
+    el.innerHTML = val + (unit ? `<small>${unit}</small>` : '');
+    if (delta != null) $$(`${id}-d`).innerHTML = delta;
+  }
+
+  // ── colour scale for heatmap ──────────────────────────────
+  function costColor(val, max) {
+    const t = Math.min(val / max, 1);
+    // low → green (#237A47), mid → amber (#D97706), high → red (#9F2B2B)
+    if (t < 0.33) {
+      const p = t / 0.33;
+      return lerpColor('#E8F2EC', '#F3EFE0', p);
+    } else if (t < 0.66) {
+      const p = (t - 0.33) / 0.33;
+      return lerpColor('#F3EFE0', '#F2E6E5', p);
+    } else {
+      const p = (t - 0.66) / 0.34;
+      return lerpColor('#F2E6E5', '#9F2B2B', p);
+    }
+  }
+  function lerpColor(a, b, t) {
+    const pr = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i;
+    const am = a.match(pr), bm = b.match(pr);
+    if (!am || !bm) return a;
+    const r = Math.round(parseInt(am[1],16)*(1-t)+parseInt(bm[1],16)*t);
+    const g = Math.round(parseInt(am[2],16)*(1-t)+parseInt(bm[2],16)*t);
+    const bb= Math.round(parseInt(am[3],16)*(1-t)+parseInt(bm[3],16)*t);
+    return `rgb(${r},${g},${bb})`;
+  }
+
+  // ── 1. load token stats ───────────────────────────────────
+  async function loadTokenStats() {
+    const url = API + '/products-enriched/token-stats' + (advId ? `?advertiser_id=${advId}` : '');
+    const s = await fetch(url).then(r => { if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+
+    const KRW_COST = (s.total_cost_usd * KRW);
+
+    // KPI
+    setKpi('k-cost', '$' + Number(s.total_cost_usd).toFixed(2), '',
+      `≈ ₩${Math.round(KRW_COST).toLocaleString('ko-KR')} (₩${KRW}/USD)`);
+    setKpi('k-total', fmt(s.total_enriched), '개',
+      `embedded 완료 상품`);
+    setKpi('k-avg', '$' + Number(s.avg_cost_usd).toFixed(4), '',
+      `≈ ₩${Math.round(s.avg_cost_usd*KRW).toLocaleString('ko-KR')}/개`);
+    const sec = (s.avg_duration_ms / 1000).toFixed(1);
+    setKpi('k-dur', sec, 's',
+      `상품당 평균 처리 시간`);
+
+    // Token breakdown bar
+    renderTokenBreakdown(s);
+
+    // Model table
+    renderModelTable(s.by_model || [], s.total_cost_usd);
+
+    return s;
+  }
+
+  function renderTokenBreakdown(s) {
+    const inp   = Number(s.total_input_tokens);
+    const out   = Number(s.total_output_tokens);
+    const cr    = Number(s.total_cache_read_tokens);
+    const cw    = Number(s.total_cache_write_tokens);
+    const total = inp + out + cr + cw;
+
+    $$('tok-total-label').textContent = `합계 ${fmtK(total)} 토큰`;
+
+    const segs = [
+      { label:'캐시 Read', val: cr,  color:'#2C4C70' },
+      { label:'캐시 Write', val: cw, color:'#4E4078' },
+      { label:'출력',       val: out, color:'#1F6464' },
+      { label:'입력',       val: inp, color:'#8A6A1A' },
+    ];
+
+    const barHtml = segs.map(s => {
+      const pct = total > 0 ? (s.val / total * 100).toFixed(1) : 0;
+      const show = pct > 4;
+      return `<div class="seg" style="width:${pct}%;background:${s.color};" title="${s.label}: ${fmtK(s.val)} (${pct}%)">${show ? pct+'%' : ''}</div>`;
+    }).join('');
+
+    const legendHtml = segs.map(s => {
+      const pct = total > 0 ? (s.val / total * 100).toFixed(1) : 0;
+      return `<div class="tok-legend-item">
+        <span class="dot" style="background:${s.color};"></span>
+        ${s.label}
+        <span class="val">${fmtK(s.val)}</span>
+        <span style="color:var(--text-4);font-size:11px;">(${pct}%)</span>
+      </div>`;
+    }).join('');
+
+    $$('tok-breakdown-body').innerHTML = `
+      <div class="tok-bar-wrap">
+        <div class="tok-bar-track">${barHtml}</div>
+        <div class="tok-legend">${legendHtml}</div>
+      </div>`;
+  }
+
+  function renderModelTable(byModel, totalCost) {
+    if (!byModel.length) {
+      $$('model-body').innerHTML = '<div class="section-state">모델 데이터 없음</div>';
+      return;
+    }
+    const rows = byModel.map(m => {
+      const pct = totalCost > 0 ? (m.cost_usd / totalCost * 100).toFixed(1) : 0;
+      return `<tr>
+        <td style="font-family:monospace;font-size:11.5px;">${esc(m.model_used || '(미기록)')}</td>
+        <td class="num">${fmt(m.cnt)}개</td>
+        <td class="num">$${Number(m.cost_usd).toFixed(4)}</td>
+        <td style="padding-right:16px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="flex:1;height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;">
+              <div style="width:${pct}%;height:100%;background:var(--purple);border-radius:3px;"></div>
+            </div>
+            <span style="font-size:11px;color:var(--text-3);min-width:32px;text-align:right;">${pct}%</span>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+    $$('model-body').innerHTML = `
+      <table style="width:100%;">
+        <thead><tr>
+          <th>모델</th><th class="num">상품 수</th><th class="num">비용</th><th>비중</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  // ── 2. search log cost ────────────────────────────────────
+  async function loadSearchCost() {
+    const d = await fetch(API + '/search-logs/stats').then(r => r.json());
+    const inp  = Number(d.total_input_tokens  || 0);
+    const out  = Number(d.total_output_tokens || 0);
+    const cost = Number(d.total_cost_usd      || 0);
+    const llm  = Number(d.llm_used            || 0);
+
+    $$('search-cost-body').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--line);">
+        ${[
+          ['LLM 검색 수',  fmt(llm)+'건',         '총 검색 중 LLM 호출'],
+          ['누적 비용',    '$'+cost.toFixed(4),    '≈ ₩'+Math.round(cost*KRW).toLocaleString('ko-KR')],
+          ['입력 토큰',    fmtK(inp)+' tok',       'LLM 입력'],
+          ['출력 토큰',    fmtK(out)+' tok',       'LLM 생성'],
+        ].map(([l,v,s]) => `
+          <div style="padding:12px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);">
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">${l}</div>
+            <div style="font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;">${v}</div>
+            <div style="font-size:11px;color:var(--text-4);margin-top:2px;">${s}</div>
+          </div>`).join('')}
+      </div>
+      ${cost === 0 ? `<div style="padding:10px 16px;font-size:12px;color:var(--text-4);border-top:1px solid var(--line);">검색 토큰 데이터는 이후 검색부터 집계됩니다.</div>` : ''}
+    `;
+  }
+
+  // ── 3. top 20 bar chart ───────────────────────────────────
+  async function loadTopChart() {
+    const params = new URLSearchParams({ size: 20, order_by: 'cost_usd' });
+    if (advId) params.set('advertiser_id', advId);
+    const d = await fetch(API + '/products-enriched/costs?' + params).then(r => r.json());
+    const items = d.items || [];
+    if (!items.length) {
+      $$('top-chart-body').innerHTML = '<div class="section-state">데이터 없음</div>';
+      return;
+    }
+    const maxCost = Math.max(...items.map(p => p.cost_usd || 0));
+    const rows = items.map((p, i) => {
+      const pct = maxCost > 0 ? ((p.cost_usd || 0) / maxCost * 100).toFixed(1) : 0;
+      const isHigh = (p.cost_usd || 0) > maxCost * 0.5;
+      return `<div class="h-bar-row" style="animation-delay:${i*25}ms;">
+        <div class="h-bar-label" title="${esc(p.product_name)}">${esc((p.product_name||'').slice(0,18)+(p.product_name?.length>18?'…':''))}</div>
+        <div class="h-bar-outer">
+          <div class="h-bar-inner ${isHigh ? 'accent' : ''}" style="width:${pct}%;" title="${esc(p.product_name)} — $${Number(p.cost_usd).toFixed(4)}"></div>
+        </div>
+        <div class="h-bar-val">$${Number(p.cost_usd||0).toFixed(3)}</div>
+      </div>`;
+    }).join('');
+    $$('top-chart-body').innerHTML = `<div class="chart-wrap">${rows}</div>`;
+  }
+
+  // ── 4. heatmap (all products as dots) ────────────────────
+  let heatmapItems = [];
+  async function loadHeatmap() {
+    const params = new URLSearchParams({ size: 200, order_by: 'cost_usd' });
+    if (advId) params.set('advertiser_id', advId);
+    const d = await fetch(API + '/products-enriched/costs?' + params).then(r => r.json());
+    heatmapItems = d.items || [];
+    renderHeatmap();
+  }
+
+  function renderHeatmap() {
+    const items = heatmapItems;
+    if (!items.length) { $$('heatmap-body').innerHTML = '<div class="section-state">없음</div>'; return; }
+    const maxCost = Math.max(...items.map(p => p.cost_usd || 0));
+    const tooltip = $$('dot-tooltip');
+    const html = items.map((p, i) => {
+      const bg = costColor(p.cost_usd || 0, maxCost);
+      return `<div class="cost-dot" style="background:${bg};"
+        data-i="${i}"
+        title="${esc(p.product_name)} — $${Number(p.cost_usd||0).toFixed(4)}">
+      </div>`;
+    }).join('');
+    $$('heatmap-body').innerHTML = html + `
+      <div style="width:100%;padding-top:8px;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-4);">
+        <div style="width:10px;height:10px;border-radius:2px;background:#E8F2EC;border:1px solid var(--line);"></div>저비용
+        <div style="flex:1;height:6px;border-radius:3px;background:linear-gradient(to right,#E8F2EC,#F3EFE0,#F2E6E5,#9F2B2B);"></div>
+        고비용<div style="width:10px;height:10px;border-radius:2px;background:#9F2B2B;"></div>
+      </div>`;
+
+    // tooltip events
+    $$('heatmap-body').addEventListener('mouseover', e => {
+      const dot = e.target.closest('.cost-dot');
+      if (!dot) return;
+      const i = +dot.dataset.i;
+      const p = items[i];
+      if (!p) return;
+      tooltip.innerHTML = `<b>${esc(p.product_name||'—')}</b><br>
+        비용: <b>$${Number(p.cost_usd||0).toFixed(4)}</b> (≈₩${Math.round((p.cost_usd||0)*KRW).toLocaleString('ko-KR')})<br>
+        출력 토큰: ${fmt(p.output_tokens||0)} / 캐시: ${fmtK(p.cache_read_input_tokens||0)}`;
+      tooltip.classList.add('show');
+    });
+    $$('heatmap-body').addEventListener('mousemove', e => {
+      tooltip.style.left = (e.clientX + 14) + 'px';
+      tooltip.style.top  = (e.clientY - 8)  + 'px';
+    });
+    $$('heatmap-body').addEventListener('mouseleave', () => tooltip.classList.remove('show'));
+  }
+
+  // ── 5. product cost table ─────────────────────────────────
+  let currentPage = 0, totalItems = 0, currentQ = '', currentSort = 'cost_usd';
+  const PAGE_SIZE = 50;
+
+  async function loadTable() {
+    const tbody = $$('cost-tbody');
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:36px;color:var(--text-4);">로딩 중…</td></tr>`;
+    const params = new URLSearchParams({ page: currentPage, size: PAGE_SIZE, order_by: currentSort });
+    if (advId)    params.set('advertiser_id', advId);
+    if (currentQ) params.set('q', currentQ);
+
+    try {
+      const d = await fetch(API + '/products-enriched/costs?' + params).then(r => r.json());
+      const items = d.items || [];
+      totalItems = d.total || 0;
+      $$('tbl-total').textContent = fmt(totalItems);
+      $$('page-info').textContent = `총 ${fmt(totalItems)}건 중 ${fmt(currentPage*PAGE_SIZE+1)} - ${fmt(Math.min((currentPage+1)*PAGE_SIZE, totalItems))}`;
+      updatePgn();
+      renderTable(items);
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:36px;color:var(--err);">로드 실패: ${esc(e.message)}</td></tr>`;
+    }
+  }
+
+  function renderTable(items) {
+    if (!items.length) {
+      $$('cost-tbody').innerHTML = `<tr><td colspan="9" style="text-align:center;padding:36px;color:var(--text-4);">데이터 없음</td></tr>`;
+      return;
+    }
+    const maxCost = Math.max(...items.map(i => i.cost_usd || 0));
+    $$('cost-tbody').innerHTML = items.map((p, idx) => {
+      const cost = p.cost_usd || 0;
+      const pct  = maxCost > 0 ? (cost / maxCost * 100).toFixed(0) : 0;
+      const badgeColor = cost > maxCost * 0.66 ? 'err' : cost > maxCost * 0.33 ? 'warn' : 'ok';
+      const thumb = p.image_url
+        ? `<img src="${esc(p.image_url)}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--line);" onerror="this.style.display='none'">`
+        : `<div style="width:36px;height:36px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line);"></div>`;
+      const modelShort = (p.model_used||'—').replace('claude-','').replace(/-\d{8}/,'');
+      const dur = p.duration_ms != null ? (p.duration_ms/1000).toFixed(1)+'s' : '—';
+      return `<tr style="animation-delay:${Math.min(idx,8)*40}ms;">
+        <td style="padding:8px 12px;">${thumb}</td>
+        <td>
+          <div style="font-weight:600;font-size:12.5px;color:var(--text);">${esc((p.product_name||'').slice(0,30)+(p.product_name?.length>30?'…':''))}</div>
+          <div style="font-size:11px;color:var(--text-4);font-family:monospace;">${esc(p.product_code||'')}</div>
+        </td>
+        <td style="font-size:12px;color:var(--text-3);">${esc(p.category||'—')}</td>
+        <td><span class="badge muted" style="font-size:10.5px;">${esc(modelShort)}</span></td>
+        <td class="num mono-c">${fmtK(p.input_tokens||0)}</td>
+        <td class="num mono-c">${fmtK(p.output_tokens||0)}</td>
+        <td class="num mono-c" style="color:var(--info);">${fmtK(p.cache_read_input_tokens||0)}</td>
+        <td class="cost">
+          <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">
+            <div style="width:40px;height:4px;background:var(--surface-2);border-radius:2px;overflow:hidden;">
+              <div style="width:${pct}%;height:100%;background:var(--${badgeColor});border-radius:2px;"></div>
+            </div>
+            $${cost.toFixed(4)}
+          </div>
+          <div style="font-size:10.5px;color:var(--text-4);text-align:right;">≈₩${Math.round(cost*KRW).toLocaleString('ko-KR')}</div>
+        </td>
+        <td class="num" style="color:var(--text-3);">${dur}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function updatePgn() {
+    const total = Math.ceil(totalItems / PAGE_SIZE) || 1;
+    $$('page-num').textContent = `${currentPage+1} / ${total}`;
+    $$('btn-prev').disabled = currentPage === 0;
+    $$('btn-next').disabled = (currentPage+1) >= total;
+  }
+
+  // ── events ────────────────────────────────────────────────
+  $$('btn-prev').addEventListener('click', () => { if (currentPage > 0) { currentPage--; loadTable(); } });
+  $$('btn-next').addEventListener('click', () => { currentPage++; loadTable(); });
+  $$('sort-select').addEventListener('change', () => { currentSort = $$('sort-select').value; currentPage = 0; loadTable(); });
+  $$('btn-search').addEventListener('click', () => { currentQ = $$('q-input').value.trim(); currentPage = 0; loadTable(); });
+  $$('q-input').addEventListener('keydown', e => { if (e.key === 'Enter') $$('btn-search').click(); });
+  $$('btn-refresh').addEventListener('click', () => { init(); });
+
+  // ── init ─────────────────────────────────────────────────
+  async function init() {
+    loadTokenStats().catch(e => {
+      ['k-cost','k-total','k-avg','k-dur'].forEach(id => { $$(id).textContent = '—'; });
+      $$('tok-breakdown-body').innerHTML = `<div class="section-state err">로드 실패: ${esc(e.message)}</div>`;
+      $$('model-body').innerHTML = `<div class="section-state err">로드 실패</div>`;
+    });
+    loadSearchCost().catch(() => {
+      $$('search-cost-body').innerHTML = `<div class="section-state err">로드 실패</div>`;
+    });
+    loadTopChart().catch(() => {
+      $$('top-chart-body').innerHTML = `<div class="section-state err">로드 실패</div>`;
+    });
+    loadHeatmap().catch(() => {
+      $$('heatmap-body').innerHTML = `<div class="section-state err">로드 실패</div>`;
+    });
+    loadTable().catch(() => {});
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

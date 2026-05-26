@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIRA · 상품 관리</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="styles.css">
+<style>
+/* ── left-tab layout ── */
+.vtab-layout {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 0;
+  align-items: start;
+}
+.vtab-strip {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+  position: sticky;
+  top: 68px;
+  margin-right: 14px;
+}
+.vtab {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 14px;
+  font-size: 12.5px; font-weight: 500;
+  color: var(--text-3);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  border-bottom: 1px solid var(--line);
+  transition: all var(--dur) var(--ease);
+  user-select: none;
+}
+.vtab:last-child { border-bottom: none; }
+.vtab:hover { background: var(--surface-2); color: var(--text); }
+.vtab.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 700;
+  border-left-color: var(--primary);
+}
+.vtab .vcnt {
+  margin-left: auto;
+  font-size: 10.5px; font-weight: 600;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  padding: 1px 5px; border-radius: 3px;
+  color: var(--text-4);
+}
+.vtab.active .vcnt { background: var(--primary); border-color: var(--primary); color: #fff; }
+.vtab-panel { display: none; }
+.vtab-panel.active { display: block; }
+
+/* ── thumb ── */
+.cell-thumb { width:44px;height:44px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line);flex-shrink:0;overflow:hidden;display:grid;place-items:center;color:var(--text-4);font-size:9px; }
+.cell-thumb img { width:44px;height:44px;object-fit:cover; }
+
+/* ── tags ── */
+.tag-chip { display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:11px;background:var(--surface-2);border:1px solid var(--line);color:var(--text-3);white-space:nowrap; }
+.tags-wrap { display:flex;flex-wrap:wrap;gap:3px;max-width:260px; }
+
+/* ── toggle ── */
+.toggle { position:relative;width:34px;height:20px;flex-shrink:0; }
+.toggle input { opacity:0;width:0;height:0; }
+.toggle-slider { position:absolute;inset:0;background:var(--line-2);border-radius:999px;cursor:pointer;transition:background var(--dur) var(--ease); }
+.toggle-slider::before { content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform var(--dur) var(--ease);box-shadow:0 1px 2px rgba(0,0,0,0.2); }
+.toggle input:checked + .toggle-slider { background:var(--primary); }
+.toggle input:checked + .toggle-slider::before { transform:translateX(14px); }
+
+/* ── modal ── */
+.modal-backdrop { display:none;position:fixed;inset:0;background:rgba(10,10,10,0.45);z-index:50;align-items:center;justify-content:center;backdrop-filter:blur(2px); }
+.modal-backdrop.open { display:flex; }
+.modal { background:#fff;border-radius:10px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(10,10,10,0.22);width:min(700px,95vw);max-height:88vh;overflow-y:auto;display:flex;flex-direction:column; }
+.modal-head { padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;font-size:14px;font-weight:700;position:sticky;top:0;background:#fff;z-index:1; }
+.modal-head .close-btn { margin-left:auto;width:28px;height:28px;display:grid;place-items:center;border-radius:5px;color:var(--text-3);cursor:pointer;border:1px solid transparent;transition:all var(--dur) var(--ease); }
+.modal-head .close-btn:hover { background:var(--surface-2);border-color:var(--line);color:var(--text); }
+.modal-body { padding:20px; }
+.modal-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+.modal-field { margin-bottom:14px; }
+.modal-field .lbl { font-size:11px;font-weight:600;color:var(--text-4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px; }
+.modal-field .val { font-size:13.5px;color:var(--text);line-height:1.6; }
+.modal-field .val a { color:var(--info);text-decoration:underline;word-break:break-all; }
+.modal-desc { background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:12px 14px;font-size:12.5px;color:var(--text-2);line-height:1.65; }
+.embed-badge-ok { color:var(--ok);font-weight:600; }
+.embed-badge-no { color:var(--warn);font-weight:600; }
+.spinner-ring { width:20px;height:20px;border:2px solid var(--line);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;margin-right:10px; }
+
+/* ── batch panel ── */
+.prog-wrap { height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden;margin-top:8px; }
+.prog-bar { height:100%;border-radius:3px;transition:width .4s var(--ease); }
+.prog-blue { background:var(--info); }
+.prog-purple { background:var(--purple); }
+.prog-ok { background:var(--ok); }
+.prog-err { background:var(--err); }
+.batch-panel { background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:14px; }
+.batch-panel .bp-head { display:flex;align-items:center;gap:10px;margin-bottom:12px;font-weight:700;font-size:13px; }
+.batch-panel .bp-row { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+.bp-label { font-size:12px;color:var(--text-3);white-space:nowrap; }
+.bp-input { height:30px;border:1px solid var(--line-2);border-radius:4px;padding:0 8px;font-size:12.5px;background:#fff;color:var(--text);width:72px;text-align:right; }
+.bp-input:focus { outline:none;border-color:var(--primary); }
+.bp-select { height:30px;border:1px solid var(--line-2);border-radius:4px;padding:0 6px;font-size:12.5px;background:#fff;color:var(--text);cursor:pointer; }
+.bp-sep { width:1px;height:20px;background:var(--line);margin:0 2px; }
+
+/* ── filter tabs ── */
+.ftabs { display:flex;gap:2px;background:var(--surface-2);padding:3px;border-radius:6px;border:1px solid var(--line); }
+.ftab { padding:5px 12px;border-radius:4px;font-size:12px;font-weight:500;color:var(--text-3);cursor:pointer;transition:all var(--dur) var(--ease);white-space:nowrap; }
+.ftab:hover { color:var(--text);background:rgba(255,255,255,.7); }
+.ftab.active { background:#fff;color:var(--text);font-weight:700;box-shadow:0 1px 3px rgba(10,10,10,.08); }
+
+/* ── image grid (common images) ── */
+.ci-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px; }
+.ci-thumb { border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff;cursor:pointer;transition:all var(--dur) var(--ease);position:relative; }
+.ci-thumb:hover { border-color:var(--primary);box-shadow:0 2px 8px rgba(10,10,10,.1); }
+.ci-thumb.blocked { border-color:var(--err);opacity:.7; }
+.ci-thumb img { width:100%;height:80px;object-fit:cover;display:block;background:var(--surface-2); }
+.ci-thumb .ci-meta { padding:5px 7px;font-size:10.5px; }
+.ci-thumb .ci-cnt { color:var(--warn);font-weight:700; }
+.ci-thumb .ci-name { color:var(--text-4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px; }
+.ci-thumb .blocked-badge { position:absolute;top:4px;right:4px;background:var(--err);color:#fff;font-size:9.5px;font-weight:700;padding:2px 5px;border-radius:3px; }
+.ci-chk-pos { position:absolute;top:4px;left:4px; }
+
+/* ── img filter tabs ── */
+.ift-row { display:flex;gap:2px;background:var(--surface-2);padding:2px;border-radius:5px;border:1px solid var(--line); }
+.ift { padding:4px 10px;border-radius:4px;font-size:11.5px;font-weight:500;cursor:pointer;color:var(--text-3);transition:all var(--dur) var(--ease); }
+.ift:hover { color:var(--text); }
+.ift.active { background:#fff;color:var(--text);font-weight:700;box-shadow:0 1px 2px rgba(10,10,10,.06); }
+.ift.active.blocked-tab { background:var(--err);color:#fff; }
+
+/* ── prod-cell for sync table ── */
+.prod-img-sm { width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid var(--line); }
+.prod-img-ph { width:40px;height:40px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line);display:inline-block; }
+
+/* ── desc block ── */
+.desc-block { border-left:3px solid var(--line-2);padding:8px 12px;border-radius:0 4px 4px 0;background:var(--surface-2);font-size:12.5px;line-height:1.6;color:var(--text-2);margin-bottom:6px; }
+.desc-block.situation { border-color:var(--info); }
+.desc-block.style { border-color:var(--warn); }
+.desc-block.persona { border-color:var(--purple); }
+.desc-block .dl { font-size:10.5px;font-weight:700;color:var(--text-4);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px; }
+.attr-chip { font-size:11.5px;padding:3px 8px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line);color:var(--text-2);display:inline-block;margin:2px; }
+
+@keyframes spin { to { transform:rotate(360deg); } }
+.spin { display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--text-3);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle; }
+
+/* ── detail modal: blocked image ── */
+.modal-img-wrap { position:relative;display:inline-block;border-radius:4px;overflow:hidden;flex-shrink:0; }
+.modal-img-wrap.is-blocked { box-shadow:0 0 0 2px var(--err); }
+.modal-img-wrap.is-blocked img { opacity:.45;filter:grayscale(40%); }
+.modal-img-blocked-dim { position:absolute;inset:0;background:rgba(180,30,30,.18);pointer-events:none; }
+.modal-img-blocked-badge { position:absolute;top:3px;right:3px;background:var(--err);color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;letter-spacing:.03em;pointer-events:none; }
+.modal-img-unblock-btn { position:absolute;bottom:4px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;padding:2px 7px;background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:4px;cursor:pointer;transition:background .15s; }
+.modal-img-unblock-btn:hover { background:var(--err); }
+</style>
+</head>
+<body data-route="products">
+<div class="shell">
+  <div id="side-mount"></div>
+  <main class="main">
+    <div id="top-mount"></div>
+
+    <div class="page">
+
+      <!-- HEAD -->
+      <div class="page-head">
+        <div>
+          <h1>상품 관리</h1>
+          <div class="sub">크롤링 → LLM Enrich → 벡터 임베딩 · Enriched 상품 카탈로그를 관리합니다.</div>
+        </div>
+        <div class="actions">
+          <button class="btn" id="btn-reload">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>
+            새로고침
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI (shared) -->
+      <div class="stat-row">
+        <div class="stat"><div class="l info"><span class="d"></span>전체 상품</div><div class="v"><span id="st-total">—</span></div><div class="delta" id="st-delta">로딩 중…</div></div>
+        <div class="stat"><div class="l warn"><span class="d"></span>미스크랩</div><div class="v"><span id="st-pending">—</span></div><div class="delta">스크랩 대기</div></div>
+        <div class="stat"><div class="l ok"><span class="d"></span>스크랩 완료</div><div class="v"><span id="st-scraped">—</span></div><div class="delta">HTML + 이미지 수집됨</div></div>
+        <div class="stat"><div class="l purple"><span class="d"></span>LLM 정제 / 벡터</div><div class="v"><span id="st-enrich">—</span><small id="st-vec" style="font-size:13px;color:var(--text-3);margin-left:4px;"></small></div><div class="delta">product_enriched · 임베딩 완료</div></div>
+      </div>
+
+      <!-- VTAB LAYOUT -->
+      <div class="vtab-layout">
+
+        <!-- left strip -->
+        <div class="vtab-strip">
+          <div class="vtab active" data-panel="products">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V10"/></svg>
+            상품 목록
+          </div>
+          <div class="vtab" data-panel="scrape">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            크롤링
+          </div>
+          <div class="vtab" data-panel="enrich">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M17 7l5-5"/><path d="M22 2h-5v5"/></svg>
+            Enrich
+          </div>
+          <div class="vtab" data-panel="images">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+            이미지 차단
+            <span class="vcnt" id="img-tab-cnt" style="display:none;"></span>
+          </div>
+        </div>
+
+        <!-- panels -->
+        <div style="min-width:0;">
+
+          <!-- ══════════ 상품 목록 패널 ══════════ -->
+          <div class="vtab-panel active" id="panel-products">
+
+            <div class="stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px;">
+              <div class="stat"><div class="l info"><span class="d"></span>전체 Enriched</div><div class="v" id="kpi-total">—</div><div class="delta">Python Embedder 기준</div></div>
+              <div class="stat"><div class="l ok"><span class="d"></span>Embedded</div><div class="v" id="kpi-embedded">—</div><div class="delta">검색 가능 상품</div></div>
+              <div class="stat"><div class="l"><span class="d"></span>카테고리 수</div><div class="v" id="kpi-cats">—</div><div class="delta"></div></div>
+              <div class="stat"><div class="l warn"><span class="d"></span>미임베딩</div><div class="v" id="kpi-notembedded">—</div><div class="delta">embedded 제외</div></div>
+            </div>
+
+            <div class="card" style="margin-bottom:12px;">
+              <div class="filters" style="grid-template-columns:2fr 1fr auto auto;padding:10px 14px;">
+                <div class="field">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:13px;height:13px;stroke-width:1.8;flex-shrink:0;color:var(--text-4);margin-right:6px;"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                  <input type="text" id="q-input" placeholder="상품명 검색…" style="flex:1;border:none;background:transparent;outline:none;font-size:12.5px;">
+                </div>
+                <div class="field">
+                  <span class="lbl">카테고리</span>
+                  <select id="cat-select" style="flex:1;border:none;background:transparent;outline:none;font-size:12.5px;"><option value="">전체</option></select>
+                </div>
+                <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text-3);">
+                  <label class="toggle"><input type="checkbox" id="embedded-toggle"><span class="toggle-slider"></span></label>
+                  <span>Embedded만</span>
+                </div>
+                <div style="display:flex;gap:6px;">
+                  <button class="btn btn-sm" id="reset-btn">초기화</button>
+                  <button class="btn btn-primary btn-sm" id="search-btn">검색</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="list-card">
+              <div class="list-head">
+                <span class="total">총 <b id="result-total">—</b>건</span>
+                <span class="sp" style="flex:1;"></span>
+              </div>
+              <table>
+                <thead><tr>
+                  <th style="width:52px;">이미지</th>
+                  <th>상품명 / 코드</th>
+                  <th>카테고리 / 브랜드</th>
+                  <th>태그</th>
+                  <th class="num">가격</th>
+                  <th>벡터 상태</th>
+                  <th class="act-col"></th>
+                </tr></thead>
+                <tbody id="prod-tbody">
+                  <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-4);">로딩 중…</td></tr>
+                </tbody>
+              </table>
+              <div class="list-foot">
+                <span id="page-info">—</span>
+                <div class="pgn">
+                  <button id="btn-prev">‹</button>
+                  <span id="page-num" style="padding:0 12px;font-size:12px;color:var(--text-3);"></span>
+                  <button id="btn-next">›</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══════════ 크롤링 패널 ══════════ -->
+          <div class="vtab-panel" id="panel-scrape">
+            <div class="batch-panel">
+              <div class="bp-head">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                스크랩 배치
+                <div id="scrape-status-badge"></div>
+              </div>
+              <div class="bp-row" id="scrape-controls">
+                <span class="bp-label">모드</span>
+                <select class="bp-select" id="sc-mode"><option value="api">API (빠름)</option><option value="page">Page</option></select>
+                <div class="bp-sep"></div>
+                <span class="bp-label">개수</span>
+                <input class="bp-input" type="number" id="sc-count" value="500" min="1" max="10000">
+                <span class="bp-label">묶음</span>
+                <input class="bp-input" type="number" id="sc-batchsize" value="100" min="1" max="200">
+                <span class="bp-label">워커</span>
+                <input class="bp-input" type="number" id="sc-concur" value="4" min="1" max="32">
+                <span class="bp-label">sleep</span>
+                <input class="bp-input" type="number" id="sc-interval" value="1000" min="0" max="10000" style="width:60px;">
+                <span class="bp-label">ms</span>
+                <button class="btn btn-primary btn-sm" id="btn-start-scrape">시작</button>
+              </div>
+              <div id="scrape-progress" style="display:none;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-top:10px;">
+                  <span id="sp-label">준비 중…</span><span id="sp-nums">—</span>
+                </div>
+                <div class="prog-wrap"><div class="prog-bar prog-blue" id="sp-bar" style="width:0%"></div></div>
+                <div style="margin-top:8px;display:flex;gap:6px;">
+                  <button class="btn btn-sm btn-danger" id="btn-cancel-scrape">취소</button>
+                  <span id="sp-err" style="font-size:11.5px;color:var(--err);"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- filter + sync product list -->
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+              <div class="ftabs" id="scrape-filter-tabs">
+                <div class="ftab active" data-f="">전체</div>
+                <div class="ftab" data-f="to_scrape">미스크랩</div>
+                <div class="ftab" data-f="to_enrich">스크랩됨/미정제</div>
+                <div class="ftab" data-f="done">정제 완료</div>
+              </div>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--line);border-radius:5px;background:rgba(78,64,120,.06);">
+                <span style="font-size:11px;color:var(--purple);font-weight:600;">행별 LLM</span>
+                <select class="bp-select" id="row-model" style="height:26px;font-size:11.5px;"><option value="haiku">haiku</option><option value="sonnet">sonnet</option><option value="opus">opus</option></select>
+                <input class="bp-input" type="number" id="row-images" value="10" min="1" max="100" style="width:52px;height:26px;font-size:11.5px;">
+                <span style="font-size:11px;color:var(--text-4);">장</span>
+              </div>
+            </div>
+            <div class="list-card">
+              <div class="list-head">
+                <span class="total">총 <b id="sync-tbl-total">—</b>개 &nbsp;·&nbsp; 페이지 <b id="sync-tbl-page">1</b> / <b id="sync-tbl-pages">1</b></span>
+                <span class="sp" style="flex:1;"></span>
+                <div class="ctrl" style="display:flex;gap:4px;">
+                  <button class="btn btn-sm" id="sync-pgn-prev" disabled>‹</button>
+                  <button class="btn btn-sm" id="sync-pgn-next" disabled>›</button>
+                </div>
+              </div>
+              <div id="sync-tbl-loading" style="text-align:center;padding:32px;color:var(--text-4);"><span class="spin"></span> 로딩 중…</div>
+              <div id="sync-tbl-empty" style="text-align:center;padding:40px;color:var(--text-4);display:none;">상품이 없습니다.</div>
+              <table id="sync-prod-table" style="display:none;">
+                <thead><tr>
+                  <th style="width:52px;">이미지</th>
+                  <th>상품</th>
+                  <th>상태</th>
+                  <th style="width:220px;text-align:right;">액션</th>
+                </tr></thead>
+                <tbody id="sync-prod-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ══════════ Enrich 패널 ══════════ -->
+          <div class="vtab-panel" id="panel-enrich">
+            <div class="batch-panel">
+              <div class="bp-head">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M17 7l5-5"/><path d="M22 2h-5v5"/></svg>
+                LLM Enrich 배치
+                <div id="enrich-status-badge"></div>
+              </div>
+              <div class="bp-row" id="enrich-controls">
+                <span class="bp-label">모델</span>
+                <select class="bp-select" id="ec-model"><option value="haiku">haiku (저렴)</option><option value="sonnet">sonnet (정확)</option><option value="opus">opus (최고급)</option></select>
+                <span class="bp-label">개수</span>
+                <input class="bp-input" type="number" id="ec-count" value="20" min="1" max="10000">
+                <span class="bp-label">이미지</span>
+                <input class="bp-input" type="number" id="ec-images" value="10" min="1" max="100">
+                <span class="bp-label">워커</span>
+                <input class="bp-input" type="number" id="ec-concur" value="2" min="1" max="8">
+                <span class="bp-label">sleep</span>
+                <input class="bp-input" type="number" id="ec-interval" value="0" min="0" max="10000" style="width:56px;">
+                <span class="bp-label">ms</span>
+                <span class="bp-label">벡터</span>
+                <select class="bp-select" id="ec-embed"><option value="bge">bge (로컬)</option><option value="openai">openai</option><option value="both">both</option></select>
+                <button class="btn btn-primary btn-sm" id="btn-start-enrich">시작</button>
+              </div>
+              <div id="enrich-progress" style="display:none;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-top:10px;">
+                  <span id="ep-label">준비 중…</span><span id="ep-nums">—</span>
+                </div>
+                <div class="prog-wrap"><div class="prog-bar prog-purple" id="ep-bar" style="width:0%"></div></div>
+                <div style="margin-top:8px;display:flex;gap:6px;">
+                  <button class="btn btn-sm btn-danger" id="btn-cancel-enrich">취소</button>
+                  <span id="ep-err" style="font-size:11.5px;color:var(--err);"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- enrich also shows the product list (reuses sync table) -->
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+              <div class="ftabs" id="enrich-filter-tabs">
+                <div class="ftab active" data-f="">전체</div>
+                <div class="ftab" data-f="to_scrape">미스크랩</div>
+                <div class="ftab" data-f="to_enrich">스크랩됨/미정제</div>
+                <div class="ftab" data-f="done">정제 완료</div>
+              </div>
+            </div>
+            <div class="list-card">
+              <div class="list-head">
+                <span class="total">총 <b id="enrich-tbl-total">—</b>개 &nbsp;·&nbsp; 페이지 <b id="enrich-tbl-page">1</b> / <b id="enrich-tbl-pages">1</b></span>
+                <span class="sp" style="flex:1;"></span>
+                <div class="ctrl" style="display:flex;gap:4px;">
+                  <button class="btn btn-sm" id="enrich-pgn-prev" disabled>‹</button>
+                  <button class="btn btn-sm" id="enrich-pgn-next" disabled>›</button>
+                </div>
+              </div>
+              <div id="enrich-tbl-loading" style="text-align:center;padding:32px;color:var(--text-4);"><span class="spin"></span> 로딩 중…</div>
+              <div id="enrich-tbl-empty" style="text-align:center;padding:40px;color:var(--text-4);display:none;">상품이 없습니다.</div>
+              <table id="enrich-prod-table" style="display:none;">
+                <thead><tr>
+                  <th style="width:52px;">이미지</th>
+                  <th>상품</th>
+                  <th>상태</th>
+                  <th style="width:220px;text-align:right;">액션</th>
+                </tr></thead>
+                <tbody id="enrich-prod-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ══════════ 이미지 차단 패널 ══════════ -->
+          <div class="vtab-panel" id="panel-images">
+            <div style="background:var(--warn-soft);border:1px solid #e0d0a0;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:var(--warn);">
+              <b>⚠️ 공통 이미지 감지</b> — 여러 상품 페이지에 동일 URL로 반복 등장하는 이미지입니다. 배너·공지·이벤트 이미지일 수 있습니다. LLM enrich 시 자동 제외됩니다.
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+              <span style="font-size:12.5px;color:var(--text-3);">최소 상품 수</span>
+              <input class="bp-input" type="number" id="img-min" value="3" min="2" max="100" style="width:56px;">
+              <button class="btn btn-sm" id="btn-img-reload">새로고침</button>
+              <span id="img-total-cnt" style="font-size:12px;color:var(--text-3);"></span>
+              <div class="ift-row" id="img-filter-tabs">
+                <div class="ift active" data-f="all">전체</div>
+                <div class="ift" data-f="unblocked">미차단</div>
+                <div class="ift blocked-tab" data-f="blocked">차단됨</div>
+              </div>
+              <div id="img-bulk-bar" style="display:none;gap:6px;align-items:center;">
+                <span id="img-sel-cnt" style="font-size:12px;color:var(--warn);font-weight:700;"></span>
+                <button class="btn btn-sm btn-danger" id="btn-bulk-block">선택 차단 등록</button>
+                <button class="btn btn-sm btn-ghost" id="btn-sel-clear">선택 해제</button>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+              <label style="font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:5px;cursor:pointer;">
+                <input type="checkbox" id="img-chk-all" class="chk"> 전체 선택
+              </label>
+            </div>
+            <div id="img-loading" style="text-align:center;padding:30px;color:var(--text-4);display:none;"><span class="spin"></span> 로딩 중…</div>
+            <div class="ci-grid" id="img-grid"></div>
+            <div id="img-empty" style="text-align:center;padding:40px;color:var(--text-4);display:none;">공통 이미지 없음</div>
+          </div>
+
+        </div><!-- /panels -->
+      </div><!-- /vtab-layout -->
+    </div><!-- /page -->
+  </main>
+</div>
+
+<!-- ── Enriched product detail modal ── -->
+<div class="modal-backdrop" id="detail-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <span id="modal-title">상품 상세</span>
+      <button class="close-btn" id="modal-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px;height:14px;stroke-width:2;"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="modal-body">
+      <div style="display:flex;align-items:center;justify-content:center;padding:40px;color:var(--text-4);gap:10px;"><div class="spinner-ring"></div>로딩 중…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Common image popup ── -->
+<div class="modal-backdrop" id="img-popup">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-head">
+      <span>공통 이미지 상세</span>
+      <button class="close-btn" id="img-popup-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px;height:14px;stroke-width:2;"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="img-popup-body"></div>
+    <div style="padding:12px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;" id="img-popup-foot"></div>
+  </div>
+</div>
+
+<script src="partials.js"></script>
+<script src="enhance.js"></script>
+<script>
+(function () {
+  const BOOT     = 'http://localhost:8090';
+  const EMBEDDER = 'http://192.168.101.27:8001';
+
+  // advertiser from localStorage
+  let ADV = 1;
+  try { const a = JSON.parse(localStorage.getItem('aira_adv') || 'null'); if (a?.id) ADV = a.id; } catch (_) {}
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const fmt = n => n == null ? '—' : Number(n).toLocaleString('ko-KR');
+
+  // ── vertical tab switching ─────────────────────────────────
+  let activePanel = 'products';
+  document.querySelectorAll('.vtab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.vtab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.vtab-panel').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      activePanel = t.dataset.panel;
+      $('panel-' + activePanel).classList.add('active');
+      if (activePanel === 'scrape') { loadSyncProducts('scrape'); startBatchPoll(); }
+      if (activePanel === 'enrich') { loadSyncProducts('enrich'); startBatchPoll(); }
+      if (activePanel === 'images') { if (!commonImages) { loadCommonImages(); loadBlockPatterns(); } }
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════
+  // KPI — from Spring Boot
+  // ══════════════════════════════════════════════════════════
+  async function loadKpiSync() {
+    try {
+      const r = await fetch(`${BOOT}/advertisers/${ADV}/products?page=0&size=1&filter=`);
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.counts) {
+        $('st-total').textContent   = fmt(d.counts.total);
+        $('st-pending').textContent = fmt(d.counts.pending);
+        $('st-scraped').textContent = fmt(d.counts.total - d.counts.pending);
+        $('st-enrich').textContent  = fmt(d.counts.llm_enriched);
+        $('st-vec').textContent     = `/ ${fmt(d.counts.vectorized)}`;
+        $('st-delta').textContent   = `정제 완료 ${fmt(d.counts.done)}개`;
+      }
+    } catch (_) {}
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // PANEL: 상품 목록 (Python Embedder)
+  // ══════════════════════════════════════════════════════════
+  let prodPage = 0, prodTotal = 0, prodQ = '', prodCat = '', prodEmbedOnly = false;
+  const PROD_SIZE = 20;
+
+  async function loadEmbedderKpi() {
+    try {
+      const [cntRes, catRes] = await Promise.all([
+        fetch(EMBEDDER + '/products-enriched/count').then(r => r.json()),
+        fetch(EMBEDDER + '/products-enriched/categories').then(r => r.json()),
+      ]);
+      const total = cntRes.total ?? 0, emb = cntRes.embedded ?? 0;
+      $('kpi-total').textContent = fmt(total);
+      $('kpi-embedded').textContent = fmt(emb);
+      $('kpi-notembedded').textContent = fmt(total - emb);
+      $('kpi-cats').textContent = Array.isArray(catRes) ? catRes.length : '—';
+      const sel = $('cat-select');
+      if (Array.isArray(catRes)) catRes.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.category; o.textContent = `${c.category} (${c.cnt})`; sel.appendChild(o);
+      });
+    } catch (_) {}
+  }
+
+  async function loadProducts() {
+    const tbody = $('prod-tbody');
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:36px;color:var(--text-4);"><div style="display:flex;align-items:center;justify-content:center;gap:8px;"><div class="spinner-ring"></div>로딩 중…</div></td></tr>`;
+    const p = new URLSearchParams({ page: prodPage, size: PROD_SIZE });
+    if (prodQ) p.set('q', prodQ);
+    if (prodCat) p.set('category', prodCat);
+    if (prodEmbedOnly) p.set('status', 'embedded');
+    try {
+      const d = await fetch(EMBEDDER + '/products-enriched?' + p).then(r => r.json());
+      const items = d.items || d.content || d || [];
+      prodTotal = d.total ?? items.length;
+      $('result-total').textContent = fmt(prodTotal);
+      $('page-info').textContent = `총 ${fmt(prodTotal)}건 중 ${fmt(prodPage*PROD_SIZE+1)} - ${fmt(Math.min((prodPage+1)*PROD_SIZE, prodTotal))}`;
+      updateProdPgn();
+      renderProdRows(items);
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:36px;color:var(--err);">로드 실패: ${esc(e.message)}</td></tr>`;
+    }
+  }
+
+  function renderProdRows(items) {
+    const tbody = $('prod-tbody');
+    if (!items.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:36px;color:var(--text-4);">검색 결과 없음</td></tr>`; return; }
+    tbody.innerHTML = items.map(p => {
+      const thumb = p.image_url
+        ? `<img src="${esc(p.image_url)}" alt="" onerror="this.style.display='none'" style="width:100%;height:100%;object-fit:cover;">`
+        : '';
+      const tags = (p.tags || []).slice(0, 4).map(t => {
+        const name = typeof t === 'string' ? t : (t.tag || t.name || '');
+        const cat  = typeof t === 'object' && t.tag_category ? t.tag_category : '';
+        return `<span class="tag-chip">${cat ? `<span style="font-size:9.5px;color:var(--text-4);text-transform:uppercase;letter-spacing:.05em;margin-right:3px;">${esc(cat)}</span>` : ''}${esc(name)}</span>`;
+      }).join('');
+      const isEmb = p.enrich_status === 'embedded';
+      const statusBadge = isEmb
+        ? '<span class="badge ok"><span class="dot"></span>embedded</span>'
+        : `<span class="badge warn"><span class="dot"></span>${esc(p.enrich_status || '—')}</span>`;
+      const price = p.sale_price ?? p.price;
+      return `<tr>
+        <td><div class="cell-thumb">${thumb}</div></td>
+        <td><div style="font-weight:600;font-size:13px;">${esc(p.product_name||'—')}</div><div style="font-size:11px;color:var(--text-4);font-family:monospace;">${esc(p.product_code||p.rv_product_id||'')}</div></td>
+        <td><div style="font-size:13px;">${esc(p.category||'—')}</div><div style="font-size:11.5px;color:var(--text-4);">${esc(p.brand||'—')}</div></td>
+        <td><div class="tags-wrap">${tags || '<span style="color:var(--text-4);font-size:11.5px;">—</span>'}</div></td>
+        <td class="num tnum" style="font-size:13px;">${price != null ? '₩'+Number(price).toLocaleString('ko-KR') : '—'}</td>
+        <td>${statusBadge}</td>
+        <td><button class="btn btn-sm" onclick="openDetail(${JSON.stringify(p.rv_product_id)})">상세보기</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function updateProdPgn() {
+    const total = Math.ceil(prodTotal / PROD_SIZE) || 1;
+    $('page-num').textContent = `${prodPage+1} / ${total}`;
+    $('btn-prev').disabled = prodPage === 0;
+    $('btn-next').disabled = (prodPage+1) >= total;
+  }
+
+  $('btn-prev').addEventListener('click', () => { if (prodPage > 0) { prodPage--; loadProducts(); } });
+  $('btn-next').addEventListener('click', () => { prodPage++; loadProducts(); });
+  $('search-btn').addEventListener('click', () => { prodQ = $('q-input').value.trim(); prodCat = $('cat-select').value; prodEmbedOnly = $('embedded-toggle').checked; prodPage = 0; loadProducts(); });
+  $('q-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('search-btn').click(); });
+  $('reset-btn').addEventListener('click', () => { $('q-input').value=''; $('cat-select').value=''; $('embedded-toggle').checked=false; prodQ=''; prodCat=''; prodEmbedOnly=false; prodPage=0; loadProducts(); });
+
+  // ── Detail modal (enriched) ───────────────────────────────
+  // 차단 이미지 래퍼 빌더 — 원본 URL 알고 있을 때
+  function buildImgWrap(proxyUrl, srcUrl, size, clickJs) {
+    const blocked = srcUrl && isBlocked(srcUrl);
+    const entry   = blocked ? getBlockEntry(srcUrl) : null;
+    const imgStyle = `width:${size}px;height:${size}px;object-fit:cover;border-radius:4px;display:block;`;
+    const wrapStyle= `width:${size}px;height:${size}px;`;
+    const click    = clickJs || '';
+    return `<div class="modal-img-wrap${blocked?' is-blocked':''}" style="${wrapStyle}">
+      <img src="${proxyUrl}" style="${imgStyle}" onerror="this.style.display='none'"${click?` onclick="${click}"`:''}>
+      ${blocked?`<div class="modal-img-blocked-dim"></div><div class="modal-img-blocked-badge">차단됨</div><button class="modal-img-unblock-btn" onclick="modalUnblockImg(${entry.id},this)">🔓 해제</button>`:''}
+    </div>`;
+  }
+
+  window.modalUnblockImg = async function(blockId, btn) {
+    if (!confirm('이 이미지의 차단을 해제합니다.\n(해당 URL 패턴을 사용하는 모든 상품에 적용됩니다)')) return;
+    const r = await fetch(`${EMBEDDER}/enrich-llm/image-blocks/${ADV}/${blockId}`, {method:'DELETE'});
+    if (!r.ok) { alert('해제 실패'); return; }
+    // blockPatterns 갱신 후 모달 내 차단 표시 제거
+    await loadBlockPatterns();
+    const wrap = btn.closest('.modal-img-wrap');
+    wrap.classList.remove('is-blocked');
+    wrap.querySelector('.modal-img-blocked-dim')?.remove();
+    wrap.querySelector('.modal-img-blocked-badge')?.remove();
+    wrap.querySelector('img').style.opacity = '';
+    wrap.querySelector('img').style.filter  = '';
+    btn.remove();
+  };
+
+  async function openDetail(rvId) {
+    $('modal-title').textContent = '상품 상세';
+    $('modal-body').innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:40px;gap:10px;color:var(--text-4);"><div class="spinner-ring"></div>로딩 중…</div>`;
+    $('detail-modal').classList.add('open');
+    // blockPatterns 미로드 시 로드 (상품 목록 탭에서 바로 열었을 때 대비)
+    if (!blockPatterns.length) await loadBlockPatterns();
+    try {
+      const r = await fetch(EMBEDDER + '/products-enriched/' + rvId);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      $('modal-title').textContent = d.product_name || '상품 상세';
+
+      const localCount  = Array.isArray(d.images) ? d.images.length : (d.image_local_count || 0);
+      const srcUrls     = Array.isArray(d.image_src_urls) ? d.image_src_urls : [];
+      const imgBase     = EMBEDDER + '/products-enriched/' + rvId + '/image/';
+      let imgHtml = '';
+      if (localCount > 0) {
+        const maxThumb = Math.min(localCount, 8);
+        // 메인 이미지 (index 0)
+        const mainSrc = srcUrls[0] || '';
+        const mainWrap = buildImgWrap(imgBase + '0', mainSrc, 130, '');
+        // 썸네일
+        const thumbs = Array.from({length: maxThumb}, (_,i) => {
+          const proxyUrl = imgBase + i;
+          const srcUrl   = srcUrls[i] || '';
+          const clickJs  = `this.closest('.modal-body').querySelector('.img-main-proxy').src=this.src`;
+          const blocked  = srcUrl && isBlocked(srcUrl);
+          const entry    = blocked ? getBlockEntry(srcUrl) : null;
+          const imgStyle = `width:76px;height:76px;object-fit:cover;border-radius:4px;display:block;`;
+          return `<div class="modal-img-wrap${blocked?' is-blocked':''}" style="width:76px;height:76px;">
+            <img class="detail-thumb" src="${proxyUrl}" style="${imgStyle}" onerror="this.style.display='none'" onclick="document.querySelector('.img-main-proxy').src=this.src">
+            ${blocked?`<div class="modal-img-blocked-dim"></div><div class="modal-img-blocked-badge">차단됨</div><button class="modal-img-unblock-btn" onclick="modalUnblockImg(${entry.id},this)">🔓 해제</button>`:''}
+          </div>`;
+        }).join('');
+        const mainBlocked = mainSrc && isBlocked(mainSrc);
+        const mainEntry   = mainBlocked ? getBlockEntry(mainSrc) : null;
+        const mainImgBlock = mainBlocked
+          ? `<div class="modal-img-blocked-dim"></div><div class="modal-img-blocked-badge">차단됨</div><button class="modal-img-unblock-btn" onclick="modalUnblockImg(${mainEntry.id},this)">🔓 해제</button>`
+          : '';
+        imgHtml = `<div class="modal-field"><div class="lbl">크롤링 이미지 (${localCount}장)</div>
+          <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-top:6px;">
+            <div class="modal-img-wrap${mainBlocked?' is-blocked':''}" style="width:130px;height:130px;flex-shrink:0;">
+              <img class="img-main img-main-proxy" src="${imgBase}0" style="width:130px;height:130px;object-fit:cover;border-radius:5px;display:block;" onerror="this.style.display='none'">
+              ${mainImgBlock}
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start;">${thumbs}</div>
+          </div></div>`;
+      } else if (d.image_url) {
+        const mainBlocked = isBlocked(d.image_url);
+        const mainEntry   = mainBlocked ? getBlockEntry(d.image_url) : null;
+        imgHtml = `<div class="modal-field"><div class="lbl">대표 이미지</div>
+          <div class="modal-img-wrap${mainBlocked?' is-blocked':''}" style="width:130px;height:130px;margin-top:6px;">
+            <img src="${esc(d.image_url)}" style="width:130px;height:130px;object-fit:cover;border-radius:5px;display:block;" onerror="this.style.display='none'">
+            ${mainBlocked?`<div class="modal-img-blocked-dim"></div><div class="modal-img-blocked-badge">차단됨</div><button class="modal-img-unblock-btn" onclick="modalUnblockImg(${mainEntry.id},this)">🔓 해제</button>`:''}
+          </div></div>`;
+      }
+
+      const tagObjs = Array.isArray(d.tags) ? d.tags : [];
+      const tagsByCategory = {};
+      tagObjs.forEach(t => {
+        const cat = (typeof t==='object'&&t.tag_category) ? t.tag_category : 'etc';
+        if (!tagsByCategory[cat]) tagsByCategory[cat] = [];
+        tagsByCategory[cat].push(t);
+      });
+      const catColors = {style:'#2563EB',feature:'#0D9488',mood:'#D97706',endorser:'#7C3AED',etc:'#6B7280'};
+      let tagsHtml = '';
+      if (Object.keys(tagsByCategory).length) {
+        const blocks = Object.entries(tagsByCategory).map(([cat, items]) => {
+          const color = catColors[cat] || catColors.etc;
+          const chips = items.map(t => {
+            const name = typeof t==='string' ? t : (t.tag||t.name||'?');
+            let lbl = esc(name);
+            if (t.score != null) lbl += ` <b style="font-size:10.5px;color:${t.score>=0.8?'var(--ok)':'var(--warn)'};">${t.score.toFixed(2)}</b>`;
+            if (t.gender) lbl += ` <span style="font-size:9.5px;color:var(--text-4);">(${esc(t.gender)})</span>`;
+            return `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-size:12px;background:${color}18;border:1px solid ${color}40;">${lbl}</span>`;
+          }).join('');
+          return `<div style="margin-bottom:6px;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:${color};margin-bottom:4px;">${esc(cat)}</div><div style="display:flex;flex-wrap:wrap;gap:4px;">${chips}</div></div>`;
+        }).join('');
+        tagsHtml = `<div class="modal-field"><div class="lbl">태그</div><div style="margin-top:6px;">${blocks}</div></div>`;
+      }
+
+      const descs = [['situation·상황',d.desc_situation],['style·스타일',d.desc_style],['persona·페르소나',d.desc_persona]].filter(([,v])=>v);
+      const price = d.orig_sale_price ?? d.orig_price ?? d.price;
+
+      $('modal-body').innerHTML = `
+        ${imgHtml}
+        <div class="modal-grid" style="margin-bottom:12px;">
+          <div class="modal-field"><div class="lbl">상품명</div><div class="val">${esc(d.product_name||'—')}</div></div>
+          <div class="modal-field"><div class="lbl">가격</div><div class="val tnum">${price!=null?'₩'+Number(price).toLocaleString('ko-KR'):'—'}</div></div>
+          <div class="modal-field"><div class="lbl">카테고리</div><div class="val">${esc(d.category||'—')}</div></div>
+          <div class="modal-field"><div class="lbl">브랜드</div><div class="val">${esc(d.brand||'—')}</div></div>
+          <div class="modal-field"><div class="lbl">임베딩 상태</div><div class="val">${d.enrich_status==='embedded'?'<span class="embed-badge-ok">✓ embedded</span>':'<span class="embed-badge-no">'+esc(d.enrich_status||'—')+'</span>'}</div></div>
+          <div class="modal-field"><div class="lbl">상품코드</div><div class="val" style="font-family:monospace;font-size:12px;">${esc(d.product_code||'—')}</div></div>
+        </div>
+        ${tagsHtml}
+        ${descs.map(([k,v])=>`<div class="modal-field"><div class="lbl">${k}</div><div class="modal-desc">${esc(v)}</div></div>`).join('')}
+        ${d.product_url?`<div class="modal-field"><div class="lbl">상품 URL</div><div class="val"><a href="${esc(d.product_url)}" target="_blank" rel="noopener">${esc(d.product_url)}</a></div></div>`:''}
+      `;
+    } catch (e) {
+      $('modal-body').innerHTML = `<div style="padding:24px;color:var(--err);">오류: ${esc(e.message)}</div>`;
+    }
+  }
+  window.openDetail = openDetail;
+
+  $('modal-close').addEventListener('click', () => $('detail-modal').classList.remove('open'));
+  $('detail-modal').addEventListener('click', e => { if (e.target===e.currentTarget) e.currentTarget.classList.remove('open'); });
+
+  // ══════════════════════════════════════════════════════════
+  // PANELS: 크롤링 / Enrich (Spring Boot)
+  // ══════════════════════════════════════════════════════════
+  let syncPage  = { scrape: 0, enrich: 0 };
+  let syncFilter = { scrape: '', enrich: '' };
+  let syncPageData = null;
+  let enrichedIds = new Set(), embeddedIds = new Set();
+  let batchTimer = null;
+  const SYNC_SIZE = 20;
+
+  // filter tab handlers for both panels
+  ['scrape','enrich'].forEach(type => {
+    const tabsId = type === 'scrape' ? 'scrape-filter-tabs' : 'enrich-filter-tabs';
+    document.querySelectorAll(`#${tabsId} .ftab`).forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll(`#${tabsId} .ftab`).forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        syncFilter[type] = t.dataset.f;
+        syncPage[type] = 0;
+        loadSyncProducts(type);
+      });
+    });
+  });
+
+  // pagination
+  $('sync-pgn-prev').addEventListener('click', () => { if (syncPage.scrape>0){syncPage.scrape--;loadSyncProducts('scrape');} });
+  $('sync-pgn-next').addEventListener('click', () => { syncPage.scrape++;loadSyncProducts('scrape'); });
+  $('enrich-pgn-prev').addEventListener('click', () => { if (syncPage.enrich>0){syncPage.enrich--;loadSyncProducts('enrich');} });
+  $('enrich-pgn-next').addEventListener('click', () => { syncPage.enrich++;loadSyncProducts('enrich'); });
+
+  async function loadSyncProducts(type) {
+    const loadEl = $(type+'-tbl-loading');
+    const emptyEl = $(type+'-tbl-empty');
+    const tableEl = $(type+'-prod-table');
+    const tbodyEl = $(type+'-prod-tbody');
+    if (loadEl) loadEl.style.display='block';
+    if (emptyEl) emptyEl.style.display='none';
+    if (tableEl) tableEl.style.display='none';
+
+    try {
+      const qs = new URLSearchParams({ page: syncPage[type], size: SYNC_SIZE, filter: syncFilter[type] });
+      const r = await fetch(`${BOOT}/advertisers/${ADV}/products?${qs}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      syncPageData = d;
+      enrichedIds = new Set(d.enrichedIds || []);
+      embeddedIds = new Set(d.embeddedIds || []);
+      if (d.counts) {
+        $('st-total').textContent   = fmt(d.counts.total);
+        $('st-pending').textContent = fmt(d.counts.pending);
+        $('st-scraped').textContent = fmt(d.counts.total - d.counts.pending);
+        $('st-enrich').textContent  = fmt(d.counts.llm_enriched);
+        $('st-vec').textContent     = `/ ${fmt(d.counts.vectorized)}`;
+      }
+      const total  = d.total ?? 0;
+      const pages  = Math.max(1, Math.ceil(total / SYNC_SIZE));
+      const pg     = syncPage[type];
+      if (type === 'scrape') {
+        $('sync-tbl-total').textContent  = fmt(total);
+        $('sync-tbl-page').textContent   = pg + 1;
+        $('sync-tbl-pages').textContent  = pages;
+        $('sync-pgn-prev').disabled  = pg === 0;
+        $('sync-pgn-next').disabled  = pg >= pages - 1;
+      } else {
+        $('enrich-tbl-total').textContent = fmt(total);
+        $('enrich-tbl-page').textContent  = pg + 1;
+        $('enrich-tbl-pages').textContent = pages;
+        $('enrich-pgn-prev').disabled = pg === 0;
+        $('enrich-pgn-next').disabled = pg >= pages - 1;
+      }
+      renderSyncTable(type, d.items || []);
+    } catch (e) {
+      if (emptyEl) { emptyEl.textContent = `오류: ${e.message}`; emptyEl.style.display='block'; }
+    } finally {
+      if (loadEl) loadEl.style.display='none';
+    }
+  }
+
+  function renderSyncTable(type, items) {
+    const tbodyEl = $(type + '-prod-tbody');
+    const tableEl = $(type + '-prod-table');
+    const emptyEl = $(type + '-tbl-empty');
+    if (!items.length) { if(emptyEl) emptyEl.style.display='block'; return; }
+    const model  = $('row-model').value;
+    const images = $('row-images').value;
+    tbodyEl.innerHTML = items.map(p => {
+      const isEnriched = enrichedIds.has(p.id);
+      const isEmbedded = embeddedIds.has(p.id);
+      const sStatus = p.scrapeStatus === 'scraped'
+        ? '<span class="badge ok"><span class="dot"></span>스크랩됨</span>'
+        : p.scrapeStatus === 'failed'
+        ? '<span class="badge err"><span class="dot"></span>실패</span>'
+        : '<span class="badge muted"><span class="dot"></span>미스크랩</span>';
+      const eStatus = isEmbedded
+        ? '<span class="badge ok"><span class="dot"></span>벡터 완료</span>'
+        : isEnriched
+        ? '<span class="badge purple"><span class="dot"></span>LLM 정제됨</span>'
+        : '';
+      const imgEl = p.imageUrl
+        ? `<img class="prod-img-sm" src="${esc(p.imageUrl)}" alt="" onerror="this.style.display='none'">`
+        : `<span class="prod-img-ph"></span>`;
+      const actFetch   = `<button class="btn btn-sm" onclick="actScrape('${esc(p.productCode)}')">Fetch</button>`;
+      const actEnrich  = p.scrapeStatus === 'scraped'
+        ? `<button class="btn btn-sm btn-primary" onclick="actEnrich('${esc(p.productCode)}',false)" title="모델:${model} 이미지:${images}장">🤖 Enrich</button>` : '';
+      const actRe = isEnriched
+        ? `<button class="btn btn-sm" style="background:var(--warn-soft);color:var(--warn);border-color:var(--warn);" onclick="actEnrich('${esc(p.productCode)}',true)">🔄 재분석</button>` : '';
+      const actDetail = isEnriched
+        ? `<button class="btn btn-sm" onclick="openSyncDetail(${p.id})">🔍 상세</button>` : '';
+      return `<tr>
+        <td style="padding:8px 12px;">${imgEl}</td>
+        <td>
+          <div style="font-weight:600;font-size:13px;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(p.productName)}">${esc(p.productName)}</div>
+          <div style="font-family:monospace;font-size:10.5px;color:var(--text-4);">#${esc(p.productCode)} · 이미지 ${p.imageLocalCount||0}장 · 본문 ${(p.bodyTextLen||0).toLocaleString()}자</div>
+          <div style="margin-top:4px;display:flex;gap:4px;">${sStatus} ${eStatus}</div>
+        </td>
+        <td><a href="${esc(p.productUrl||'')}" target="_blank" style="font-size:11px;color:var(--info);">↗ 상품 페이지</a></td>
+        <td style="text-align:right;"><div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">${actFetch}${actEnrich}${actRe}${actDetail}</div></td>
+      </tr>`;
+    }).join('');
+    if (tableEl) tableEl.style.display = 'table';
+  }
+
+  // single actions
+  window.actScrape = async function(code) {
+    try {
+      const r = await fetch(`${BOOT}/advertisers/${ADV}/products/${code}/scrape`, {method:'POST'});
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`);
+      loadSyncProducts(activePanel);
+    } catch(e) { alert(`스크랩 실패: ${e.message}`); }
+  };
+
+  window.actEnrich = async function(code, force) {
+    const model = $('row-model').value, images = $('row-images').value;
+    if (force && !confirm(`이미 enriched된 상품입니다. 재분석 시 LLM 비용이 발생합니다.\n계속하시겠습니까?`)) return;
+    try {
+      const qs = new URLSearchParams({model, imageLimit:images, force:String(force)});
+      const r = await fetch(`${BOOT}/advertisers/${ADV}/products/${code}/enrich/llm?${qs}`, {method:'POST'});
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.message || `HTTP ${r.status}`);
+      loadSyncProducts(activePanel);
+    } catch(e) { alert(`Enrich 실패: ${e.message}`); }
+  };
+
+  window.openSyncDetail = async function(rvId) {
+    $('modal-title').textContent = '상품 상세';
+    $('modal-body').innerHTML = `<div style="text-align:center;padding:30px;"><span class="spin"></span></div>`;
+    $('detail-modal').classList.add('open');
+    try {
+      const r = await fetch(`${EMBEDDER}/products-enriched/${rvId}`);
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`);
+      $('modal-title').textContent = j.product_name || `rv_id=${rvId}`;
+      const chips = arr => arr.filter(Boolean).map(t => `<span class="attr-chip">${esc(String(t))}</span>`).join('');
+      const db = (key, lbl) => j['desc_'+key] ? `<div class="desc-block ${key}"><div class="dl">${lbl}</div>${esc(j['desc_'+key])}</div>` : '';
+      $('modal-body').innerHTML = `
+        <div style="margin-bottom:14px;">
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
+            ${chips([j.category&&`${j.category} (${(j.category_confidence||0).toFixed(2)})`,j.brand,j.brand_tier,j.target_gender,j.origin_country])}
+            ${j.model_used?`<span class="attr-chip" style="font-family:monospace;">${esc(j.model_used)}</span>`:''}
+            ${j.cost_usd?`<span class="attr-chip">$${j.cost_usd.toFixed(4)}</span>`:''}
+          </div>
+          ${j.tags&&j.tags.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${j.tags.map(t=>`<span class="attr-chip" style="font-size:11px;">${esc(typeof t==='object'?t.tag:t)}</span>`).join('')}</div>`:''}
+        </div>
+        ${db('situation','상황')}${db('style','스타일')}${db('persona','페르소나')}
+        <div style="font-size:11.5px;color:var(--text-3);font-family:monospace;margin-top:10px;">rv_id=${j.rv_product_id} · ${j.enriched_at?.slice(0,16)||'?'} · ${j.duration_ms||'?'}ms</div>
+      `;
+    } catch(e) { $('modal-body').innerHTML = `<p style="color:var(--err);">오류: ${e.message}</p>`; }
+  };
+
+  // batch scrape
+  $('btn-start-scrape').addEventListener('click', async () => {
+    const mode=$('sc-mode').value, count=+$('sc-count').value, batchsize=+$('sc-batchsize').value;
+    const concur=+$('sc-concur').value, interval=+$('sc-interval').value;
+    const estMin = Math.round(count*(mode==='api'?.3:8/concur+interval/1000)/60);
+    if (!confirm(`미스크랩 ${count}개 배치 시작\nmode=${mode} · 워커 ${concur} · sleep ${interval}ms\n예상 ~${estMin}분`)) return;
+    const qs=new URLSearchParams({count,intervalMs:interval,concurrency:concur,mode,batchSize:batchsize});
+    await fetch(`${BOOT}/advertisers/${ADV}/products/batch-fetch?${qs}`,{method:'POST'});
+    startBatchPoll();
+  });
+  $('btn-cancel-scrape').addEventListener('click', async () => {
+    if (!confirm('스크랩 배치 취소?')) return;
+    await fetch(`${BOOT}/advertisers/${ADV}/products/batch-fetch/cancel`,{method:'POST'});
+  });
+
+  // batch enrich
+  $('btn-start-enrich').addEventListener('click', async () => {
+    const model=$('ec-model').value, count=+$('ec-count').value, images=+$('ec-images').value;
+    const concur=+$('ec-concur').value, interval=+$('ec-interval').value, embed=$('ec-embed').value;
+    const perMin={haiku:40,sonnet:120,opus:180}[model]||40;
+    const estMin=Math.round(count*perMin/(60*concur));
+    if (!confirm(`Enrich+Embed 배치\nmodel=${model} · ${count}개 · 이미지 ${images}장 · embed=${embed}\n예상 ~${estMin}분`)) return;
+    const qs=new URLSearchParams({count,model,imageLimit:images,concurrency:concur,intervalMs:interval,embedBackend:embed});
+    await fetch(`${BOOT}/advertisers/${ADV}/products/batch-enrich?${qs}`,{method:'POST'});
+    startBatchPoll();
+  });
+  $('btn-cancel-enrich').addEventListener('click', async () => {
+    if (!confirm('Enrich 배치 취소?')) return;
+    await fetch(`${BOOT}/advertisers/${ADV}/products/batch-enrich/cancel`,{method:'POST'});
+  });
+
+  // batch polling
+  async function pollBatch() {
+    try {
+      const [rs,re] = await Promise.all([
+        fetch(`${BOOT}/advertisers/${ADV}/products/batch-fetch/status`).then(r=>r.ok?r.json():null),
+        fetch(`${BOOT}/advertisers/${ADV}/products/batch-enrich/status`).then(r=>r.ok?r.json():null),
+      ]);
+      renderBatchProgress(rs,'scrape');
+      renderBatchProgress(re,'enrich');
+      const running=(rs?.status==='RUNNING')||(re?.status==='RUNNING');
+      if (running && (activePanel==='scrape'||activePanel==='enrich')) loadSyncProducts(activePanel);
+      return running;
+    } catch { return false; }
+  }
+
+  function renderBatchProgress(s, type) {
+    if (!s||s.status==='IDLE') { $(type+'-progress').style.display='none'; return; }
+    const pct=s.total>0?Math.round(s.done/s.total*100):0;
+    const clsMap={RUNNING:'info',COMPLETED:'ok',FAILED:'err',CANCELLED:'warn'};
+    const lblMap={RUNNING:'실행 중',COMPLETED:'완료',FAILED:'실패',CANCELLED:'취소됨',IDLE:'대기'};
+    $(type+'-status-badge').innerHTML=`<span class="badge ${clsMap[s.status]||'muted'}" style="font-size:11px;"><span class="dot"></span>${lblMap[s.status]||s.status}</span>`;
+    $(type+'-progress').style.display='block';
+    $(type+'-controls').style.opacity=s.status==='RUNNING'?'0.5':'1';
+    $(type+'-controls').style.pointerEvents=s.status==='RUNNING'?'none':'auto';
+    const elapsed=Math.floor(s.elapsedMs/1000);
+    const eta=s.status==='RUNNING'&&s.done>0?Math.round((s.total-s.done)*(s.elapsedMs/s.done)/60000):0;
+    $(type==='scrape'?'sp-label':'ep-label').textContent=`${s.done.toLocaleString()} / ${s.total.toLocaleString()} · 성공 ${s.ok} · 실패 ${s.fail}`;
+    $(type==='scrape'?'sp-nums':'ep-nums').textContent=`${elapsed}초${eta>0?` · 잔여 ~${eta}분`:''}`;
+    const bar=$(type==='scrape'?'sp-bar':'ep-bar');
+    bar.className='prog-bar '+(s.status==='RUNNING'?(type==='scrape'?'prog-blue':'prog-purple'):s.status==='COMPLETED'?'prog-ok':'prog-err');
+    bar.style.width=pct+'%';
+    $(type==='scrape'?'sp-err':'ep-err').textContent=s.lastError?`오류: ${s.lastError.slice(0,80)}`:'';
+  }
+
+  function startBatchPoll() {
+    if (batchTimer) return;
+    batchTimer = setInterval(async()=>{
+      const running=await pollBatch();
+      if (!running){clearInterval(batchTimer);batchTimer=null;}
+    },2000);
+    pollBatch();
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // PANEL: 이미지 차단
+  // ══════════════════════════════════════════════════════════
+  let commonImages=null, blockPatterns=[], checkedSrcs=new Set(), imgFilter='all';
+
+  async function loadBlockPatterns() {
+    try {
+      const r=await fetch(`${EMBEDDER}/enrich-llm/image-blocks/${ADV}`);
+      if (r.ok) blockPatterns=await r.json();
+      renderImages();
+    } catch {}
+  }
+
+  async function loadCommonImages(minProducts) {
+    const min=minProducts||+$('img-min').value||3;
+    $('img-loading').style.display='block';
+    $('img-grid').innerHTML='';
+    $('img-empty').style.display='none';
+    try {
+      const r=await fetch(`${EMBEDDER}/enrich-llm/common-images/${ADV}?min_products=${min}&limit=300`);
+      if (r.ok) commonImages=await r.json();
+      const cnt=commonImages?commonImages.length:0;
+      $('img-tab-cnt').textContent=cnt;
+      $('img-tab-cnt').style.display=cnt>0?'':'none';
+      renderImages();
+    } catch(e) {
+      $('img-empty').textContent=`오류: ${e.message}`;
+      $('img-empty').style.display='block';
+    } finally { $('img-loading').style.display='none'; }
+  }
+
+  function isBlocked(url){ return blockPatterns.some(b=>b.enabled&&url.includes(b.pattern)); }
+  function getBlockEntry(url){ return blockPatterns.find(b=>b.enabled&&url.includes(b.pattern)); }
+
+  function filteredImages(){
+    if (!commonImages) return [];
+    return commonImages.filter(i=>imgFilter==='all'?true:imgFilter==='blocked'?isBlocked(i.src_url):!isBlocked(i.src_url));
+  }
+
+  function renderImages(){
+    const list=filteredImages();
+    updateImgFilterCounts(); updateImgBulkBar();
+    const chkAll=$('img-chk-all');
+    if (chkAll) chkAll.checked=list.length>0&&list.every(i=>checkedSrcs.has(i.src_url));
+    if (!list.length){ $('img-grid').innerHTML=''; $('img-empty').style.display='block'; $('img-empty').textContent=imgFilter==='blocked'?'차단된 이미지 없음':imgFilter==='unblocked'?'미차단 이미지 없음':'공통 이미지 없음'; return; }
+    $('img-empty').style.display='none';
+    $('img-grid').innerHTML=list.map(img=>{
+      const blocked=isBlocked(img.src_url), checked=checkedSrcs.has(img.src_url);
+      return `<div class="ci-thumb ${blocked?'blocked':''}" style="${checked?'border-color:var(--warn);box-shadow:0 0 0 2px rgba(138,106,26,.2);':''}" data-src="${esc(img.src_url)}">
+        ${blocked?`<div class="blocked-badge">차단됨</div>`:''}
+        <div class="ci-chk-pos" onclick="event.stopPropagation();toggleImgCheck('${esc(img.src_url)}')"><input type="checkbox" class="chk" ${checked?'checked':''} onclick="event.stopPropagation();"></div>
+        <img src="${esc(img.src_url)}" alt="" loading="lazy" onerror="this.style.opacity='.2'" onclick="openImgPopup('${esc(img.src_url)}',${img.product_count})">
+        <div class="ci-meta"><div class="ci-cnt">${img.product_count}개 상품</div><div class="ci-name">${esc(img.src_url.split('/').pop()||img.src_url)}</div></div>
+      </div>`;
+    }).join('');
+  }
+
+  function updateImgFilterCounts(){
+    if (!commonImages) return;
+    document.querySelectorAll('#img-filter-tabs .ift').forEach(t=>{
+      const f=t.dataset.f; if (f==='all') return;
+      const n=commonImages.filter(i=>f==='blocked'?isBlocked(i.src_url):!isBlocked(i.src_url)).length;
+      t.textContent=(f==='blocked'?'차단됨':'미차단')+` (${n})`;
+    });
+    $('img-total-cnt').textContent=`총 ${commonImages.length}개 URL`;
+  }
+  function updateImgBulkBar(){
+    const bar=$('img-bulk-bar');
+    if (checkedSrcs.size>0){ bar.style.display='flex'; $('img-sel-cnt').textContent=`${checkedSrcs.size}개 선택됨`; }
+    else bar.style.display='none';
+  }
+
+  window.toggleImgCheck=function(src){ if(checkedSrcs.has(src))checkedSrcs.delete(src);else checkedSrcs.add(src); renderImages(); };
+  $('img-chk-all').addEventListener('change',e=>{ filteredImages().forEach(i=>e.target.checked?checkedSrcs.add(i.src_url):checkedSrcs.delete(i.src_url)); renderImages(); });
+  $('btn-img-reload').addEventListener('click',()=>{ commonImages=null; loadCommonImages(); loadBlockPatterns(); });
+  $('btn-bulk-block').addEventListener('click',async()=>{
+    const srcs=[...checkedSrcs];
+    if (!confirm(`${srcs.length}개 URL을 차단 패턴으로 등록합니다.`)) return;
+    await fetch(`${EMBEDDER}/enrich-llm/image-blocks/${ADV}/batch`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patterns:srcs})});
+    checkedSrcs.clear(); await loadBlockPatterns();
+  });
+  $('btn-sel-clear').addEventListener('click',()=>{ checkedSrcs.clear(); renderImages(); });
+
+  document.querySelectorAll('#img-filter-tabs .ift').forEach(t=>{
+    t.addEventListener('click',()=>{ document.querySelectorAll('#img-filter-tabs .ift').forEach(x=>x.classList.remove('active')); t.classList.add('active'); imgFilter=t.dataset.f; renderImages(); });
+  });
+
+  window.openImgPopup=async function(src,cnt){
+    $('img-popup-body').innerHTML=`
+      <span class="badge purple" style="margin-bottom:10px;">${cnt}개 상품에 공통 등장</span>
+      <img src="${esc(src)}" alt="" style="max-width:100%;max-height:240px;display:block;object-fit:contain;border-radius:6px;border:1px solid var(--line);background:var(--surface-2);margin:8px auto;">
+      <p style="font-size:11px;color:var(--text-3);word-break:break-all;margin-top:6px;">${esc(src)}</p>
+      <div id="popup-products" style="margin-top:12px;border:1px solid var(--line);border-radius:5px;overflow:hidden;">
+        <div style="padding:8px 12px;background:var(--surface-2);border-bottom:1px solid var(--line);font-size:11.5px;font-weight:700;color:var(--text-3);">사용 상품 (최대 5개)</div>
+        <div style="padding:10px;text-align:center;color:var(--text-4);"><span class="spin"></span></div>
+      </div>`;
+    renderImgPopupFoot(src);
+    $('img-popup').classList.add('open');
+    try {
+      const r=await fetch(`${EMBEDDER}/enrich-llm/image-products/${ADV}?src_url=${encodeURIComponent(src)}&limit=5`);
+      const products=r.ok?await r.json():[];
+      const rows=products.map(p=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line);font-size:12px;"><span style="font-family:monospace;font-size:10.5px;color:var(--text-4);">#${p.product_code}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.product_name||'')}</span>${p.product_url?`<a href="${esc(p.product_url)}" target="_blank" class="btn btn-sm">↗</a>`:''}</div>`).join('')||'<div style="padding:10px 12px;color:var(--text-4);font-size:12px;">상품 정보 없음</div>';
+      $('popup-products').innerHTML=`<div style="padding:8px 12px;background:var(--surface-2);border-bottom:1px solid var(--line);font-size:11.5px;font-weight:700;color:var(--text-3);">사용 상품 (최대 5개)</div>${rows}`;
+    } catch {}
+  };
+
+  function renderImgPopupFoot(src){
+    const blocked=isBlocked(src), entry=getBlockEntry(src);
+    $('img-popup-foot').innerHTML=blocked
+      ?`<button class="btn" onclick="unblockImg(${entry.id})">🔓 차단 해제</button>`
+      :`<button class="btn btn-danger" onclick="blockImg('${esc(src)}')">🚫 차단 등록</button>`;
+  }
+  window.blockImg=async function(src){ if(!confirm(`차단 패턴에 등록합니다.\n${src}`))return; await fetch(`${EMBEDDER}/enrich-llm/image-blocks/${ADV}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patterns:[src]})}); await loadBlockPatterns(); $('img-popup').classList.remove('open'); };
+  window.unblockImg=async function(blockId){ if(!confirm('차단을 해제합니다.'))return; await fetch(`${EMBEDDER}/enrich-llm/image-blocks/${ADV}/${blockId}`,{method:'DELETE'}); await loadBlockPatterns(); $('img-popup').classList.remove('open'); };
+  $('img-popup-close').addEventListener('click',()=>$('img-popup').classList.remove('open'));
+  $('img-popup').addEventListener('click',e=>{ if(e.target===e.currentTarget)e.currentTarget.classList.remove('open'); });
+
+  // ── reload & init ─────────────────────────────────────────
+  $('btn-reload').addEventListener('click', () => {
+    loadKpiSync();
+    if (activePanel==='products') { loadEmbedderKpi(); loadProducts(); }
+    else if (activePanel==='scrape'||activePanel==='enrich') loadSyncProducts(activePanel);
+    else if (activePanel==='images') { commonImages=null; loadCommonImages(); loadBlockPatterns(); }
+  });
+
+  // boot
+  loadKpiSync();
+  loadEmbedderKpi();
+  loadProducts();
+  loadBlockPatterns(); // 상품 목록 탭에서도 차단 여부 표시하기 위해 미리 로드
+  startBatchPoll();
+})();
+</script>
+</body>
+</html>

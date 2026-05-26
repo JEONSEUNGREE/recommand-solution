@@ -1,0 +1,73 @@
+{
+  "file": "scripts/scrape/samples/pippin.html",
+  "platform_guess": "makeshop",
+  "platform_scores": {
+    "makeshop": 51
+  },
+  "title": "[[¸Þ¸£½Ã¸¶¸®¿¡] µ¥´Ô ¼ÅÃ÷ #49920]",
+  "meta_charset": "",
+  "matched_known_selectors": [
+    {
+      "selector": "#productDetail",
+      "label": "div#productDetail",
+      "img_count": 56,
+      "text_len": 1066
+    },
+    {
+      "selector": "[id*=detail]",
+      "label": "a#detailGoodsInfo",
+      "img_count": 0,
+      "text_len": 0
+    }
+  ],
+  "heuristic_top_candidates": [
+    {
+      "label": "div#wrap",
+      "img_count": 67,
+      "text_len": 1768,
+      "score": 15168
+    },
+    {
+      "label": "div#contentWrapper",
+      "img_count": 56,
+      "text_len": 1066,
+      "score": 12266
+    },
+    {
+      "label": "div#contentWrap",
+      "img_count": 56,
+      "text_len": 1066,
+      "score": 12266
+    },
+    {
+      "label": "div#content",
+      "img_count": 56,
+      "text_len": 1066,
+      "score": 12266
+    },
+    {
+      "label": "div#productDetail",
+      "img_count": 56,
+      "text_len": 1066,
+      "score": 12266
+    },
+    {
+      "label": "div.page-body",
+      "img_count": 39,
+      "text_len": 827,
+      "score": 8627
+    },
+    {
+      "label": "div.prd-detail",
+      "img_count": 27,
+      "text_len": 327,
+      "score": 5727
+    },
+    {
+      "label": "div.review-write.snapreview_hidden",
+      "img_count": 16,
+      "text_len": 50,
+      "score": 3250
+    }
+  ]
+}

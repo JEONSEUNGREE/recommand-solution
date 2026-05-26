@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>상품 분석(Enrich) 비용 구조</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif; background: #0f1117; color: #e2e8f0; line-height: 1.7; }
+  .page { max-width: 960px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { font-size: 28px; font-weight: 700; color: #f8fafc; margin-bottom: 8px; }
+  h2 { font-size: 20px; font-weight: 600; color: #93c5fd; margin: 48px 0 16px; border-bottom: 1px solid #1e293b; padding-bottom: 8px; }
+  h3 { font-size: 16px; font-weight: 600; color: #cbd5e1; margin: 24px 0 12px; }
+  p  { color: #94a3b8; margin-bottom: 12px; }
+  .subtitle { color: #64748b; font-size: 14px; margin-bottom: 40px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 12px 0 24px; }
+  th { background: #1e293b; color: #94a3b8; font-weight: 600; padding: 10px 14px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  td { padding: 10px 14px; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
+  tr:hover td { background: #0f172a; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .row-min td { background: #052e16; }
+  .row-avg td { background: #172554; color: #93c5fd; }
+  .row-max td { background: #450a0a; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 16px 0 28px; }
+  .stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 18px 20px; }
+  .stat-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .stat-value { font-size: 26px; font-weight: 700; color: #f1f5f9; }
+  .stat-sub { font-size: 12px; color: #475569; margin-top: 4px; }
+  .note { background: #1c1917; border: 1px solid #44403c; border-left: 3px solid #f59e0b; border-radius: 6px; padding: 14px 18px; margin: 16px 0; font-size: 13px; color: #a8a29e; }
+  .note strong { color: #fbbf24; }
+  .note.ok  { border-left-color: #22c55e; background: #052e16; border-color: #14532d; }
+  .note.ok strong { color: #4ade80; }
+  .note.info { border-left-color: #3b82f6; background: #0f1f3a; border-color: #1e3a5f; }
+  .note.info strong { color: #60a5fa; }
+  .calc-box { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 20px; }
+  .calc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 16px 0 28px; }
+  @media (max-width: 700px) { .calc-grid { grid-template-columns: 1fr; } }
+  .calc-min { border-left: 3px solid #22c55e; }
+  .calc-avg { border-left: 3px solid #3b82f6; }
+  .calc-max { border-left: 3px solid #ef4444; }
+  .calc-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #1e293b; font-size: 14px; }
+  .calc-row:last-child { border-bottom: none; }
+  .calc-total { border-top: 2px solid #3b82f6; padding-top: 12px; margin-top: 4px; font-weight: 700; font-size: 16px; }
+  .calc-label { color: #94a3b8; }
+  .calc-detail { font-size: 12px; color: #475569; }
+  .calc-cost { color: #fbbf24; font-variant-numeric: tabular-nums; }
+  .scale-row { display: flex; align-items: center; gap: 20px; padding: 12px 0; border-bottom: 1px solid #1e293b; }
+  .scale-count { min-width: 90px; font-weight: 700; font-size: 15px; color: #f1f5f9; }
+  .scale-bar-wrap { flex: 1; height: 12px; background: #1e293b; border-radius: 6px; overflow: hidden; }
+  .scale-bar { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #22c55e, #3b82f6); }
+  .scale-cost { min-width: 130px; text-align: right; font-weight: 600; color: #4ade80; }
+  .search-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  .search-card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 20px; }
+  .search-card-title { font-size: 14px; font-weight: 700; color: #e2e8f0; margin-bottom: 8px; }
+  .search-card-cost { font-size: 28px; font-weight: 800; margin: 8px 0; }
+  .search-card-desc { font-size: 12px; color: #64748b; line-height: 1.7; }
+  .cost-zero { color: #4ade80; }
+  .cost-low  { color: #fbbf24; }
+  details { border: 1px solid #1e293b; border-radius: 8px; margin: 12px 0; }
+  summary { padding: 12px 16px; cursor: pointer; font-size: 14px; font-weight: 600; color: #94a3b8; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: '▼'; font-size: 11px; color: #475569; }
+  details[open] summary::after { content: '▲'; }
+  details[open] summary { color: #e2e8f0; border-bottom: 1px solid #1e293b; }
+  .details-body { padding: 16px; }
+  .prompt-block { background: #0d1117; border: 1px solid #1e293b; border-left: 3px solid #3b82f6; border-radius: 6px; padding: 20px; margin: 12px 0 24px; font-size: 13px; line-height: 1.8; }
+  .prompt-block pre { white-space: pre-wrap; word-break: break-word; color: #e2e8f0; font-family: 'Fira Code', 'Consolas', monospace; }
+  .prompt-label { font-size: 11px; font-weight: 700; color: #3b82f6; letter-spacing: 0.08em; margin-bottom: 10px; }
+  code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 12px; color: #7dd3fc; font-family: 'Fira Code', monospace; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; margin-right: 4px; }
+  .tag-real { background: #14532d; color: #4ade80; }
+  .tag-est  { background: #422006; color: #fbbf24; }
+  .qa-item { border: 1px solid #1e293b; border-radius: 10px; margin: 12px 0; overflow: hidden; }
+  .qa-q { padding: 14px 18px; background: #1e293b; font-weight: 600; color: #e2e8f0; font-size: 14px; }
+  .qa-a { padding: 14px 18px; font-size: 14px; color: #94a3b8; line-height: 1.8; border-top: 1px solid #0f172a; }
+  .qa-a strong { color: #fbbf24; }
+  hr { border: none; border-top: 1px solid #1e293b; margin: 48px 0; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>상품 분석(Enrich) 비용 구조</h1>
+  <p class="subtitle">
+    기준일: 2026-05-19 &nbsp;·&nbsp; 실측 데이터: 1,056건 &nbsp;·&nbsp;
+    모델: Claude Haiku 3.5 (Anthropic API 직접 호출) &nbsp;·&nbsp;
+    <span class="tag tag-real">실측</span> DB 실제값 &nbsp;
+    <span class="tag tag-est">추정</span> 계산값 &nbsp;·&nbsp;
+    환율: $1 = ₩1,501 (2026-05-19)
+  </p>
+
+  <!-- ───── 1. 핵심 수치 ───── -->
+  <h2>1. Enrich 비용 — 핵심 수치</h2>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-label">최저 <span class="tag tag-real">실측</span></div>
+      <div class="stat-value" style="color:#4ade80">$0.072</div>
+      <div class="stat-sub">≈ 108원 / 이미지 적은 상품</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">평균 <span class="tag tag-real">실측</span></div>
+      <div class="stat-value">$0.157</div>
+      <div class="stat-sub">≈ 236원 / 표준 상품</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">최고 <span class="tag tag-real">실측</span></div>
+      <div class="stat-value" style="color:#f87171">$0.390</div>
+      <div class="stat-sub">≈ 585원 / 이미지 다수</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">누적 1,056건</div>
+      <div class="stat-value" style="font-size:20px">$165.36</div>
+      <div class="stat-sub">≈ 248,300원 / 실 청구 합계</div>
+    </div>
+  </div>
+
+  <table>
+    <tr>
+      <th>시나리오</th>
+      <th class="num">input_tokens</th>
+      <th class="num">output_tokens</th>
+      <th class="num">cache_creation</th>
+      <th class="num">cache_read</th>
+      <th class="num">비용</th>
+    </tr>
+    <tr class="row-min">
+      <td>🟢 최저 (이미지 적음)</td>
+      <td class="num">10</td><td class="num">3,075</td>
+      <td class="num">34,265</td><td class="num">—</td>
+      <td class="num"><strong style="color:#4ade80">$0.0716</strong></td>
+    </tr>
+    <tr class="row-avg">
+      <td><strong>🔵 평균 (표준)</strong></td>
+      <td class="num"><strong>281</strong></td><td class="num"><strong>8,920</strong></td>
+      <td class="num"><strong>76,301</strong></td><td class="num"><strong>103,596</strong></td>
+      <td class="num"><strong>$0.157</strong></td>
+    </tr>
+    <tr class="row-max">
+      <td>🔴 최고 (이미지 다수)</td>
+      <td class="num">6,868</td><td class="num">45,204</td>
+      <td class="num">157,684</td><td class="num">552,977</td>
+      <td class="num"><strong style="color:#f87171">$0.390</strong></td>
+    </tr>
+  </table>
+
+  <div class="note info">
+    <strong>input_tokens이 왜 281뿐인가요?</strong><br>
+    Claude는 토큰을 4개 버킷으로 분리 청구합니다.<br>
+    <code>input_tokens 281</code> = 상품별 텍스트(상품명·URL·본문)만<br>
+    <code>cache_creation 76,301</code> = 시스템프롬프트(~800) + JSON스키마(~900) + 이미지(~74,600)<br>
+    <code>cache_read 103,596</code> = Pass2에서 Pass1 이미지 재사용<br>
+    <strong>800+900 토큰의 프롬프트는 cache_creation 안에 포함되어 있습니다.</strong>
+  </div>
+
+  <!-- ───── 2. 비용 계산 ───── -->
+  <h2>2. 비용 계산 상세 (최저 · 평균 · 최고)</h2>
+
+  <div class="calc-grid">
+    <!-- 최저 -->
+    <div class="calc-box calc-min">
+      <div style="font-size:13px;font-weight:700;color:#4ade80;margin-bottom:12px;">🟢 최저 시나리오</div>
+      <div class="calc-row">
+        <div><div class="calc-label">Input 텍스트</div><div class="calc-detail">10 tok × $0.80/MTok</div></div>
+        <div class="calc-cost">$0.0000</div>
+      </div>
+      <div class="calc-row">
+        <div><div class="calc-label">Cache write</div><div class="calc-detail">34,265 tok × $1.00/MTok</div></div>
+        <div class="calc-cost">$0.0343</div>
+      </div>
+      <div class="calc-row">
+        <div><div class="calc-label">Cache read</div><div class="calc-detail">—</div></div>
+        <div class="calc-cost">$0.0000</div>
+      </div>
+      <div class="calc-row">
+        <div><div class="calc-label">Output (JSON)</div><div class="calc-detail">3,075 tok × $4.00/MTok</div></div>
+        <div class="calc-cost">$0.0123</div>
+      </div>
+      <div class="calc-row calc-total" style="border-top-color:#22c55e">
+        <div><div class="calc-label">Pass 2 이론값</div></div>
+        <div class="calc-cost">~$0.047 <small style="color:#475569">≈ 71원</small></div>
+      </div>
+      <div class="calc-row">
+        <div><div class="calc-label">DB 실측 (Pass 1+2)</div></div>
+        <div class="calc-cost" style="color:#4ade80">$0.0716 <small style="color:#4ade80">≈ 108원</small></div>
+      </div>
+    </div>
+
+    <!-- 평균 -->
+    <div class="calc-box calc-avg">
+      <div style="font-size:13px;font-weight:700;color:#60a5fa;margin-bottom:12px;">🔵 평균 시나리오</div>
+      <div class="calc-row">
+        <div><div class="calc-label">Input 텍스트</div><div class="calc-detail">281 tok × $0.80/MTok</div></div>
+        <div class="calc-cost">$0.0002</div>
+      </div>
+      <div class="calc-row">
+        <div><div class="calc-label">Cache write</div><div class="calc-detail">76,301 tok × $1.00/MTok</div></div>
+        <div class="calc-cost">$0.0763</div>
+      </div>
+      <div class="calc-row">
+        <div><div class="calc-label">Cache read</div><div class="calc-detail">103,596 tok × $0.08/MTok</div></div>
+        <div class="calc-cost">$0.0083</div>
+      </div>
+      <div class="calc-row">
+        <div><div class="calc-label">Output (JSON)</div><div class="calc-detail">8,920 tok × $4.00/MTok</div></div>
+        <div class="calc-cost">$0.0357</div>
+      </div>
+      <div class="calc-row calc-total">
+        <div><div class="calc-label">Pass 2 이론값</div></div>
+        <div class="calc-cost">~$0.121 <small style="color:#475569">≈ 182원</small></div>
+      </div>
+      <div class="calc-row">
+        <div><div class="calc-label">DB 실측 (Pass 1+2)</div></div>
+        <div class="calc-cost" style="color:#f87171">$0.157 <small style="color:#f87171">≈ 236원</small></div>
+      </div>
+    </div>
+
+    <!-- 최고 -->
+    <div class="calc-box calc-max">
+      <div style="font-size:13px;font-weight:700;color:#f87171;margin-bottom:12px;">🔴 최고 시나리오</div>
+      <div class="calc-row">
+        <div><div class="calc-label">Input 텍스트</div><div class="calc-detail">6,868 tok × $0.80/MTok</div></div>
+        <div class="calc-cost">$0.0055</div>
+      </div>
+      <div class="calc-row">
+        <div><div class="calc-label">Cache write</div><div class="calc-detail">157,684 tok × $1.00/MTok</div></div>
+        <div class="calc-cost">$0.1577</div>
+      </div>
+      <div class="calc-row">
+        <div><div class="calc-label">Cache read</div><div class="calc-detail">552,977 tok × $0.08/MTok</div></div>
+        <div class="calc-cost">$0.0442</div>
+      </div>
+      <div class="calc-row">
+        <div><div class="calc-label">Output (JSON)</div><div class="calc-detail">45,204 tok × $4.00/MTok</div></div>
+        <div class="calc-cost">$0.1808</div>
+      </div>
+      <div class="calc-row calc-total" style="border-top-color:#ef4444">
+        <div><div class="calc-label">Pass 2 이론값</div></div>
+        <div class="calc-cost">~$0.388 <small style="color:#475569">≈ 583원</small></div>
+      </div>
+      <div class="calc-row">
+        <div><div class="calc-label">DB 실측 (Pass 1+2)</div></div>
+        <div class="calc-cost" style="color:#f87171">$0.390 <small style="color:#f87171">≈ 585원</small></div>
+      </div>
+    </div>
+  </div>
+  <div class="note">이론값과 실측의 차이는 <strong>Pass 1 이미지 필터 호출</strong> + 재시도 비용입니다.</div>
+
+  <!-- ───── 3. 규모별 ───── -->
+  <h2>3. 규모별 비용</h2>
+  <div style="margin: 16px 0 28px;">
+    <div class="scale-row"><div class="scale-count">100건</div><div class="scale-bar-wrap"><div class="scale-bar" style="width:1%"></div></div><div class="scale-cost">$15.70 <small style="color:#475569">≈ 23,600원</small></div></div>
+    <div class="scale-row"><div class="scale-count">1,000건</div><div class="scale-bar-wrap"><div class="scale-bar" style="width:10%"></div></div><div class="scale-cost">$157 <small style="color:#475569">≈ 23.6만원</small></div></div>
+    <div class="scale-row"><div class="scale-count">5,000건</div><div class="scale-bar-wrap"><div class="scale-bar" style="width:50%"></div></div><div class="scale-cost">$785 <small style="color:#475569">≈ 118만원</small></div></div>
+    <div class="scale-row"><div class="scale-count">10,000건</div><div class="scale-bar-wrap"><div class="scale-bar" style="width:100%"></div></div><div class="scale-cost">$1,570 <small style="color:#475569">≈ 236만원</small></div></div>
+  </div>
+
+  <!-- ───── 4. 모델 비교 ───── -->
+  <h2>4. 모델별 비용 비교</h2>
+  <table>
+    <tr><th>모델</th><th class="num">상품 1개</th><th class="num">1,000건</th><th class="num">10,000건</th><th>비고</th></tr>
+    <tr><td>Claude 3 Haiku (구버전)</td><td class="num">~$0.047 <small style="color:#475569">≈71원</small></td><td class="num">~$47 <small style="color:#475569">≈7만</small></td><td class="num">~$470 <small style="color:#475569">≈71만</small></td><td style="color:#64748b;font-size:12px">품질 낮음</td></tr>
+    <tr style="background:#172554"><td><strong>Claude 3.5 Haiku (현재)</strong></td><td class="num"><strong style="color:#fbbf24">$0.157</strong> <small style="color:#93c5fd">≈236원</small></td><td class="num"><strong style="color:#fbbf24">$157</strong> <small style="color:#93c5fd">≈23.6만</small></td><td class="num"><strong style="color:#fbbf24">$1,570</strong> <small style="color:#93c5fd">≈236만</small></td><td style="font-size:12px;color:#93c5fd">실측 기준</td></tr>
+    <tr><td>GPT-4o-mini <span class="tag tag-est">추정</span></td><td class="num">~$0.010 <small style="color:#475569">≈15원</small></td><td class="num">~$10 <small style="color:#475569">≈1.5만</small></td><td class="num">~$100 <small style="color:#475569">≈15만</small></td><td style="color:#64748b;font-size:12px">품질 미검증</td></tr>
+    <tr><td>Claude Sonnet <span class="tag tag-est">추정</span></td><td class="num">~$1.00 <small style="color:#475569">≈1,501원</small></td><td class="num">~$1,000 <small style="color:#475569">≈150만</small></td><td class="num">~$10,000 <small style="color:#475569">≈1,501만</small></td><td style="color:#64748b;font-size:12px">Haiku 대비 6~8배</td></tr>
+  </table>
+
+  <!-- ───── 5. 처리 흐름 (접기) ───── -->
+  <details>
+    <summary>5. 처리 흐름 상세 (Pass 1 + Pass 2)</summary>
+    <div class="details-body">
+      <table>
+        <tr><th>단계</th><th>모델</th><th>역할</th><th>조건</th></tr>
+        <tr><td>Pass 1 — 이미지 필터</td><td>Claude Haiku</td><td>배너·광고 제거, 본 상품 이미지 sha1만 추출</td><td>이미지 &gt; 4장일 때만</td></tr>
+        <tr><td>Pass 2 — 본 분석</td><td>Claude Haiku/Sonnet</td><td>카테고리/태그/설명문/이미지 분류 JSON 출력</td><td>항상 실행</td></tr>
+      </table>
+      <p style="font-size:13px;color:#64748b;margin-top:12px;">이미지: 장변 최대 1,280px 리사이즈 → JPEG quality 82 → Claude 전송. 토큰 계산: (가로×세로)÷750. 예) 1,280×1,280 ≈ 2,185 tok/장.</p>
+    </div>
+  </details>
+
+  <!-- ───── 6. 환경변수 (접기) ───── -->
+  <details>
+    <summary>6. 비용 관련 환경변수</summary>
+    <div class="details-body">
+      <table>
+        <tr><th>변수</th><th>기본값</th><th>설명</th></tr>
+        <tr><td><code>CLAUDE_MODEL</code></td><td>haiku</td><td>Pass 2 모델. sonnet으로 바꾸면 ~6배 비용 증가</td></tr>
+        <tr><td><code>ENRICH_MAX_IMAGES</code></td><td>30</td><td>상품당 최대 이미지 수. 줄이면 비용·시간 모두 감소</td></tr>
+        <tr><td><code>ENRICH_IMG_MAX_DIM</code></td><td>1280</td><td>장변 최대 px. 800px 이하 비권장 (OCR 품질 저하)</td></tr>
+      </table>
+    </div>
+  </details>
+
+  <!-- ───── 7. 실제 프롬프트 (접기) ───── -->
+  <details>
+    <summary>7. 실제 사용 프롬프트 보기</summary>
+    <div class="details-body">
+      <h3>Pass 1 — 이미지 필터 (~200 tok)</h3>
+      <div class="prompt-block"><div class="prompt-label">PROMPT</div>
+        <pre>다음 이미지들을 보고 실제 판매 중인 본 상품의 sha1(파일명, 확장자 제외)만 JSON 배열로 출력하라.
+포함: 메인샷/상세컷/착용컷/인포그래픽/사이즈표
+제외: 배너/결제안내/다른상품/브랜드광고
+출력 규칙: JSON 배열만. 예) ["abc123", "def456"]</pre>
+      </div>
+      <h3>Pass 2 — System Prompt (~800 tok) + JSON Schema (~900 tok)</h3>
+      <div class="prompt-block"><div class="prompt-label">SYSTEM PROMPT 요약</div>
+        <pre>한국 쇼핑몰 상품 데이터 분석 전문가.
+추출 항목 5종: product / common_attributes / category_attributes / tags / descriptions
+4관점 설명문: SITUATION / MATERIAL / STYLE / PERSONA (각 30~80자)
+마케팅 과장 표현 금지 / 환각 금지 / JSON 한 덩어리만 출력</pre>
+      </div>
+    </div>
+  </details>
+
+  <hr>
+
+  <!-- ───── 8. 검색 요청 비용 ───── -->
+  <h2>8. 검색 요청 비용</h2>
+
+  <div class="search-grid">
+    <div class="search-card">
+      <div class="search-card-title">/search-rv (일반 벡터 검색)</div>
+      <div class="search-card-cost cost-zero">$0</div>
+      <div class="search-card-desc">
+        pgvector 코사인 유사도만 실행.<br>
+        bge-m3 임베딩은 로컬 → LLM 비용 없음.
+      </div>
+    </div>
+    <div class="search-card">
+      <div class="search-card-title">/search-rv-llm · GPT-4o-mini <span class="tag tag-real">실측</span></div>
+      <div class="search-card-cost cost-low">$0.000229 <span style="font-size:16px;color:#fbbf24">≈ 0.34원</span></div>
+      <div class="search-card-desc">
+        검색 1건당 평균 <strong>$0.000229</strong> (≈ 0.34원).<br>
+        자연어 → JSON 변환 + 벡터 검색.<br>
+        실측 10건 기준 · 2026-05-19.
+      </div>
+    </div>
+  </div>
+
+  <div class="note ok">
+    <strong>왜 이렇게 저렴한가? (0.34원/건)</strong><br>
+    ① <strong>GPT-4o-mini는 OpenAI 최저가 모델</strong> — input $0.15/MTok (GPT-4o의 <em>10분의 1</em>)<br>
+    ② <strong>시스템 프롬프트 1,920 tok가 자동 캐싱</strong> — 연속 호출 시 cache read $0.075/MTok (정가의 반값)<br>
+    ③ <strong>출력이 작음</strong> — JSON 구조 변환만이라 output 평균 77 tok (≈ $0.000046)<br>
+    ④ <strong>이미지 없음</strong> — 텍스트 쿼리만 처리하므로 Enrich 대비 비용이 650배 이상 차이남
+  </div>
+
+  <h3>GPT-4o-mini 역할</h3>
+  <p>사용자가 입력한 자연어 검색어를 아래 JSON 구조로 변환합니다. 이 변환 결과로 벡터 검색 + 정형 필터를 동시에 적용합니다.</p>
+  <div class="prompt-block">
+    <div class="prompt-label">INPUT → OUTPUT 예시</div>
+    <pre>입력: "30대 직장 여성 데일리 귀걸이"
+
+출력: {
+  "semantic_query": "30대 직장 여성 데일리 귀걸이",
+  "filters": {
+    "target_gender": "여성",
+    "target_age_min": 30,
+    "target_age_max": 39,
+    "category_contains": "귀걸이",
+    "perspective_preference": "persona",
+    "keyword_filters": []
+  },
+  "notes": "직장 여성 페르소나 강조"
+}</pre>
+  </div>
+
+  <h3>실측 10건 상세 <span class="tag tag-real">2026-05-19 실측</span></h3>
+  <div class="note info" style="margin-bottom:16px;">
+    시스템 프롬프트(~2,431 tok)가 연속 호출 시 OpenAI 자동 캐싱 적용 (캐시 히트: 1,920 tok).
+    첫 번째 호출은 캐시 없어 $0.000366, 이후 $0.000199~$0.000225로 안정됩니다.
+  </div>
+
+  <table>
+    <tr>
+      <th>구분</th>
+      <th class="num">input_tokens</th>
+      <th class="num">cached_tokens</th>
+      <th class="num">output_tokens</th>
+      <th class="num">비용</th>
+    </tr>
+    <tr class="row-min">
+      <td>최저 (캐시 히트)</td>
+      <td class="num">2,071</td><td class="num">1,920</td>
+      <td class="num">54</td><td class="num"><strong style="color:#4ade80">$0.000199</strong> <small style="color:#4ade80">≈0.30원</small></td>
+    </tr>
+    <tr class="row-avg">
+      <td><strong>평균 (10건)</strong></td>
+      <td class="num"><strong>2,076</strong></td><td class="num"><strong>~1,728</strong></td>
+      <td class="num"><strong>77</strong></td><td class="num"><strong>$0.000229</strong> <small style="color:#93c5fd">≈0.34원</small></td>
+    </tr>
+    <tr class="row-max">
+      <td>최고 (첫 호출, 캐시 없음)</td>
+      <td class="num">2,082</td><td class="num">0</td>
+      <td class="num">89</td><td class="num"><strong style="color:#f87171">$0.000366</strong> <small style="color:#f87171">≈0.55원</small></td>
+    </tr>
+  </table>
+
+  <div class="calc-box" style="margin-bottom:20px;">
+    <div class="calc-row">
+      <div><div class="calc-label">캐시 히트 (1,920 tok)</div><div class="calc-detail">× $0.075/MTok</div></div>
+      <div class="calc-cost">$0.000144</div>
+    </div>
+    <div class="calc-row">
+      <div><div class="calc-label">캐시 미스 (~156 tok)</div><div class="calc-detail">× $0.15/MTok</div></div>
+      <div class="calc-cost">$0.000023</div>
+    </div>
+    <div class="calc-row">
+      <div><div class="calc-label">Output (~77 tok)</div><div class="calc-detail">× $0.60/MTok</div></div>
+      <div class="calc-cost">$0.000046</div>
+    </div>
+    <div class="calc-row calc-total">
+      <div><div class="calc-label">검색 1건 합계 (캐시 히트 기준)</div></div>
+      <div class="calc-cost">~$0.000213 <small style="color:#475569">≈ 0.32원</small></div>
+    </div>
+  </div>
+
+  <h3>검색 규모별 비용 (GPT-4o-mini, 캐시 히트 기준)</h3>
+  <div style="margin: 16px 0 28px;">
+    <div class="scale-row"><div class="scale-count">1,000건</div><div class="scale-bar-wrap"><div class="scale-bar" style="width:1%;background:linear-gradient(90deg,#22c55e,#22c55e)"></div></div><div class="scale-cost" style="color:#4ade80">$0.23 <small style="color:#475569">≈ 345원</small></div></div>
+    <div class="scale-row"><div class="scale-count">10,000건</div><div class="scale-bar-wrap"><div class="scale-bar" style="width:5%;background:linear-gradient(90deg,#22c55e,#3b82f6)"></div></div><div class="scale-cost" style="color:#4ade80">$2.29 <small style="color:#475569">≈ 3,440원</small></div></div>
+    <div class="scale-row"><div class="scale-count">100,000건</div><div class="scale-bar-wrap"><div class="scale-bar" style="width:50%;background:linear-gradient(90deg,#3b82f6,#7c3aed)"></div></div><div class="scale-cost" style="color:#fbbf24">$22.9 <small style="color:#475569">≈ 34,400원</small></div></div>
+    <div class="scale-row"><div class="scale-count">1,000,000건</div><div class="scale-bar-wrap"><div class="scale-bar" style="width:100%;background:linear-gradient(90deg,#7c3aed,#ef4444)"></div></div><div class="scale-cost" style="color:#f87171">$229 <small style="color:#475569">≈ 34만원</small></div></div>
+  </div>
+
+  <div class="note">
+    <strong>Groq (Llama 3.3 70B)</strong> — 현재 무료 티어 사용 중 ($0).
+    유료 전환 시 검색 1건당 ~$0.0016 (GPT-4o-mini 대비 약 7배 비쌈).
+  </div>
+
+  <hr>
+
+  <!-- ───── Q&A ───── -->
+  <h2>Q&amp;A</h2>
+
+  <div class="qa-item">
+    <div class="qa-q">Q1. input_tokens이 281인데 시스템 프롬프트 800tok + 스키마 900tok은 어디 있나요?</div>
+    <div class="qa-a">
+      Claude는 토큰을 4개 버킷으로 분리 청구합니다.<br>
+      <code>input_tokens 281</code> = 상품별 텍스트만 / <code>cache_creation 76,301</code> = 시스템프롬프트(800) + 스키마(900) + 이미지(~74,600)<br>
+      <strong>800+900 토큰은 cache_creation 안에 포함되어 있습니다.</strong>
+      처음 쓸 때 cache_creation($1.00/MTok)으로 기록되고, 5분 내 재호출 시 cache_read($0.08/MTok)로 92% 절약됩니다.
+    </div>
+  </div>
+
+  <div class="qa-item">
+    <div class="qa-q">Q2. Claude API 직접 호출도 캐시가 동일하게 적용되나요?</div>
+    <div class="qa-a">
+      네. 프롬프트 캐싱은 <strong>Anthropic API 자체 기능</strong>으로 CLI와 동일합니다.
+      API 호출 시 <code>"cache_control": {"type": "ephemeral"}</code>을 캐시할 블록에 명시해야 하며,
+      현재 코드에 이미 적용되어 있습니다 (DB의 cache_creation/cache_read 값으로 확인됨).
+    </div>
+  </div>
+
+  <div class="qa-item">
+    <div class="qa-q">Q3. 검색 시 GPT-4o-mini는 어떤 역할을 하나요?</div>
+    <div class="qa-a">
+      사용자의 <strong>자연어 검색어를 구조화된 JSON으로 변환</strong>합니다.<br>
+      예) "30대 직장 여성 귀걸이" → <code>target_gender: 여성</code>, <code>target_age_min: 30</code>, <code>category_contains: 귀걸이</code>, <code>semantic_query: "직장 여성 데일리 귀걸이"</code><br>
+      이 결과로 벡터 검색(임베딩 유사도)과 정형 필터(성별/연령/카테고리)를 동시에 적용합니다.
+      실측 기준 검색 1건당 <strong>평균 $0.000229 (약 0.33원)</strong>입니다.
+    </div>
+  </div>
+
+  <div class="qa-item">
+    <div class="qa-q">Q4. GPT-4o-mini로 Enrich 바꾸면 얼마나 싸지나요?</div>
+    <div class="qa-a">
+      Output 요금 차이가 주 원인: Claude 3.5 Haiku <strong>$4.00/MTok</strong> vs GPT-4o-mini <strong>$0.60/MTok</strong> (6.7배 차이).<br>
+      단순 토큰 수 대입 추정 시 상품 1개 <strong>~$0.010</strong>으로 현재 대비 약 <strong>15배 절감</strong> 예상.<br>
+      단, 이미지 토큰 계산 방식이 달라 실제 차이는 다를 수 있으며, 한국어 인포그래픽 OCR 품질 검증이 필요합니다.
+    </div>
+  </div>
+
+  <div class="qa-item">
+    <div class="qa-q">Q5. Claude 3 Haiku (구버전)로 바꾸면 얼마인가요?</div>
+    <div class="qa-a">
+      Input $0.25/MTok, Cache write $0.30/MTok, Output $1.25/MTok 기준 상품 1개 추정 <strong>~$0.047</strong> (현재 대비 약 3.3배 절감).<br>
+      품질은 3.5 Haiku보다 낮으나 Pass 1 이미지 필터 같은 단순 작업에는 충분할 수 있습니다.
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

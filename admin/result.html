@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIRA · 추출 결과</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .verify-bar {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--ok-soft);
+    border: 1px solid rgba(35,122,71,0.22);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+  }
+  .verify-bar .ic {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid rgba(35,122,71,0.22);
+    color: var(--ok);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .verify-bar .t1 { font-size: 13.5px; font-weight: 700; color: var(--ok); }
+  .verify-bar .t2 { font-size: 12px; color: var(--text-2); margin-top: 1px; }
+  .verify-bar .score { margin-left: auto; text-align: right; }
+  .verify-bar .score .v { font-size: 22px; font-weight: 700; color: var(--ok); font-variant-numeric: tabular-nums; line-height: 1; }
+  .verify-bar .score .l { font-size: 10.5px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+  .verify-bar.warn { background: var(--warn-soft); border-color: rgba(138,106,26,0.28); }
+  .verify-bar.warn .ic { color: var(--warn); border-color: rgba(138,106,26,0.28); }
+  .verify-bar.warn .t1 { color: var(--warn); }
+  .verify-bar.warn .score .v { color: var(--warn); }
+
+  .prod-card {
+    display: flex; gap: 14px; align-items: center;
+    padding: 14px;
+  }
+  .prod-thumb {
+    width: 64px; height: 64px;
+    border-radius: 6px;
+    background: repeating-linear-gradient(135deg, var(--surface-2) 0 8px, var(--surface-3) 8px 16px);
+    border: 1px solid var(--line);
+    flex-shrink: 0;
+    display: grid; place-items: center;
+    color: var(--text-4);
+    font-family: ui-monospace, monospace;
+    font-size: 10px;
+  }
+  .prod-info h2 { font-size: 16px; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.015em; }
+  .prod-info .cat { font-size: 12px; color: var(--text-3); margin-bottom: 6px; }
+  .prod-info .price { font-size: 14px; color: var(--primary); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .persp-block { border-left: 3px solid var(--p-color, var(--primary)); padding-left: 12px; }
+  .persp-block .ph { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .persp-block .pl {
+    font-size: 11px; font-weight: 700;
+    color: var(--p-color, var(--primary));
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .persp-block .pe { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-4); display: inline-flex; align-items: center; gap: 5px; }
+  .persp-block .pe .ok-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ok); }
+  .persp-block .pt { font-size: 13px; color: var(--text-2); line-height: 1.65; }
+  .persp-block + .persp-block { margin-top: 12px; }
+
+  .state-toggle {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 12px; background: var(--surface-2);
+    border: 1px dashed var(--line-2); border-radius: 5px;
+    margin-bottom: 12px;
+    font-size: 12px;
+  }
+  .state-toggle .lbl {
+    color: var(--text-4);
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    margin-right: 6px;
+  }
+</style>
+</head>
+<body data-route="result" data-crumbs="홈 / 상품 데이터 / 상품 업로드 / 추출 결과">
+  <div class="shell">
+    <div id="side-mount"></div>
+    <main class="main">
+      <div id="top-mount"></div>
+
+      <div class="page" style="max-width:1180px;margin:0 auto;">
+
+        <!-- HEAD -->
+        <div class="page-head">
+          <div>
+            <h1>추출 결과</h1>
+            <div class="sub" id="head-sub">속성 추출이 완료되었습니다. 결과를 확인하고 저장하세요.</div>
+          </div>
+          <div class="actions" id="head-actions">
+            <button class="btn" onclick="location.href='upload.html'">다시 분석</button>
+            <button class="btn btn-primary" onclick="location.href='product.html'">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+              저장하기
+            </button>
+          </div>
+        </div>
+
+        <!-- demo state switch (mock only) -->
+        <div class="state-toggle">
+          <span class="lbl">DEMO · 진입 경로</span>
+          <button class="btn btn-sm btn-primary" data-state="fresh">① 업로드 직후</button>
+          <button class="btn btn-sm" data-state="reopen-unsaved">② 추출리스트 · 미저장</button>
+          <button class="btn btn-sm" data-state="reopen-saved">③ 추출리스트 · 저장됨</button>
+        </div>
+
+        <!-- VERIFY -->
+        <div class="verify-bar">
+          <div class="ic">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div>
+            <div class="t1">검증 통과</div>
+            <div class="t2">필수 속성 4개 모두 추출 · 경고 없음 · 저장 가능</div>
+          </div>
+          <div class="score">
+            <div class="v">0.87</div>
+            <div class="l">trust score</div>
+          </div>
+        </div>
+
+        <!-- 2-COL LAYOUT -->
+        <div class="detail-grid">
+
+          <!-- LEFT -->
+          <div class="row-gap-10">
+
+            <!-- Product info -->
+            <div class="card">
+              <div class="card-head">
+                <span style="display:inline-flex;align-items:center;gap:8px;">
+                  <span style="width:8px;height:8px;border-radius:2px;background:var(--primary);"></span>
+                  상품 정보
+                </span>
+              </div>
+              <div class="prod-card">
+                <div class="prod-thumb">img_0</div>
+                <div class="prod-info">
+                  <h2>지젯시믹스 바람막이</h2>
+                  <div class="cat">Apparel › Activewear · 이미지 5장</div>
+                  <div class="price">₩189,000</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Common attrs -->
+            <div class="card">
+              <div class="card-head">
+                <span style="display:inline-flex;align-items:center;gap:8px;">
+                  <span style="width:8px;height:8px;border-radius:2px;background:var(--primary);"></span>
+                  공통 속성
+                </span>
+                <span class="right mono" style="color:var(--text-3);font-size:11.5px;font-weight:500;">common_attributes</span>
+              </div>
+              <div class="card-body">
+                <div class="kv-list">
+                  <div class="kv"><div class="k">색상</div><div class="v"><span class="chip">검정</span><span class="chip">네이비</span><span class="chip">카키</span></div></div>
+                  <div class="kv"><div class="k">소재</div><div class="v">나일론 100%</div></div>
+                  <div class="kv"><div class="k">핏</div><div class="v">스탠다드핏</div></div>
+                  <div class="kv"><div class="k">사이즈</div><div class="v"><span class="chip">S</span><span class="chip">M</span><span class="chip">L</span><span class="chip">XL</span></div></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Category attrs -->
+            <div class="card">
+              <div class="card-head">
+                <span style="display:inline-flex;align-items:center;gap:8px;">
+                  <span style="width:8px;height:8px;border-radius:2px;background:var(--amber);"></span>
+                  카테고리 속성
+                </span>
+                <span class="right mono" style="color:var(--text-3);font-size:11.5px;font-weight:500;">category_attributes</span>
+              </div>
+              <div class="card-body">
+                <div class="kv-list">
+                  <div class="kv"><div class="k">원단 특성</div><div class="v"><span class="chip">발수</span><span class="chip">신축성</span><span class="chip">통기성</span></div></div>
+                  <div class="kv"><div class="k">디자인</div><div class="v"><span class="chip">집업</span><span class="chip">포켓</span><span class="chip">후드</span></div></div>
+                  <div class="kv"><div class="k">시즌</div><div class="v">가을</div></div>
+                  <div class="kv"><div class="k">용도</div><div class="v"><span class="chip">등산</span><span class="chip">일상 외출</span><span class="chip">야외활동</span></div></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tags -->
+            <div class="card">
+              <div class="card-head">
+                <span style="display:inline-flex;align-items:center;gap:8px;">
+                  <span style="width:8px;height:8px;border-radius:2px;background:var(--teal);"></span>
+                  자유 태그
+                </span>
+                <span class="right mono" style="color:var(--text-3);font-size:11.5px;font-weight:500;">product_tags</span>
+              </div>
+              <div class="card-body">
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                  <span class="chip" style="display:inline-flex;align-items:center;gap:6px;margin:0;"><span style="font-size:9.5px;text-transform:uppercase;color:var(--text-4);letter-spacing:0.05em;">style</span>캐주얼<b class="mono tnum" style="color:var(--ok);font-size:11px;">0.88</b></span>
+                  <span class="chip" style="display:inline-flex;align-items:center;gap:6px;margin:0;"><span style="font-size:9.5px;text-transform:uppercase;color:var(--text-4);letter-spacing:0.05em;">feature</span>방한<b class="mono tnum" style="color:var(--ok);font-size:11px;">0.92</b></span>
+                  <span class="chip" style="display:inline-flex;align-items:center;gap:6px;margin:0;"><span style="font-size:9.5px;text-transform:uppercase;color:var(--text-4);letter-spacing:0.05em;">mood</span>활동성<b class="mono tnum" style="color:var(--ok);font-size:11px;">0.85</b></span>
+                  <span class="chip" style="display:inline-flex;align-items:center;gap:6px;margin:0;"><span style="font-size:9.5px;text-transform:uppercase;color:var(--text-4);letter-spacing:0.05em;">feature</span>경량<b class="mono tnum" style="color:var(--ok);font-size:11px;">0.90</b></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4 perspectives -->
+            <div class="card">
+              <div class="card-head">
+                <span style="display:inline-flex;align-items:center;gap:8px;">
+                  <span style="width:8px;height:8px;border-radius:2px;background:var(--purple);"></span>
+                  다관점 설명문
+                </span>
+                <span class="right mono" style="color:var(--text-3);font-size:11.5px;font-weight:500;">product_descriptions</span>
+              </div>
+              <div class="card-body">
+                <div class="persp-block" style="--p-color: #2563EB;">
+                  <div class="ph">
+                    <span class="pl">situation · 상황</span>
+                    <span class="pe"><span class="ok-dot"></span>embedding 1,536d</span>
+                  </div>
+                  <div class="pt">캐주얼한 일상 외출부터 등산까지 다양한 활동에서 활용 가능한 바람막이. 가벼운 무게로 휴대성이 좋아 어디든 챙겨가기 편하다.</div>
+                </div>
+                <div class="persp-block" style="--p-color: #0D9488;">
+                  <div class="ph">
+                    <span class="pl">material · 소재</span>
+                    <span class="pe"><span class="ok-dot"></span>embedding 1,536d</span>
+                  </div>
+                  <div class="pt">나일론 100% 소재에 발수 가공을 더해 가벼운 비나 바람을 막아준다. 신축성과 통기성을 갖춰 활동 시 쾌적함을 유지한다.</div>
+                </div>
+                <div class="persp-block" style="--p-color: #D97706;">
+                  <div class="ph">
+                    <span class="pl">style · 스타일</span>
+                    <span class="pe"><span class="ok-dot"></span>embedding 1,536d</span>
+                  </div>
+                  <div class="pt">모던한 라인의 집업 디자인으로 어떤 옷과도 매치하기 쉽다. 후드와 포켓 디테일이 실용성과 캐주얼한 무드를 동시에 잡았다.</div>
+                </div>
+                <div class="persp-block" style="--p-color: #7C3AED;">
+                  <div class="ph">
+                    <span class="pl">persona · 페르소나</span>
+                    <span class="pe"><span class="ok-dot"></span>embedding 1,536d</span>
+                  </div>
+                  <div class="pt">활동적인 라이프스타일을 선호하는 20~40대. 등산이나 야외 활동을 즐기며 기능성과 스타일을 모두 중시하는 사용자에게 적합.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT RAIL -->
+          <div class="rail">
+            <div class="card">
+              <div class="card-head" style="padding:10px 14px;">
+                <span style="font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">토큰 / 비용</span>
+              </div>
+              <div class="card-body" style="padding:0;">
+                <table style="font-size:12px;">
+                  <tbody>
+                    <tr><td style="padding-left:14px;color:var(--text-3);">Step 1 <span style="color:var(--text-4);font-size:11px;">분류</span></td><td class="num tnum" style="padding-right:14px;">2,500 / 180</td></tr>
+                    <tr><td style="padding-left:14px;color:var(--text-3);">Step 2 <span style="color:var(--text-4);font-size:11px;">추출</span></td><td class="num tnum" style="padding-right:14px;">8,500 / 850</td></tr>
+                    <tr><td style="padding-left:14px;color:var(--text-3);">Step 3 <span style="color:var(--text-4);font-size:11px;">검증</span></td><td class="num tnum" style="padding-right:14px;">2,200 / 150</td></tr>
+                  </tbody>
+                </table>
+                <div style="padding:12px 14px;background:var(--surface-2);border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline;">
+                  <span style="font-size:12px;font-weight:600;">총 비용</span>
+                  <span class="tnum" style="font-size:18px;font-weight:700;letter-spacing:-0.02em;">$0.0065</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div id="rail-actions" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
+              <button class="btn btn-primary btn-lg" style="justify-content:center;" onclick="location.href='product.html'">저장하기</button>
+              <button class="btn" style="justify-content:center;" onclick="location.href='upload.html'">다시 분석</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="note">
+          <b>참고</b> · Phase 3~5 — 진입 경로에 따라 버튼 분기.
+          <ul>
+            <li>① <code>/result</code> 업로드 직후: [저장하기] [다시 분석]</li>
+            <li>② <code>/result?job=…</code> 미저장: [목록으로] · 저장 불가 (검토 전용)</li>
+            <li>③ <code>/result?job=…</code> 저장됨: [상품 상세 보기] [목록으로]</li>
+            <li>저장은 ①(업로드 직후)에서만 — 중복 방지 키 부재(PoC)</li>
+          </ul>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="partials.js"></script>
+  <script src="enhance.js"></script>
+  <script>
+    document.querySelectorAll('.state-toggle button').forEach((b) => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.state-toggle button').forEach((x) => x.classList.remove('btn-primary'));
+        b.classList.add('btn-primary');
+        const state = b.dataset.state;
+        const sub = document.getElementById('head-sub');
+        const headActs = document.getElementById('head-actions');
+        const railActs = document.getElementById('rail-actions');
+
+        if (state === 'fresh') {
+          sub.textContent = '속성 추출이 완료되었습니다. 결과를 확인하고 저장하세요.';
+          headActs.innerHTML = `<button class="btn" onclick="location.href='upload.html'">다시 분석</button>
+            <button class="btn btn-primary" onclick="location.href='product.html'">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+              저장하기
+            </button>`;
+          railActs.innerHTML = `<button class="btn btn-primary btn-lg" style="justify-content:center;" onclick="location.href='product.html'">저장하기</button>
+            <button class="btn" style="justify-content:center;" onclick="location.href='upload.html'">다시 분석</button>`;
+        } else if (state === 'reopen-unsaved') {
+          sub.textContent = '이전에 추출한 결과입니다. 검토 후 저장할 수 있습니다.';
+          headActs.innerHTML = `<button class="btn" onclick="location.href='extractions.html'">목록으로</button>`;
+          railActs.innerHTML = `<div class="badge warn" style="justify-content:center;padding:8px 12px;font-size:12px;"><span class="dot"></span>미저장 추출 결과 · 검토 전용</div>
+            <button class="btn" style="justify-content:center;" onclick="location.href='extractions.html'">목록으로</button>`;
+        } else {
+          sub.textContent = '이미 저장된 상품의 추출 결과입니다.';
+          headActs.innerHTML = `<button class="btn" onclick="location.href='extractions.html'">목록으로</button>
+            <button class="btn btn-primary" onclick="location.href='product.html'">상품 상세 보기</button>`;
+          railActs.innerHTML = `<div class="badge ok" style="justify-content:center;padding:8px 12px;font-size:12px;"><span class="dot"></span>이미 저장된 상품입니다</div>
+            <button class="btn btn-primary btn-lg" style="justify-content:center;" onclick="location.href='product.html'">상품 상세 보기</button>
+            <button class="btn" style="justify-content:center;" onclick="location.href='extractions.html'">목록으로</button>`;
+        }
+      });
+    });
+  </script>
+</body>
+</html>

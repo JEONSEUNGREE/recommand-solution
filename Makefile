@@ -1,4 +1,4 @@
-.PHONY: up down install seed embed api psql
+.PHONY: up down install seed embed psql
 
 up:
 	docker compose up -d
@@ -19,9 +19,6 @@ seed:
 
 embed:
 	.venv/bin/python scripts/embed_products.py
-
-api:
-	.venv/bin/uvicorn app.main:app --reload --port 8000
 
 psql:
 	docker compose exec postgres psql -U app -d recommend

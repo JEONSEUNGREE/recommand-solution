@@ -19,6 +19,7 @@ public class EmbedderClient {
     private final OkHttpClient http;
     private final ObjectMapper mapper;
     private final String baseUrl;
+    private final String apiToken;
 
     public EmbedderClient(@Qualifier("embedderHttp") OkHttpClient http,
                           ObjectMapper mapper,
@@ -26,15 +27,19 @@ public class EmbedderClient {
         this.http = http;
         this.mapper = mapper;
         this.baseUrl = props.embedder().baseUrl();
+        this.apiToken = props.embedder().apiToken();
     }
 
     public float[] embed(String text) {
         try {
             String body = mapper.writeValueAsString(java.util.Map.of("texts", List.of(text)));
-            Request req = new Request.Builder()
+            Request.Builder rb = new Request.Builder()
                     .url(baseUrl + "/embed")
-                    .post(RequestBody.create(body, JSON))
-                    .build();
+                    .post(RequestBody.create(body, JSON));
+            if (apiToken != null && !apiToken.isBlank()) {
+                rb.header("Authorization", "Bearer " + apiToken);
+            }
+            Request req = rb.build();
             try (Response res = http.newCall(req).execute()) {
                 if (!res.isSuccessful()) {
                     throw new RuntimeException("Embedder failed: " + res.code());

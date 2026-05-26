@@ -1,0 +1,73 @@
+{
+  "file": "scripts/scrape/andar_17828.html",
+  "platform_guess": "cafe24",
+  "platform_scores": {
+    "cafe24": 496
+  },
+  "title": "[SET] NEW 풀앤비치 집업 래쉬가드 & 에어쿨링 레깅스 - 안다르",
+  "meta_charset": "",
+  "matched_known_selectors": [
+    {
+      "selector": "#prdDetail",
+      "label": "div#prdDetail.ec-base-tab.grid5.tab-item-1",
+      "img_count": 54,
+      "text_len": 5029
+    },
+    {
+      "selector": ".xans-product-detail",
+      "label": "div.xans-element-.xans-product.xans-product-detail",
+      "img_count": 0,
+      "text_len": 0
+    }
+  ],
+  "heuristic_top_candidates": [
+    {
+      "label": "div#wrapper",
+      "img_count": 190,
+      "text_len": 13490,
+      "score": 51490
+    },
+    {
+      "label": "div#cnt",
+      "img_count": 186,
+      "text_len": 13339,
+      "score": 50539
+    },
+    {
+      "label": "div.cntbody",
+      "img_count": 186,
+      "text_len": 13339,
+      "score": 50539
+    },
+    {
+      "label": "div#detail.prd_detail_container",
+      "img_count": 186,
+      "text_len": 13337,
+      "score": 50537
+    },
+    {
+      "label": "div.xans-element-.xans-product.xans-product-detail",
+      "img_count": 130,
+      "text_len": 4965,
+      "score": 30965
+    },
+    {
+      "label": "div.detailArea",
+      "img_count": 130,
+      "text_len": 4961,
+      "score": 30961
+    },
+    {
+      "label": "div#infoArea.infoArea.infoArea_ATF",
+      "img_count": 110,
+      "text_len": 4955,
+      "score": 26955
+    },
+    {
+      "label": "div.scrollbar",
+      "img_count": 101,
+      "text_len": 2950,
+      "score": 23150
+    }
+  ]
+}

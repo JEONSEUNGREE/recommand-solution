@@ -1,0 +1,1888 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIRA · 추천 채팅</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* ── 레이아웃 ─────────────────────────────────── */
+  .chat-layout {
+    display: grid;
+    grid-template-columns: 1fr 272px;
+    gap: 12px;
+    height: calc(100vh - 52px - 28px - 82px);
+    min-height: 480px;
+  }
+  .chat-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    min-height: 0;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  }
+
+  /* ── 채팅 헤더 ────────────────────────────────── */
+  .chat-head {
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 10px;
+    background: #fafafa;
+  }
+  .aira-icon {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    display: grid; place-items: center;
+    font-size: 14px; flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(99,102,241,.35);
+  }
+  .chat-head-info { flex: 1; min-width: 0; }
+  .chat-head-name { font-size: 13px; font-weight: 700; color: var(--text); }
+  .chat-head-sub  { font-size: 11px; color: var(--text-4); font-family: ui-monospace, monospace; margin-top: 1px; }
+  .chat-head-right { display: flex; align-items: center; gap: 8px; }
+
+  /* ── 메시지 영역 ──────────────────────────────── */
+  .msgs {
+    overflow-y: auto;
+    padding: 20px 18px;
+    display: flex; flex-direction: column; gap: 16px;
+    min-height: 0;
+  }
+  .msgs::-webkit-scrollbar { width: 5px; }
+  .msgs::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 3px; }
+
+  .day-divider {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--text-4); font-size: 11px;
+    font-family: ui-monospace, monospace;
+    margin: 4px 0 8px;
+  }
+  .day-divider::before, .day-divider::after {
+    content: ""; flex: 1; height: 1px; background: var(--line);
+  }
+
+  .msg { display: flex; gap: 9px; max-width: 80%; align-items: flex-start; }
+  .msg.user  { align-self: flex-end; flex-direction: row-reverse; }
+  .msg.wide  { max-width: 96%; }
+
+  .av {
+    width: 30px; height: 30px; border-radius: 50%;
+    display: grid; place-items: center;
+    flex-shrink: 0; font-size: 11px; font-weight: 700;
+  }
+  .msg.user .av {
+    background: linear-gradient(135deg, #2563EB, #3B82F6);
+    color: #fff;
+  }
+  .msg.ai .av {
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    color: #fff;
+    font-size: 12px;
+  }
+
+  .msg .body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .msg.user .body { align-items: flex-end; }
+
+  .bubble {
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 13.5px; line-height: 1.65;
+    word-break: break-word;
+  }
+  .msg.user .bubble {
+    background: linear-gradient(135deg, #2563EB, #3B82F6);
+    color: #fff;
+    border-bottom-right-radius: 3px;
+    box-shadow: 0 2px 8px rgba(37,99,235,.25);
+  }
+  .msg.ai .bubble {
+    background: #F8F8FB;
+    color: var(--text);
+    border: 1px solid #EBEBF0;
+    border-bottom-left-radius: 3px;
+  }
+
+  .msg-meta {
+    font-size: 10.5px; font-family: ui-monospace, monospace;
+    color: var(--text-4); display: flex; gap: 5px; align-items: center;
+    padding: 0 2px;
+  }
+
+  /* ── 상품 카드 (가로 스크롤) ─────────────────── */
+  .reco-header {
+    font-size: 12px; font-weight: 700; color: var(--text);
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 7px;
+    letter-spacing: -.01em;
+  }
+  .reco-header .cnt {
+    font-size: 10.5px; font-weight: 600;
+    font-family: ui-monospace, monospace;
+    color: #fff; background: #111;
+    padding: 1px 6px; border-radius: 999px;
+    letter-spacing: 0;
+  }
+  .reco-scroll {
+    display: flex; flex-direction: row; gap: 10px;
+    overflow-x: auto;
+    padding: 2px 2px 10px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  .reco-scroll::-webkit-scrollbar { height: 4px; }
+  .reco-scroll::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 2px; }
+  .reco-scroll::-webkit-scrollbar-track { background: transparent; }
+
+  .reco-card {
+    flex-shrink: 0; width: 164px;
+    display: flex; flex-direction: column;
+    border-radius: 10px;
+    border: 1px solid #E5E7EB;
+    background: #fff;
+    overflow: hidden;
+    cursor: pointer;
+    text-decoration: none;
+    scroll-snap-align: start;
+    transition: box-shadow 0.15s, transform 0.15s;
+  }
+  .reco-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    transform: translateY(-2px);
+    border-color: #C4B5FD;
+  }
+  .reco-thumb {
+    width: 100%; height: 136px;
+    background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
+    display: grid; place-items: center;
+    overflow: hidden; flex-shrink: 0;
+    position: relative;
+  }
+  .reco-thumb img {
+    width: 100%; height: 100%; object-fit: cover;
+    transition: transform 0.2s;
+  }
+  .reco-card:hover .reco-thumb img { transform: scale(1.04); }
+  .reco-thumb .no-img {
+    font-size: 28px; opacity: .3;
+  }
+  .reco-body {
+    padding: 9px 10px 10px;
+    display: flex; flex-direction: column; gap: 3px; flex: 1;
+  }
+  .reco-name {
+    font-size: 12px; font-weight: 600; color: var(--text);
+    overflow: hidden; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    line-height: 1.45;
+  }
+  .reco-cat {
+    font-size: 10.5px; color: var(--text-4);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .reco-reason {
+    font-size: 10.5px; color: #6B7280; line-height: 1.4;
+    overflow: hidden; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    margin-top: 2px;
+  }
+  .reco-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 5px; padding-top: 6px;
+    border-top: 1px solid #F3F4F6;
+  }
+  .reco-price {
+    font-size: 12.5px; font-weight: 700; color: var(--text);
+    font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, monospace;
+  }
+  .reco-sim {
+    font-size: 10px; color: #10B981; font-weight: 600;
+    font-family: ui-monospace, monospace;
+    background: #ECFDF5; padding: 1px 5px; border-radius: 3px;
+  }
+  .persp-badge {
+    font-size: 9.5px; padding: 1px 5px; border-radius: 3px;
+    font-family: ui-monospace, monospace;
+    background: #EEF2FF; color: #4338CA;
+    margin-top: 2px; display: inline-block;
+  }
+
+  /* ── 파이프라인 버튼 ──────────────────────────── */
+  .pipe-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    margin-top: 10px; margin-bottom: 2px;
+    padding: 5px 12px;
+    border: 1px solid #C4B5FD;
+    border-radius: 999px;
+    font-size: 11.5px; font-weight: 600;
+    color: #6D28D9; background: #F5F3FF;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .pipe-btn:hover { background: #7C3AED; color: #fff; border-color: #7C3AED; }
+  .pipe-btn svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2.2; }
+
+  /* ── 입력 영역 ────────────────────────────────── */
+  .input-wrap {
+    padding: 10px 14px 12px;
+    border-top: 1px solid var(--line);
+    background: #fafafa;
+  }
+  .suggest { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .suggest-chip {
+    background: #fff; border: 1px solid #E5E7EB;
+    color: var(--text-3); padding: 4px 11px;
+    border-radius: 999px; font-size: 11.5px; cursor: pointer;
+    transition: all 0.1s;
+  }
+  .suggest-chip:hover { border-color: #7C3AED; color: #7C3AED; background: #F5F3FF; }
+
+  .input-row {
+    display: flex; gap: 8px; align-items: flex-end;
+    background: #fff;
+    border: 1.5px solid #E5E7EB;
+    border-radius: 10px;
+    padding: 7px 7px 7px 14px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .input-row:focus-within {
+    border-color: #7C3AED;
+    box-shadow: 0 0 0 3px rgba(124,58,237,.1);
+  }
+  .input-row textarea {
+    flex: 1; background: transparent; border: none; resize: none;
+    font-size: 13.5px; color: var(--text);
+    min-height: 26px; max-height: 110px;
+    line-height: 1.5; padding: 4px 0; outline: none;
+    font-family: inherit;
+  }
+  .input-row textarea::placeholder { color: #9CA3AF; }
+  .send-btn {
+    width: 34px; height: 34px;
+    background: linear-gradient(135deg, #6366F1, #7C3AED);
+    color: #fff; border-radius: 8px;
+    display: grid; place-items: center; flex-shrink: 0;
+    transition: opacity 0.15s, transform 0.1s;
+    box-shadow: 0 2px 6px rgba(99,102,241,.35);
+  }
+  .send-btn:hover { opacity: .88; transform: scale(1.04); }
+  .send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+  .send-btn svg { width: 14px; height: 14px; stroke-width: 2; fill: none; stroke: currentColor; }
+
+  /* ── 컨트롤 바 (모델·임베딩·결과수) ────────────── */
+  .chat-ctrls {
+    display: flex; align-items: center; gap: 0;
+    margin-top: 8px; padding-top: 7px;
+    border-top: 1px solid #F3F4F6;
+    font-size: 11.5px;
+  }
+  .ctrl-pill {
+    display: flex; align-items: center; gap: 4px;
+    padding: 0 10px 0 0;
+  }
+  .ctrl-pill:not(:last-of-type) {
+    padding-right: 10px;
+    border-right: 1px solid #E5E7EB;
+    margin-right: 10px;
+  }
+  .ctrl-lbl { color: #9CA3AF; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .ctrl-sel, .ctrl-num {
+    font-size: 11.5px; color: var(--text);
+    background: transparent; border: none;
+    cursor: pointer; outline: none;
+    font-family: inherit;
+    -webkit-appearance: none; appearance: none;
+  }
+  .ctrl-sel { padding-right: 2px; }
+  .ctrl-num { width: 34px; text-align: center; font-weight: 600; }
+  .ctrl-num::-webkit-inner-spin-button,
+  .ctrl-num::-webkit-outer-spin-button { opacity: 1; }
+  .ctrl-spacer { flex: 1; }
+  .ctrl-adv { color: #9CA3AF; font-size: 10.5px; font-family: ui-monospace, monospace; }
+
+  /* ── 사이드 패널 ──────────────────────────────── */
+  .recent-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    display: flex; flex-direction: column;
+    min-height: 0; overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  }
+  .recent-head {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center;
+    font-size: 12px; font-weight: 700;
+    background: #fafafa;
+  }
+  .recent-head .right { margin-left: auto; }
+  .recent-list { overflow-y: auto; min-height: 0; flex: 1; }
+  .recent-list::-webkit-scrollbar { width: 4px; }
+  .recent-list::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 2px; }
+  .recent-item {
+    padding: 9px 14px; border-bottom: 1px solid #F9FAFB;
+    cursor: pointer; transition: background 0.1s;
+  }
+  .recent-item:hover { background: #F5F3FF; }
+  .recent-item.active { background: #EEF2FF; }
+  .ri-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+  .ri-q {
+    font-size: 12px; font-weight: 600; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+  }
+  .ri-t { font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--text-4); flex-shrink: 0; }
+  .ri-meta { font-size: 10.5px; display: flex; gap: 5px; align-items: center; }
+  .recent-foot {
+    padding: 9px 12px; border-top: 1px solid var(--line);
+    background: #fafafa;
+  }
+
+  /* ── 파이프라인 모달 ──────────────────────────── */
+  .pipe-modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 2000;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    backdrop-filter: blur(3px);
+  }
+  .pipe-modal-overlay[hidden] { display: none; }
+  .pipe-modal-panel {
+    background: #fff; border-radius: 14px;
+    width: 100%; max-width: 560px; max-height: 88vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 24px 72px rgba(0,0,0,.22);
+    overflow: hidden;
+  }
+  .pipe-modal-head {
+    padding: 14px 16px 13px;
+    border-bottom: 1px solid #E5E7EB;
+    display: flex; align-items: center; gap: 9px; flex-shrink: 0;
+    background: #111;
+  }
+  .pipe-modal-icon { font-size: 14px; color: #fff; }
+  .pipe-modal-title { font-size: 13px; font-weight: 700; color: #fff; }
+  .pipe-modal-q {
+    flex: 1; font-size: 11.5px; color: rgba(255,255,255,.55);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: ui-monospace, monospace;
+  }
+  .pipe-modal-close {
+    width: 26px; height: 26px; border-radius: 6px;
+    font-size: 13px; color: rgba(255,255,255,.8);
+    display: grid; place-items: center; transition: background 0.1s;
+  }
+  .pipe-modal-close:hover { background: rgba(255,255,255,.2); color: #fff; }
+  .pipe-modal-body {
+    flex: 1 1 auto; min-height: 0;
+    overflow-y: auto; padding: 18px 16px;
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .pipe-modal-body::-webkit-scrollbar { width: 5px; }
+  .pipe-modal-body::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 3px; }
+
+  /* ── 플로우차트 ──────────────────────────────── */
+  .flow-step { border-radius: 8px; overflow: hidden; border: 1.5px solid; }
+  .flow-step-head {
+    padding: 8px 13px; font-size: 11.5px; font-weight: 700;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .flow-step-body {
+    padding: 9px 13px; background: #fff;
+    display: flex; flex-direction: column; gap: 5px;
+    font-size: 11.5px; font-family: ui-monospace, monospace;
+  }
+  .flow-row { display: flex; gap: 8px; line-height: 1.55; }
+  .flow-lbl { color: #9CA3AF; min-width: 90px; flex-shrink: 0; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; }
+  .flow-val { color: #374151; flex: 1; word-break: break-all; }
+  .flow-val b { color: #4F46E5; font-weight: 600; }
+  .flow-note { color: #9CA3AF; font-size: 10.5px; padding-top: 2px; }
+  .flow-arrow { text-align: center; color: #D1D5DB; font-size: 18px; line-height: 1; padding: 5px 0; }
+  .flow-json-wrap {
+    margin-top: 6px; border-top: 1px solid #F3F4F6; padding-top: 6px;
+  }
+  .flow-json-lbl {
+    font-size: 10px; color: #9CA3AF; text-transform: uppercase; letter-spacing: .04em;
+    margin-bottom: 3px; cursor: pointer; display: flex; align-items: center; gap: 4px;
+    user-select: none;
+  }
+  .flow-json-lbl:hover { color: #6B7280; }
+  .flow-json-pre {
+    background: #111; color: #86EFAC; font-size: 10.5px; font-family: ui-monospace, monospace;
+    padding: 8px 10px; border-radius: 5px; overflow-x: auto; line-height: 1.5;
+    max-height: 200px; overflow-y: auto;
+    display: none;
+  }
+  .flow-json-pre.open { display: block; }
+  .flow-step.s-input  { border-color: #E5E7EB; }
+  .flow-step.s-input  .flow-step-head { background: #F9FAFB; color: #111; }
+  .flow-step.s-llm    { border-color: #E5E7EB; }
+  .flow-step.s-llm    .flow-step-head { background: #F9FAFB; color: #111; }
+  .flow-step.s-embed  { border-color: #E5E7EB; }
+  .flow-step.s-embed  .flow-step-head { background: #F9FAFB; color: #111; }
+  .flow-step.s-db     { border-color: #E5E7EB; }
+  .flow-step.s-db     .flow-step-head { background: #F9FAFB; color: #111; }
+  .flow-step.s-result { border-color: #E5E7EB; }
+  .flow-step.s-result .flow-step-head { background: #111; color: #fff; }
+
+  /* ── 스피너 ──────────────────────────────────── */
+  .spin-inline {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid #E5E7EB; border-top-color: #7C3AED;
+    border-radius: 50%;
+    animation: spin .7s linear infinite; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── 이전 pipeline-detail (이력용) ─────────────── */
+  .pipeline-detail {
+    margin-top: 10px; border: 1px solid var(--line);
+    border-radius: 6px; font-size: 11.5px;
+    font-family: ui-monospace, monospace; overflow: hidden;
+  }
+  .pipeline-detail .pd-head {
+    padding: 5px 10px; background: var(--surface-2);
+    border-bottom: 1px solid var(--line);
+    font-weight: 600; color: var(--text-3); font-size: 10.5px;
+  }
+  .pipeline-detail .pd-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
+  .pd-row { display: flex; gap: 8px; align-items: baseline; line-height: 1.5; }
+  .pd-label { color: var(--text-4); min-width: 84px; flex-shrink: 0; }
+  .pd-val { color: var(--text-2); word-break: break-all; flex: 1; }
+  .pd-val b { color: var(--primary); font-weight: 600; }
+  .pd-timing { display: flex; gap: 12px; flex-wrap: wrap; }
+  .pd-timing .tv { font-weight: 700; color: var(--text); }
+
+  /* ── 추천 사유 버튼 & 팝업 ───────────────────── */
+  .reason-btn {
+    font-size: 9px; font-weight: 700; letter-spacing: .02em;
+    color: #6B7280; border: 1px solid #E5E7EB;
+    background: #F9FAFB; border-radius: 3px;
+    padding: 1px 5px; cursor: pointer; user-select: none;
+    flex-shrink: 0; transition: background .12s, color .12s, border-color .12s;
+    line-height: 1.5;
+  }
+  .reason-btn:hover { background: #111; color: #fff; border-color: #111; }
+
+  .reason-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.38);
+    z-index: 2000; display: none; place-items: center;
+    backdrop-filter: blur(2px);
+  }
+  .reason-overlay.open { display: grid; }
+  .reason-box {
+    background: #fff; border-radius: 10px;
+    width: auto; max-width: 94vw;
+    box-shadow: 0 10px 40px rgba(0,0,0,.25);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .reason-main { display: flex; flex-direction: row; align-items: stretch; }
+  .reason-head {
+    background: #111; padding: 12px 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .reason-head-title { color: #fff; font-size: 12px; font-weight: 700; flex: 1; }
+  .reason-close { color: rgba(255,255,255,.55); cursor: pointer; font-size: 18px; line-height: 1; }
+  .reason-close:hover { color: #fff; }
+  .reason-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; width: 320px; flex-shrink: 0; box-sizing: border-box; }
+  .reason-product { font-size: 12.5px; font-weight: 700; color: #111; line-height: 1.4; }
+  .reason-rows { display: flex; flex-direction: column; gap: 4px; }
+  .reason-row { display: flex; gap: 10px; font-size: 11.5px; align-items: baseline; }
+  .reason-lbl { color: #9CA3AF; width: 58px; flex-shrink: 0; }
+  .reason-val { color: #111; font-weight: 600; }
+  .reason-val .dist { font-weight: 400; color: #9CA3AF; font-size: 10.5px; margin-left: 4px; }
+  .reason-sep { height: 1px; background: #F3F4F6; }
+  .reason-desc-lbl { font-size: 10px; color: #9CA3AF; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+  .reason-desc-text {
+    font-size: 11.5px; color: #374151; line-height: 1.6;
+    background: #111; color: #86EFAC;
+    font-family: ui-monospace, monospace;
+    border-radius: 6px; padding: 9px 11px;
+    max-height: 140px; overflow-y: auto;
+  }
+  .reason-explain { font-size: 10px; color: #9CA3AF; line-height: 1.6; }
+
+  /* ── 벡터 공간 3D 그래프 ─────────────────────── */
+  .reason-graph-wrap {
+    width: 340px; flex-shrink: 0; box-sizing: border-box;
+    border-left: 1px solid #F3F4F6;
+    padding: 14px 14px 16px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .reason-box.no-graph .reason-graph-wrap { display: none; }
+  .reason-graph-title { font-size: 10px; color: #9CA3AF; text-transform: uppercase; letter-spacing: .05em; }
+  #rp-graph {
+    width: 100%; height: 300px; position: relative;
+    background: radial-gradient(circle at 50% 40%, #1A1A22 0%, #0B0B0F 100%);
+    border-radius: 8px; overflow: hidden; cursor: grab; touch-action: none;
+  }
+  #rp-graph:active { cursor: grabbing; }
+  #rp-graph canvas { display: block; }
+  #rp-graph .rp-graph-empty {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    color: #6B7280; font-size: 11px; text-align: center; padding: 0 18px; line-height: 1.6;
+  }
+  /* 점 hover 툴팁 / click 팝업 — 그래프 박스(overflow:hidden) 밖으로 빠져나와도
+     안 잘리도록 document.body에 position:fixed 로 띄운다(뷰포트 좌표 사용). */
+  .rp-tip {
+    position: fixed; z-index: 9990; pointer-events: none; display: none;
+    transform: translate(-50%, calc(-100% - 12px));
+    background: rgba(17,17,22,.95); color: #F9FAFB; font-size: 11px; line-height: 1.4;
+    padding: 7px 9px; border-radius: 8px; width: 168px; white-space: normal;
+    border: 1px solid rgba(255,255,255,.16); box-shadow: 0 8px 22px rgba(0,0,0,.55);
+  }
+  .rp-tip .tg {
+    width: 150px; height: 150px; object-fit: contain; display: block;
+    margin: 0 auto 6px; border-radius: 6px; background: #fff;
+  }
+  .rp-tip .tn { font-weight: 700; }
+  .rp-tip .ts { color: rgba(255,255,255,.6); margin-top: 3px; }
+  .rp-tip .ts b { color: #C4B5FD; font-weight: 700; }
+  .rp-pop {
+    position: fixed; z-index: 9991; display: none;
+    transform: translate(-50%, calc(-100% - 14px));
+    background: rgba(17,17,22,.97); color: #F9FAFB; border-radius: 8px;
+    padding: 9px 26px 9px 12px; font-size: 11px; line-height: 1.55; min-width: 152px; max-width: 240px;
+    border: 1px solid rgba(167,139,250,.55); box-shadow: 0 8px 24px rgba(0,0,0,.6);
+  }
+  .rp-pop .pn { font-weight: 700; margin-bottom: 4px; }
+  .rp-pop .pr { display: flex; justify-content: space-between; gap: 14px; }
+  .rp-pop .pr b { color: #C4B5FD; font-weight: 700; }
+  .rp-pop .px {
+    position: absolute; top: 5px; right: 8px; cursor: pointer;
+    color: rgba(255,255,255,.5); font-size: 13px; line-height: 1;
+  }
+  .rp-pop .px:hover { color: #fff; }
+  /* 점보다 위 공간이 부족하면 점 아래로 표시 */
+  .rp-pop.below, .rp-tip.below { transform: translate(-50%, 14px); }
+  .reason-graph-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 10.5px; color: #6B7280; }
+  .reason-graph-legend .lg { display: flex; align-items: center; gap: 5px; }
+  .reason-graph-legend .dot {
+    width: 9px; height: 9px; border-radius: 50%; display: inline-block;
+  }
+  .reason-graph-legend .dot.q { background: #F59E0B; border-radius: 2px; transform: rotate(45deg); }
+  .reason-graph-legend .dot.cur { background: #A78BFA; }
+  .reason-graph-legend .dot.oth { background: #6B7280; }
+  .reason-graph-hint { font-size: 9.5px; color: #4B5563; }
+
+  @media (max-width: 760px) {
+    .reason-main { flex-direction: column; }
+    .reason-body, .reason-graph-wrap { width: 340px; max-width: 92vw; }
+    .reason-graph-wrap { border-left: none; border-top: 1px solid #F3F4F6; }
+  }
+</style>
+</head>
+<body data-route="chat">
+<div class="shell">
+  <div id="side-mount"></div>
+  <main class="main">
+    <div id="top-mount"></div>
+    <div class="page" style="padding:12px 20px 12px;">
+
+      <div class="page-head" style="margin-bottom:10px;">
+        <div>
+          <h1>추천 채팅</h1>
+          <div class="sub" id="page-sub">자연어 질의 → 의도 분석 → 벡터 검색 → 추천</div>
+        </div>
+        <div class="actions">
+          <button class="btn" id="new-chat-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            새 대화
+          </button>
+        </div>
+      </div>
+
+      <div class="chat-layout">
+
+        <!-- CHAT CARD -->
+        <div class="chat-card">
+          <div class="chat-head">
+            <div class="aira-icon">✦</div>
+            <div class="chat-head-info">
+              <div class="chat-head-name">AIRA</div>
+              <div class="chat-head-sub" id="chat-head-sub">BGE-M3 · Groq Llama-3.3</div>
+            </div>
+            <div class="chat-head-right">
+              <span class="badge ok"><span class="dot"></span>벡터 검색 정상</span>
+            </div>
+          </div>
+
+          <div class="msgs" id="msgs">
+            <div class="day-divider" id="day-div"></div>
+            <div class="msg ai" id="welcome-msg">
+              <div class="av">✦</div>
+              <div class="body">
+                <div class="bubble">
+                  안녕하세요! 찾으시는 상품을 자연어로 말씀해주세요.<br>
+                  <span style="font-size:12.5px;color:#9CA3AF;">"등산할 때 입을 바람막이"처럼 상황이나 용도로 알려주시면 바로 찾아드릴게요.</span>
+                </div>
+                <div class="msg-meta"><b style="color:var(--text-3);">AIRA</b></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="input-wrap">
+            <div class="suggest" id="suggest-row">
+              <div class="suggest-chip">등산용 바람막이</div>
+              <div class="suggest-chip">여름 수영복</div>
+              <div class="suggest-chip">5만원대 캐주얼</div>
+              <div class="suggest-chip">연예인 착용 귀걸이</div>
+            </div>
+            <div class="input-row">
+              <textarea id="inp" rows="1" placeholder="찾으시는 상품을 자연어로 입력하세요…  Enter 전송 · Shift+Enter 줄바꿈"></textarea>
+              <button class="send-btn" id="send-btn">
+                <svg viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
+              </button>
+            </div>
+            <div class="chat-ctrls">
+              <div class="ctrl-pill">
+                <span class="ctrl-lbl">LLM</span>
+                <select id="llm-sel" class="ctrl-sel">
+                  <option value="groq">Groq · Llama-3.3</option>
+                  <option value="openai">OpenAI · GPT-4o-mini</option>
+                </select>
+              </div>
+              <div class="ctrl-pill">
+                <span class="ctrl-lbl">임베딩</span>
+                <select id="embed-sel" class="ctrl-sel">
+                  <option value="bge">BGE-M3 (1024d)</option>
+                  <option value="openai">OpenAI (1536d)</option>
+                </select>
+              </div>
+              <div class="ctrl-pill">
+                <span class="ctrl-lbl">결과 수</span>
+                <input type="number" id="k-inp" class="ctrl-num" value="10" min="1" max="50">
+              </div>
+              <div class="ctrl-pill">
+                <span class="ctrl-lbl">검색</span>
+                <select id="mode-sel" class="ctrl-sel">
+                  <option value="dense">Dense</option>
+                  <option value="hybrid">Hybrid (D+S)</option>
+                </select>
+              </div>
+              <button type="button" id="help-btn" title="검색 모드/융합 방식 설명"
+                      style="width:22px;height:22px;border-radius:50%;border:1px solid #E5E7EB;background:#fff;color:#7C3AED;font-weight:700;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;">?</button>
+              <div class="ctrl-pill" id="fusion-pill" style="display:none;">
+                <span class="ctrl-lbl">융합</span>
+                <select id="fusion-sel" class="ctrl-sel">
+                  <option value="rrf">RRF</option>
+                  <option value="alpha">α-가중합</option>
+                </select>
+              </div>
+              <div class="ctrl-pill" id="alpha-pill" style="display:none;">
+                <span class="ctrl-lbl">α</span>
+                <input type="range" id="alpha-inp" min="0" max="1" step="0.05" value="0.5" style="width:80px;vertical-align:middle;accent-color:#7C3AED;">
+                <span class="ctrl-lbl" id="alpha-val" style="font-variant-numeric:tabular-nums;min-width:32px;text-align:right;">0.50</span>
+              </div>
+              <span class="ctrl-spacer"></span>
+              <span class="ctrl-adv" id="session-info">광고주 로드 중…</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- RECENT SEARCH LOGS -->
+        <div class="recent-card">
+          <div class="recent-head">
+            검색 이력
+            <span class="right">
+              <button class="btn btn-sm btn-ghost" id="refresh-logs-btn">↺</button>
+            </span>
+          </div>
+          <div class="recent-list" id="recent-list">
+            <div style="padding:20px;text-align:center;color:var(--text-4);font-size:12px;">
+              <span class="spin-inline"></span>
+            </div>
+          </div>
+          <div class="recent-foot">
+            <button class="btn btn-sm btn-primary" style="width:100%;justify-content:center;" id="new-chat-side-btn">+ 새 대화</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 하이브리드 검색 도움말 모달 -->
+<div id="help-modal" class="pipe-modal-overlay" hidden>
+  <div class="pipe-modal-panel">
+    <div class="pipe-modal-head">
+      <span class="pipe-modal-icon">?</span>
+      <span class="pipe-modal-title">하이브리드 검색 — 융합 방식과 α 슬라이더</span>
+      <button class="pipe-modal-close" id="help-modal-close">✕</button>
+    </div>
+    <div class="pipe-modal-body" style="font-size:13px;line-height:1.65;color:#374151;">
+      <div style="background:#F5F3FF;border:1px solid #E0D5FA;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;color:#5b21b6;">
+        <b>한 줄 요약:</b> dense(의미 매칭)와 sparse(어휘 매칭)를 함께 보고, 슬라이더로 둘의 비중을 조절합니다.
+      </div>
+
+      <h4 style="margin:0 0 6px;font-size:13px;color:#111;">검색 모드</h4>
+      <ul style="margin:0 0 14px 18px;padding:0;">
+        <li><b>Dense</b> — 기존 의미 검색(코사인 거리 1024d). 분위기·맥락에 강함.</li>
+        <li><b>Hybrid (D+S)</b> — dense + sparse(어휘 가중치). 정확한 단어·품번·고유명사 매칭이 추가로 반영됨.</li>
+      </ul>
+
+      <h4 style="margin:0 0 6px;font-size:13px;color:#111;">융합(fusion) — 두 점수를 합치는 방식</h4>
+
+      <div style="border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+        <div style="font-weight:700;color:#111;margin-bottom:4px;">RRF (Reciprocal Rank Fusion) <span style="font-size:11px;color:#7C3AED;background:#F5F3FF;padding:1px 6px;border-radius:3px;margin-left:4px;">기본 추천</span></div>
+        점수 값 대신 <b>순위</b>로 합산: <code style="font-size:11.5px;background:#F3F4F6;padding:1px 5px;border-radius:3px;">α/(60+dense순위) + (1-α)/(60+sparse순위)</code>.
+        스케일 정규화 불필요해서 <b>안정적</b>이고 튜닝 부담이 적음. 모르면 이걸 두세요.
+      </div>
+
+      <div style="border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px;margin-bottom:14px;">
+        <div style="font-weight:700;color:#111;margin-bottom:4px;">α-가중합 (Weighted Sum)</div>
+        후보 점수를 0~1로 정규화한 뒤 평균: <code style="font-size:11.5px;background:#F3F4F6;padding:1px 5px;border-radius:3px;">α·dense + (1-α)·sparse</code>.
+        점수 차이까지 반영되지만 쿼리마다 결과가 살짝 흔들릴 수 있음.
+      </div>
+
+      <h4 style="margin:0 0 6px;font-size:13px;color:#111;">α 슬라이더 — dense 가중치</h4>
+      <p style="margin:0 0 8px;">슬라이더 값 = α = <b>dense 에 주는 가중치</b>. sparse 가중치는 (1−α).</p>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;">
+        <thead>
+          <tr style="background:#F9FAFB;">
+            <th style="text-align:left;padding:6px 8px;border-bottom:1px solid #E5E7EB;">슬라이더 위치</th>
+            <th style="text-align:left;padding:6px 8px;border-bottom:1px solid #E5E7EB;">α</th>
+            <th style="text-align:left;padding:6px 8px;border-bottom:1px solid #E5E7EB;">의미</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style="padding:6px 8px;">맨 왼쪽 (sparse 쪽)</td><td style="padding:6px 8px;"><b>0.0</b></td><td style="padding:6px 8px;">단어 정확 매칭만</td></tr>
+          <tr style="background:#FAFAFA;"><td style="padding:6px 8px;">0.3</td><td style="padding:6px 8px;">0.3</td><td style="padding:6px 8px;">sparse 70% + dense 30%</td></tr>
+          <tr><td style="padding:6px 8px;"><b>가운데 (기본)</b></td><td style="padding:6px 8px;"><b>0.5</b></td><td style="padding:6px 8px;">균등 50:50</td></tr>
+          <tr style="background:#FAFAFA;"><td style="padding:6px 8px;">0.7</td><td style="padding:6px 8px;">0.7</td><td style="padding:6px 8px;">dense 70% + sparse 30%</td></tr>
+          <tr><td style="padding:6px 8px;">맨 오른쪽 (dense 쪽)</td><td style="padding:6px 8px;"><b>1.0</b></td><td style="padding:6px 8px;">의미 매칭만</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="margin:0 0 6px;font-size:13px;color:#111;">언제 어떻게 쓰면 좋나</h4>
+      <ul style="margin:0 0 14px 18px;padding:0;">
+        <li><b>품번·브랜드명·"14K"</b> 같이 정확 단어가 중요 → α 낮춰 sparse 비중↑ (예: 0.3)</li>
+        <li><b>"봄에 데이트하기 좋은"</b> 같은 분위기·맥락 → α 높여 dense 비중↑ (예: 0.7)</li>
+        <li>잘 모르겠으면 → RRF + α=0.5 (기본값)</li>
+      </ul>
+
+      <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400E;">
+        <b>참고:</b> hybrid 는 임베딩 백엔드가 <code>BGE-M3</code>일 때만 동작합니다 (sparse 가 BGE-M3 기반). OpenAI 임베딩 + hybrid 는 자동으로 dense 로 폴백돼요.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 파이프라인 모달 -->
+<div id="pipeline-modal" class="pipe-modal-overlay" hidden>
+  <div class="pipe-modal-panel">
+    <div class="pipe-modal-head">
+      <span class="pipe-modal-icon">◈</span>
+      <span class="pipe-modal-title">파이프라인</span>
+      <span class="pipe-modal-q" id="pipe-modal-q"></span>
+      <button class="pipe-modal-close" id="pipe-modal-close">✕</button>
+    </div>
+    <div class="pipe-modal-body" id="pipe-modal-body"></div>
+  </div>
+</div>
+
+<script src="partials.js"></script>
+<script src="enhance.js"></script>
+<script>
+  const EMBEDDER   = 'http://192.168.101.27:8001';
+  const inp        = document.getElementById('inp');
+  const msgs       = document.getElementById('msgs');
+  const sendBtn    = document.getElementById('send-btn');
+  const llmSel     = document.getElementById('llm-sel');
+  const embedSel   = document.getElementById('embed-sel');
+  const kInp       = document.getElementById('k-inp');
+  const modeSel    = document.getElementById('mode-sel');
+  const fusionSel  = document.getElementById('fusion-sel');
+  const alphaInp   = document.getElementById('alpha-inp');
+  const alphaVal   = document.getElementById('alpha-val');
+  const fusionPill = document.getElementById('fusion-pill');
+  const alphaPill  = document.getElementById('alpha-pill');
+
+  let isSending = false;
+  let advId = null, advName = null;
+  const logCache      = new Map();
+  const pipelineStore = new Map();
+  const recoStore     = new Map();   // pId → { items(coord3d 포함), query_coord3d }
+  let msgIdCounter    = 0;
+  const perspLabel    = { situation: '상황/TPO', material: '소재/원단', style: '디자인', persona: '페르소나' };
+
+  // ── 모델 선택 → 헤더 sub 업데이트 ───────────────────────────
+  function updateHeadSub() {
+    const llm   = llmSel.value === 'openai' ? 'GPT-4o-mini' : 'Llama-3.3 (Groq)';
+    const embed = embedSel.value === 'openai' ? 'OpenAI ada' : 'BGE-M3';
+    const mode  = modeSel.value === 'hybrid' ? ('hybrid·' + fusionSel.value) : 'dense';
+    document.getElementById('chat-head-sub').textContent = mode + ' · ' + embed + ' · ' + llm;
+  }
+  llmSel.addEventListener('change', updateHeadSub);
+  embedSel.addEventListener('change', updateHeadSub);
+
+  // ── 하이브리드 옵션 ─────────────────────────────────────────
+  function syncHybridOpts() {
+    const on = modeSel.value === 'hybrid';
+    fusionPill.style.display = on ? '' : 'none';
+    alphaPill.style.display  = on ? '' : 'none';
+    alphaVal.textContent = Number(alphaInp.value).toFixed(2);
+    updateHeadSub();
+  }
+  modeSel.addEventListener('change', syncHybridOpts);
+  fusionSel.addEventListener('change', syncHybridOpts);
+  alphaInp.addEventListener('input', syncHybridOpts);
+  syncHybridOpts();
+
+  // ── 광고주 초기화 ────────────────────────────────────────────
+  function initAdvertiser() {
+    try {
+      const raw = localStorage.getItem('aira_adv');
+      if (!raw) { location.href = 'login.html'; return; }
+      const adv = JSON.parse(raw);
+      advId = adv.id; advName = adv.name;
+      document.getElementById('page-sub').textContent =
+        '자연어 질의 → 벡터 검색 → 추천  |  광고주: ' + (advName || advId);
+      document.getElementById('session-info').textContent = advName || ('ID ' + advId);
+    } catch (e) { location.href = 'login.html'; }
+  }
+
+  // ── 날짜 구분선 ─────────────────────────────────────────────
+  (function setDayDiv() {
+    const d = new Date();
+    document.getElementById('day-div').textContent =
+      d.getFullYear() + '. ' + String(d.getMonth()+1).padStart(2,'0') + '. ' + String(d.getDate()).padStart(2,'0') + '. · 오늘';
+  })();
+
+  // ── 유틸 ────────────────────────────────────────────────────
+  function escHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function nowStr() {
+    const d = new Date();
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+  }
+
+  // ── 텍스트영역 자동 높이 ────────────────────────────────────
+  inp.addEventListener('input', () => {
+    inp.style.height = 'auto';
+    inp.style.height = Math.min(inp.scrollHeight, 110) + 'px';
+  });
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+
+  // ── 추천 칩 ─────────────────────────────────────────────────
+  document.querySelectorAll('.suggest-chip').forEach(c => {
+    c.addEventListener('click', () => { inp.value = c.textContent; inp.focus(); });
+  });
+
+  // ── 새 대화 ─────────────────────────────────────────────────
+  function startNewChat() {
+    msgs.innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'day-divider';
+    const d = new Date();
+    div.textContent = d.getFullYear() + '. ' + String(d.getMonth()+1).padStart(2,'0') + '. ' + String(d.getDate()).padStart(2,'0') + '. · 오늘';
+    msgs.appendChild(div);
+    appendAIMsg('안녕하세요! 찾으시는 상품을 자연어로 말씀해주세요.<br><span style="font-size:12.5px;color:#9CA3AF;">"등산할 때 입을 바람막이"처럼 상황이나 용도로 알려주시면 바로 찾아드릴게요.</span>');
+    document.querySelectorAll('.recent-item').forEach(el => el.classList.remove('active'));
+  }
+  document.getElementById('new-chat-btn').addEventListener('click', startNewChat);
+  document.getElementById('new-chat-side-btn').addEventListener('click', startNewChat);
+  document.getElementById('refresh-logs-btn').addEventListener('click', loadRecentLogs);
+  sendBtn.addEventListener('click', send);
+
+  // ── 메시지 추가 헬퍼 ────────────────────────────────────────
+  function appendUserMsg(txt) {
+    const el = document.createElement('div');
+    el.className = 'msg user';
+    el.innerHTML = `<div class="av">${escHtml(advName ? advName.slice(0,2).toUpperCase() : 'ME')}</div>
+      <div class="body">
+        <div class="bubble"></div>
+        <div class="msg-meta"><span>${nowStr()}</span></div>
+      </div>`;
+    el.querySelector('.bubble').textContent = txt;
+    msgs.appendChild(el);
+    msgs.scrollTop = msgs.scrollHeight;
+    return el;
+  }
+
+  function appendAIMsg(htmlContent, metaHtml) {
+    const el = document.createElement('div');
+    el.className = 'msg ai';
+    el.innerHTML = `<div class="av">✦</div>
+      <div class="body">
+        <div class="bubble">${htmlContent}</div>
+        <div class="msg-meta"><b style="color:var(--text-3);">AIRA</b>${metaHtml ? '<span>·</span>' + metaHtml : ''}</div>
+      </div>`;
+    msgs.appendChild(el);
+    msgs.scrollTop = msgs.scrollHeight;
+    return el;
+  }
+
+  function appendAILoading() {
+    const el = document.createElement('div');
+    el.className = 'msg ai';
+    el.innerHTML = `<div class="av">✦</div>
+      <div class="body">
+        <div class="bubble" style="display:flex;align-items:center;gap:8px;color:#9CA3AF;">
+          <span class="spin-inline"></span><span>분석 중…</span>
+        </div>
+        <div class="msg-meta"><b style="color:var(--text-3);">AIRA</b><span>·</span><span>처리중</span></div>
+      </div>`;
+    msgs.appendChild(el);
+    msgs.scrollTop = msgs.scrollHeight;
+    return el;
+  }
+
+  // ── 상품 카드 (가로 스크롤) ─────────────────────────────────
+  function buildRecoCards(items, resultCount, pId, meta) {
+    if (!items || !items.length) return '';
+    const isHybrid = !!(meta && meta.mode === 'hybrid');
+    // 이력에서 온 hybrid 는 per-item 점수가 안 저장돼 있음 → "live" 여부 별도 판정.
+    const isHybridLive = isHybrid && items.length > 0 && items[0].sparse_ip != null;
+    // hybrid 카드 % = 결과셋 내 융합점수 상대비율(top=100%). dense 는 절대 코사인유사도.
+    let scoreMax = 0;
+    // sparse 도 % 표시: |sparse_ip| / |min| × 100 (결과셋 내 상대 강도, top=100%)
+    let sparseAbsMax = 0;
+    if (isHybridLive) {
+      scoreMax = Math.max(0, ...items.map(x => x.score || 0));
+      sparseAbsMax = Math.max(0, ...items.map(x => Math.abs(x.sparse_ip || 0)));
+    }
+    const cards = items.map((p, idx) => {
+      const price    = p.sale_price ?? p.price;
+      const priceStr = price != null ? '₩' + Number(price).toLocaleString('ko-KR') : '';
+      // 모드별 유사도(%) 계산
+      let sim = '—';
+      if (isHybridLive && p.score != null && scoreMax > 0) {
+        sim = ((p.score / scoreMax) * 100).toFixed(0) + '%';
+      } else if (p.distance != null) {
+        sim = ((1 - p.distance) * 100).toFixed(0) + '%';
+      }
+      const href     = p.product_url ? escHtml(p.product_url) : '#';
+      const thumbHtml = p.image_url
+        ? `<img src="${escHtml(p.image_url)}" alt="" loading="lazy" onerror="this.parentNode.innerHTML='<span class=no-img>🛍</span>'">`
+        : '<span class="no-img">🛍</span>';
+      const perspHtml = p.perspective && perspLabel[p.perspective]
+        ? `<div class="persp-badge">${perspLabel[p.perspective]}</div>`
+        : '';
+      const distVal  = p.distance != null ? p.distance.toFixed(4) : '';
+      // 하이브리드 카드 부가표시: dense% + sparse% (둘 다 % 로 통일).
+      // 이력(per-item 점수 미저장) 일 때는 "HYBRID" 배지만 작게 표시.
+      let simExtra = '';
+      let sparsePctNum = 0;
+      if (isHybridLive) {
+        const dPct = (p.dense_dist != null) ? ((1 - p.dense_dist) * 100).toFixed(0) + '%' : '—';
+        if (sparseAbsMax > 0 && p.sparse_ip != null) {
+          sparsePctNum = Math.round(Math.abs(p.sparse_ip) / sparseAbsMax * 100);
+        }
+        const sPct = (p.sparse_ip != null) ? sparsePctNum + '%' : '—';
+        simExtra = `<span style="font-size:9.5px;color:#9CA3AF;font-weight:500;line-height:1;letter-spacing:.02em;">D ${dPct} · S ${sPct}</span>`;
+      } else if (isHybrid) {
+        simExtra = `<span style="font-size:9px;color:#7C3AED;font-weight:600;line-height:1;letter-spacing:.04em;">HYBRID</span>`;
+      }
+      // 하이브리드 데이터 attr (사유 팝업에서 사용)
+      const hybridAttrs = isHybrid ? `
+                data-mode="hybrid"
+                data-fusion="${escHtml(meta.fusion || '')}"
+                data-alpha="${meta.alpha != null ? meta.alpha : ''}"
+                data-dense-dist="${p.dense_dist != null ? p.dense_dist.toFixed(4) : ''}"
+                data-sparse-ip="${p.sparse_ip != null ? p.sparse_ip.toFixed(4) : ''}"
+                data-sparse-pct="${sparsePctNum}"
+                data-score="${p.score != null ? p.score.toFixed(6) : ''}"
+                data-rank-dense="${p.rank_dense != null ? p.rank_dense : ''}"
+                data-rank-sparse="${p.rank_sparse != null ? p.rank_sparse : ''}"
+                data-desc-raw="${escHtml(p.description || '')}"
+                data-query="${escHtml(meta.query || '')}"` : ` data-mode="dense"`;
+      return `<a class="reco-card" href="${href}" target="_blank" rel="noopener">
+        <div class="reco-thumb">${thumbHtml}</div>
+        <div class="reco-body">
+          <div class="reco-name">${escHtml(p.product_name || '—')}</div>
+          <div class="reco-cat">${escHtml(p.category || '')}${p.brand ? ' · ' + escHtml(p.brand) : ''}</div>
+          ${perspHtml}
+          <div class="reco-footer">
+            <span class="reco-price">${priceStr || '—'}</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span class="reco-sim" style="${isHybrid ? 'display:flex;flex-direction:column;align-items:flex-end;line-height:1.1;gap:1px;' : ''}">
+                <span>${sim}</span>
+                ${simExtra}
+              </span>
+              <span class="reason-btn"
+                data-name="${escHtml(p.product_name || '')}"
+                data-persp="${escHtml(p.perspective || '')}"
+                data-sim="${sim}"
+                data-dist="${distVal}"
+                data-desc="${escHtml(p.description || '')}"
+                data-pid="${pId != null ? pId : ''}"
+                data-idx="${idx}"${hybridAttrs}
+                onclick="showReason(event,this)" role="button" tabindex="0">사유</span>
+            </div>
+          </div>
+        </div>
+      </a>`;
+    }).join('');
+    return `<div class="reco-header">
+      <span>추천 상품</span>
+      <span class="cnt">${resultCount}건</span>
+    </div>
+    <div class="reco-scroll">${cards}</div>`;
+  }
+
+  // ── 파이프라인 버튼 ─────────────────────────────────────────
+  function pipelineBtn(pId) {
+    return `<button class="pipe-btn" data-pipeline-id="${pId}">
+      <svg viewBox="0 0 24 24"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>
+      파이프라인 보기
+    </button>`;
+  }
+
+  // ── 전송 ─────────────────────────────────────────────────────
+  async function send() {
+    const txt = inp.value.trim();
+    if (!txt || isSending) return;
+    isSending = true; sendBtn.disabled = true;
+    inp.value = ''; inp.style.height = 'auto';
+
+    appendUserMsg(txt);
+    const loadEl = appendAILoading();
+
+    try {
+      const body = {
+        query: txt,
+        advertiser_id: advId,
+        k: Math.max(1, Math.min(50, parseInt(kInp.value) || 10)),
+        backend: embedSel.value,
+        llm_provider: llmSel.value,
+        mode: modeSel.value,
+        fusion: fusionSel.value,
+        alpha: Number(alphaInp.value),
+      };
+      const res  = await fetch(EMBEDDER + '/search-rv-llm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data  = await res.json();
+      const items = data.items || [];
+      const cnt   = items.length;
+
+      const pId = ++msgIdCounter;
+      pipelineStore.set(pId, {
+        raw_query: txt, parsed: data.parsed,
+        keyword_filters_applied: data.keyword_filters_applied || [],
+        keyword_filter_relaxed: data.keyword_filter_relaxed,
+        pe_filter_relaxed: data.pe_filter_relaxed,
+        llm_duration_ms: data.llm_duration_ms,
+        embed_duration_ms: data.embed_duration_ms,
+        total_duration_ms: data.total_duration_ms,
+        result_count: cnt,
+      });
+      recoStore.set(pId, { items, query_coord3d: data.query_coord3d || null,
+                            mode: data.mode, fusion: data.fusion, alpha: data.alpha });
+
+      let bubbleHtml, metaExtra = '';
+      if (cnt > 0) {
+        loadEl.classList.add('wide');
+        bubbleHtml = buildRecoCards(items, cnt, pId,
+                                     { mode: data.mode, fusion: data.fusion, alpha: data.alpha,
+                                       query: data.raw_query || txt })
+                    + pipelineBtn(pId);
+        metaExtra  = `<span>${data.total_duration_ms != null ? data.total_duration_ms + 'ms' : ''}</span>`;
+      } else {
+        bubbleHtml = `<span style="color:#6B7280;">검색 결과가 없어요. 다른 표현으로 다시 시도해보세요.</span>${pipelineBtn(pId)}`;
+      }
+
+      const llmBadge = '<span class="badge" style="background:#F5F3FF;color:#6D28D9;border:1px solid #DDD6FE;font-size:10px;padding:1px 5px;">LLM</span>';
+      const bodyEl = loadEl.querySelector('.body');
+      const bubbleEl = bodyEl.querySelector('.bubble');
+      bubbleEl.removeAttribute('style');
+      bubbleEl.innerHTML = bubbleHtml;
+      bodyEl.querySelector('.msg-meta').innerHTML =
+        `<b style="color:var(--text-3);">AIRA</b><span>·</span>${llmBadge}<span>${nowStr()}</span>${metaExtra}`;
+      msgs.scrollTop = msgs.scrollHeight;
+      loadRecentLogs();
+    } catch (e) {
+      const bodyEl = loadEl.querySelector('.body');
+      const bubbleEl = bodyEl.querySelector('.bubble');
+      bubbleEl.removeAttribute('style');
+      bubbleEl.innerHTML =
+        `<span style="color:var(--err);">오류: ${escHtml(e.message)}</span>`;
+    } finally {
+      isSending = false; sendBtn.disabled = false; inp.focus();
+    }
+  }
+
+  // ── 최근 검색 이력 ───────────────────────────────────────────
+  async function loadRecentLogs() {
+    const list = document.getElementById('recent-list');
+    try {
+      const qs   = new URLSearchParams({ size: 30, ...(advId ? { advertiser_id: advId } : {}) });
+      const data = await fetch(EMBEDDER + '/search-logs?' + qs).then(r => r.json());
+      const items = data.items || data.content || data || [];
+      if (!items.length) {
+        list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-4);font-size:12px;">검색 이력이 없습니다.</div>';
+        return;
+      }
+      items.forEach(log => logCache.set(log.id, log));
+
+      const groups = {};
+      items.forEach(log => {
+        const d = log.created_at ? new Date(log.created_at) : new Date();
+        const today = new Date(), yd = new Date(today); yd.setDate(today.getDate()-1);
+        let key;
+        if (d.toDateString() === today.toDateString()) key = '오늘';
+        else if (d.toDateString() === yd.toDateString()) key = '어제';
+        else key = (d.getMonth()+1) + '/' + d.getDate();
+        if (!groups[key]) groups[key] = [];
+        groups[key].push({ log, d });
+      });
+
+      list.innerHTML = Object.entries(groups).map(([day, rows]) => {
+        const hdr = `<div style="padding:5px 14px 3px;font-size:10px;font-weight:700;color:#9CA3AF;letter-spacing:.05em;background:#FAFAFA;border-bottom:1px solid #F3F4F6;">${day}</div>`;
+        return hdr + rows.map(({ log, d }) => {
+          const zero  = (log.result_count ?? 0) === 0;
+          const cntCl = zero ? 'color:#EF4444' : 'color:#10B981';
+          const llmB  = log.llm_used
+            ? '<span style="font-size:9.5px;background:#F5F3FF;color:#7C3AED;border:1px solid #DDD6FE;padding:1px 4px;border-radius:3px;">LLM</span>'
+            : '';
+          const t = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+          return `<div class="recent-item" data-log-id="${log.id}">
+            <div class="ri-row">
+              <span class="ri-q">${escHtml(log.query || '—')}</span>
+              <span class="ri-t">${t}</span>
+            </div>
+            <div class="ri-meta">
+              <span style="${cntCl};font-weight:600;">${log.result_count ?? 0}건</span>
+              ${llmB}
+            </div>
+          </div>`;
+        }).join('');
+      }).join('');
+    } catch (e) {
+      list.innerHTML = '<div style="padding:14px;color:var(--err);font-size:12px;">이력 로드 실패</div>';
+    }
+  }
+
+  // 이력 클릭 이벤트 위임
+  document.getElementById('recent-list').addEventListener('click', (e) => {
+    const item = e.target.closest('.recent-item');
+    if (!item) return;
+    const log = logCache.get(parseInt(item.dataset.logId, 10));
+    if (log) loadHistoryConversation(log);
+  });
+
+  // ── 이력 대화 복원 ───────────────────────────────────────────
+  async function loadHistoryConversation(log) {
+    msgs.innerHTML = '';
+    const d = log.created_at ? new Date(log.created_at) : new Date();
+    const isToday = d.toDateString() === new Date().toDateString();
+    const divEl = document.createElement('div');
+    divEl.className = 'day-divider';
+    divEl.textContent = d.getFullYear() + '. ' + String(d.getMonth()+1).padStart(2,'0') + '. ' + String(d.getDate()).padStart(2,'0') + '. · ' + (isToday ? '오늘' : '과거 대화');
+    msgs.appendChild(divEl);
+
+    const uEl = document.createElement('div');
+    uEl.className = 'msg user';
+    uEl.innerHTML = `<div class="av">${escHtml(advName ? advName.slice(0,2).toUpperCase() : 'ME')}</div>
+      <div class="body">
+        <div class="bubble"></div>
+        <div class="msg-meta"><span>${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}</span></div>
+      </div>`;
+    uEl.querySelector('.bubble').textContent = log.query || '';
+    msgs.appendChild(uEl);
+
+    const loadEl = appendAILoading();
+
+    try {
+      const r     = await fetch(`${EMBEDDER}/search-logs/${log.id}/results`);
+      const data  = r.ok ? await r.json() : {};
+      const items = data.items || [];
+      const cnt   = log.result_count ?? 0;
+
+      const pId = ++msgIdCounter;
+      pipelineStore.set(pId, {
+        raw_query: log.query,
+        parsed: log.llm_parsed_json ? {
+          ...log.llm_parsed_json,
+          _usage: { input_tokens: log.llm_input_tokens, output_tokens: log.llm_output_tokens, cost_usd: log.llm_cost_usd },
+        } : null,
+        keyword_filters_applied: log.keyword_filters || [],
+        keyword_filter_relaxed: log.keyword_filter_relaxed,
+        pe_filter_relaxed: false,
+        llm_duration_ms: log.llm_duration_ms,
+        embed_duration_ms: log.embed_duration_ms,
+        total_duration_ms: log.total_duration_ms,
+        result_count: cnt,
+      });
+      // backend 라벨에서 hybrid 모드/융합/α 파싱 (예: "bge+sparse:rrf(a=0.5)")
+      // → 이력 클릭 시에도 메타가 살아있어 사유 팝업의 단어 상세보기가 가능해짐.
+      let histMeta = null;
+      const be = String(log.backend || '');
+      const m = be.match(/sparse:(\w+)\(a=([\d.]+)\)/);
+      if (m) histMeta = { mode: 'hybrid', fusion: m[1], alpha: parseFloat(m[2]), query: log.query || '' };
+
+      recoStore.set(pId, { items, query_coord3d: data.query_coord3d || null,
+                            mode: histMeta ? 'hybrid' : 'dense',
+                            fusion: histMeta ? histMeta.fusion : null,
+                            alpha:  histMeta ? histMeta.alpha  : null });
+
+      let bubbleHtml;
+      if (items.length > 0) {
+        loadEl.classList.add('wide');
+        bubbleHtml = buildRecoCards(items, cnt, pId, histMeta) + pipelineBtn(pId);
+      } else if (cnt > 0) {
+        bubbleHtml = `<span style="color:#9CA3AF;font-size:12.5px;">저장된 결과 없음 — 다시 검색하려면 아래에 입력하세요.</span>${pipelineBtn(pId)}`;
+      } else {
+        bubbleHtml = `이 검색에서는 결과가 없었습니다.${pipelineBtn(pId)}`;
+      }
+
+      const llmB = log.llm_used ? '<span class="badge" style="background:#F5F3FF;color:#6D28D9;border:1px solid #DDD6FE;font-size:10px;padding:1px 5px;">LLM</span>' : '';
+      const ts   = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+      const bodyEl = loadEl.querySelector('.body');
+      const bubbleEl2 = bodyEl.querySelector('.bubble');
+      bubbleEl2.removeAttribute('style');
+      bubbleEl2.innerHTML = bubbleHtml;
+      bodyEl.querySelector('.msg-meta').innerHTML = `<b style="color:var(--text-3);">AIRA</b><span>·</span>${llmB}<span>${ts}</span>`;
+      msgs.scrollTop = msgs.scrollHeight;
+
+      document.querySelectorAll('.recent-item').forEach(el => el.classList.remove('active'));
+      document.querySelector(`.recent-item[data-log-id="${log.id}"]`)?.classList.add('active');
+      inp.value = log.query || '';
+      inp.style.height = 'auto';
+      inp.style.height = Math.min(inp.scrollHeight, 110) + 'px';
+    } catch (e) {
+      loadEl.querySelector('.bubble').innerHTML = `<span style="color:var(--err);">결과 로드 실패: ${escHtml(e.message)}</span>`;
+    }
+  }
+
+  // ── 파이프라인 모달 ─────────────────────────────────────────
+  msgs.addEventListener('click', (e) => {
+    const btn = e.target.closest('.pipe-btn');
+    if (!btn) return;
+    const d = pipelineStore.get(parseInt(btn.dataset.pipelineId, 10));
+    if (d) openPipelineModal(d);
+  });
+  document.getElementById('pipe-modal-close').addEventListener('click', () => {
+    document.getElementById('pipeline-modal').setAttribute('hidden', '');
+  });
+  document.getElementById('pipeline-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.setAttribute('hidden', '');
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') document.getElementById('pipeline-modal').setAttribute('hidden', '');
+  });
+
+  // ── 하이브리드 검색 도움말 모달 ───────────────────────────────
+  const helpModal = document.getElementById('help-modal');
+  document.getElementById('help-btn').addEventListener('click', () => {
+    helpModal.removeAttribute('hidden');
+  });
+  document.getElementById('help-modal-close').addEventListener('click', () => {
+    helpModal.setAttribute('hidden', '');
+  });
+  helpModal.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.setAttribute('hidden', '');
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') helpModal.setAttribute('hidden', '');
+  });
+
+  function openPipelineModal(d) {
+    document.getElementById('pipe-modal-q').textContent = '"' + (d.raw_query || d.query || '') + '"';
+    document.getElementById('pipe-modal-body').innerHTML = buildPipelineFlow(d);
+    document.getElementById('pipeline-modal').removeAttribute('hidden');
+  }
+
+  // ── 플로우차트 빌더 ─────────────────────────────────────────
+  function fRow(lbl, val) {
+    return `<div class="flow-row"><span class="flow-lbl">${lbl}</span><span class="flow-val">${val}</span></div>`;
+  }
+  function fNote(txt) { return `<div class="flow-note">${txt}</div>`; }
+  function fStep(cls, icon, title, rows) {
+    return `<div class="flow-step ${cls}">
+      <div class="flow-step-head">${icon}&nbsp; ${title}</div>
+      <div class="flow-step-body">${rows.join('')}</div>
+    </div>`;
+  }
+
+  function buildPipelineFlow(d) {
+    const parsed  = d.parsed || {};
+    const filters = parsed.filters || {};
+    const usage   = parsed._usage || {};
+    const modelName = parsed.provider === 'openai' ? 'GPT-4o-mini (OpenAI)' : 'Llama-3.3-70b (Groq)';
+
+    const s1 = fStep('s-input', '①', '사용자 입력', [
+      fRow('원문', `<b>"${escHtml(d.raw_query || d.query || '')}"</b>`),
+    ]);
+
+    const s2r = [fRow('모델', escHtml(modelName))];
+    if (parsed.semantic_query)
+      s2r.push(fRow('semantic_query', `<b>"${escHtml(parsed.semantic_query)}"</b>`));
+    const fp = [];
+    if (filters.category_contains) fp.push(`category: <b>${escHtml(filters.category_contains)}</b>`);
+    if (filters.target_gender)     fp.push(`gender: <b>${escHtml(filters.target_gender)}</b>`);
+    if (filters.target_age_min != null || filters.target_age_max != null)
+      fp.push(`age: <b>${filters.target_age_min ?? '?'}~${filters.target_age_max ?? '?'}세</b>`);
+    if (filters.price_min != null) fp.push(`price ≥ <b>₩${Number(filters.price_min).toLocaleString('ko-KR')}</b>`);
+    if (filters.price_max != null) fp.push(`price ≤ <b>₩${Number(filters.price_max).toLocaleString('ko-KR')}</b>`);
+    if (filters.price_tier)        fp.push(`price_tier: <b>${escHtml(filters.price_tier)}</b>`);
+    if (filters.perspective_preference) fp.push(`perspective: <b>${escHtml(filters.perspective_preference)}</b>`);
+    if (fp.length) s2r.push(fRow('filters', fp.join(' &nbsp;·&nbsp; ')));
+    const kws = d.keyword_filters_applied || [];
+    if (kws.length) s2r.push(fRow('keyword', kws.map(k => `<b>[${escHtml(k)}]</b>`).join(' ')));
+    if (parsed.notes) s2r.push(fRow('notes', escHtml(parsed.notes)));
+    const tp = [];
+    if (d.llm_duration_ms != null) tp.push(d.llm_duration_ms + 'ms');
+    if (usage.input_tokens != null) tp.push(`in ${usage.input_tokens} / out ${usage.output_tokens} tok`);
+    if (usage.cost_usd != null)     tp.push('$' + Number(usage.cost_usd).toFixed(6));
+    if (tp.length) s2r.push(fNote(tp.join(' · ')));
+    // JSON 원문 토글
+    const rawJson = d.parsed ? JSON.stringify(d.parsed, (k, v) => k === '_usage' ? undefined : v, 2) : null;
+    if (rawJson) {
+      const uid = 'j' + Math.random().toString(36).slice(2);
+      s2r.push(`<div class="flow-json-wrap">
+        <div class="flow-json-lbl" onclick="document.getElementById('${uid}').classList.toggle('open')">
+          ▸ JSON 원문 보기
+        </div>
+        <pre class="flow-json-pre" id="${uid}">${escHtml(rawJson)}</pre>
+      </div>`);
+    }
+    const s2 = fStep('s-llm', '②', 'LLM 파싱 (자연어 → JSON)', s2r);
+
+    const embedModel = d.parsed?.provider === 'openai' ? 'text-embedding-3-small (1536d)' : 'BAAI/bge-m3 (1024d)';
+    const s3r = [fRow('모델', embedModel)];
+    if (parsed.semantic_query) s3r.push(fRow('입력', `<b>"${escHtml(parsed.semantic_query)}"</b>`));
+    s3r.push(fRow('출력', '[0.12, −0.34, …] · float[]'));
+    if (d.embed_duration_ms != null) s3r.push(fNote(d.embed_duration_ms + 'ms'));
+    const s3 = fStep('s-embed', '③', '임베딩 (벡터화)', s3r);
+
+    const s4r = [];
+    const sq = [];
+    if (filters.category_contains) sq.push(`category ILIKE '%${escHtml(filters.category_contains)}%'`);
+    if (filters.target_gender)     sq.push(`gender = '${escHtml(filters.target_gender)}'`);
+    if (filters.price_min != null) sq.push(`price ≥ ${filters.price_min}`);
+    if (filters.price_max != null) sq.push(`price ≤ ${filters.price_max}`);
+    if (sq.length) s4r.push(fRow('WHERE', sq.join('<br>')));
+    if (kws.length) s4r.push(fRow('ILIKE', kws.map(k => `desc LIKE '%${escHtml(k)}%'`).join('<br>')));
+    if (d.keyword_filter_relaxed) s4r.push(fNote('⚠ 키워드 필터 결과 없어 제거'));
+    if (d.pe_filter_relaxed)      s4r.push(fNote('⚠ 정형 필터 결과 없어 제거'));
+    s4r.push(fRow('ORDER BY', 'embedding &lt;=&gt; query_vec (코사인 거리)'));
+    s4r.push(fRow('LIMIT', String(d.result_count != null ? Math.max(d.result_count, parseInt(kInp.value)||10) : 10)));
+    const s4 = fStep('s-db', '④', 'pgvector 검색', s4r);
+
+    const s5r = [fRow('반환', `<b>${d.result_count ?? 0}건</b>`)];
+    if (d.total_duration_ms != null) s5r.push(fNote('전체 ' + d.total_duration_ms + 'ms'));
+    const s5 = fStep('s-result', '⑤', '결과', s5r);
+
+    return [s1, '<div class="flow-arrow">↓</div>',
+            s2, '<div class="flow-arrow">↓</div>',
+            s3, '<div class="flow-arrow">↓</div>',
+            s4, '<div class="flow-arrow">↓</div>',
+            s5].join('');
+  }
+
+  // ── three.js 지연 로딩 ──────────────────────────────────────
+  let _threeLoading = null;
+  function ensureThree() {
+    if (window.THREE && THREE.OrbitControls) return Promise.resolve();
+    if (_threeLoading) return _threeLoading;
+    const load = (src) => new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = src; s.onload = res; s.onerror = () => rej(new Error('load fail: ' + src));
+      document.head.appendChild(s);
+    });
+    _threeLoading = load('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js')
+      .then(() => load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js'));
+    return _threeLoading;
+  }
+
+  // ── 벡터 공간 3D 산점도 ─────────────────────────────────────
+  let _pca = null;  // { renderer, controls, raf, onResize }
+  function disposePcaGraph() {
+    if (!_pca) return;
+    cancelAnimationFrame(_pca.raf);
+    window.removeEventListener('resize', _pca.onResize);
+    try { _pca.controls.dispose(); } catch (_) {}
+    try { _pca.renderer.dispose(); } catch (_) {}
+    const host = document.getElementById('rp-graph');
+    if (host) host.querySelectorAll('canvas').forEach(c => c.remove());
+    // 툴팁/팝업은 body에 있으므로 직접 제거 (혹시 남은 것도 함께 정리)
+    document.querySelectorAll('.rp-tip, .rp-pop').forEach(el => el.remove());
+    _pca = null;
+  }
+
+  function renderPcaGraph(items, queryCoord, hiIdx) {
+    disposePcaGraph();
+    const host = document.getElementById('rp-graph');
+    const box  = document.getElementById('reason-overlay').querySelector('.reason-box');
+    host.innerHTML = '';
+    const hasCoords = queryCoord && Array.isArray(items) && items.some(it => Array.isArray(it.coord3d));
+    if (!hasCoords) {
+      box.classList.add('no-graph');
+      return;
+    }
+    box.classList.remove('no-graph');
+
+    ensureThree().then(() => {
+      // 팝업이 그새 닫혔으면 중단
+      if (!document.getElementById('reason-overlay').classList.contains('open')) return;
+      const W = host.clientWidth || 320, H = host.clientHeight || 300;
+
+      const scene  = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, W / H, 0.01, 100);
+      camera.position.set(1.8, 1.5, 1.8);
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(W, H);
+      host.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true; controls.dampingFactor = 0.1;
+      controls.autoRotate = true; controls.autoRotateSpeed = 1.1;
+
+      // 깊이감용 바닥 그리드 + 경계 와이어프레임 구 (질문이 중심, 상품은 반경≤1)
+      const grid = new THREE.GridHelper(2.6, 10, 0x2A2A38, 0x1C1C28);
+      grid.position.y = -1.05; scene.add(grid);
+      scene.add(new THREE.Mesh(
+        new THREE.SphereGeometry(1.0, 24, 16),
+        new THREE.MeshBasicMaterial({ color: 0x3A3A4D, wireframe: true, transparent: true, opacity: 0.12 })
+      ));
+
+      const sphere = (r) => new THREE.SphereGeometry(r, 24, 24);
+      const at = (mesh, c) => { mesh.position.set(c[0], c[1], c[2]); scene.add(mesh); return mesh; };
+      const vlen = (c) => Math.hypot(c[0], c[1], c[2]);
+      // 중심(질문) → 상품 방사선. 반경이 곧 코사인거리이므로 선 길이 = 비유사도.
+      const spoke = (c, color, op) => {
+        const g = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(...queryCoord), new THREE.Vector3(...c)]);
+        scene.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity: op })));
+      };
+
+      // 마우스 hover/click 대상 — 보이지 않는 큰 히트구(proxy)로 조준을 쉽게.
+      const pickable = [];
+      const addPoint = (it, vizMesh) => {
+        vizMesh.userData.baseScale = vizMesh.scale.x || 1;
+        const proxy = new THREE.Mesh(
+          sphere(Math.max(0.11, vizMesh.geometry.parameters.radius * 1.7)),
+          new THREE.MeshBasicMaterial({ visible: false })
+        );
+        proxy.position.copy(vizMesh.position);
+        proxy.userData = {
+          name: it.product_name || '(이름 없음)',
+          dist: typeof it.distance === 'number' ? it.distance : null,
+          img: it.image_url || '',
+          viz: vizMesh,
+        };
+        scene.add(proxy);
+        pickable.push(proxy);
+      };
+
+      // 다른 추천 상품 — 질문에 가까울수록 크게 + 옅은 방사선
+      items.forEach((it, i) => {
+        if (!Array.isArray(it.coord3d) || i === hiIdx) return;
+        const close = 1 - Math.min(1, vlen(it.coord3d));   // 0(멀다)~1(가깝다)
+        spoke(it.coord3d, 0x6B7280, 0.15);
+        const m = at(new THREE.Mesh(sphere(0.035 + 0.03 * close), new THREE.MeshBasicMaterial({ color: 0x6B7280 })), it.coord3d);
+        addPoint(it, m);
+      });
+      // 현재 상품 강조 — 보라 구 + 헤일로 + 굵은 방사선
+      if (items[hiIdx] && Array.isArray(items[hiIdx].coord3d)) {
+        const cur = items[hiIdx].coord3d;
+        spoke(cur, 0xA78BFA, 0.75);
+        const m = at(new THREE.Mesh(sphere(0.085), new THREE.MeshBasicMaterial({ color: 0xA78BFA })), cur);
+        at(new THREE.Mesh(sphere(0.14), new THREE.MeshBasicMaterial({ color: 0xA78BFA, transparent: true, opacity: 0.18 })), cur);
+        addPoint(items[hiIdx], m);
+      }
+      // 질문 = 중심 마커 (주황 8면체 + 옅은 글로우)
+      at(new THREE.Mesh(new THREE.OctahedronGeometry(0.085), new THREE.MeshBasicMaterial({ color: 0xF59E0B })), queryCoord);
+      at(new THREE.Mesh(sphere(0.16), new THREE.MeshBasicMaterial({ color: 0xF59E0B, transparent: true, opacity: 0.14 })), queryCoord);
+
+      // ── 인터랙션: hover=상품명 툴팁, click=코사인거리 팝업 ──────
+      // 그래프 박스의 overflow에 잘리지 않도록 body에 직접 띄운다(뷰포트 좌표).
+      const tip = document.createElement('div'); tip.className = 'rp-tip'; document.body.appendChild(tip);
+      const pop = document.createElement('div'); pop.className = 'rp-pop'; document.body.appendChild(pop);
+      const ray = new THREE.Raycaster();
+      const ndc = new THREE.Vector2();
+      let hovered = null;   // 현재 hover된 proxy
+      let pinned = null;    // click으로 고정된 proxy
+      // 상품명에 섞인 HTML 엔티티(&#9733; 등)를 ★ 같은 문자로 안전 디코드 (스크립트 미실행).
+      const decodeEnt = (s) => { const t = document.createElement('textarea'); t.innerHTML = String(s == null ? '' : s); return t.value; };
+
+      const setHover = (proxy) => {
+        if (hovered === proxy) return;
+        if (hovered) hovered.userData.viz.scale.setScalar(hovered.userData.viz.userData.baseScale);
+        hovered = proxy;
+        if (hovered) hovered.userData.viz.scale.setScalar(hovered.userData.viz.userData.baseScale * 1.6);
+      };
+      const screenOf = (obj) => {
+        const v = obj.position.clone().project(camera);
+        const rect = renderer.domElement.getBoundingClientRect();
+        return {
+          x: rect.left + (v.x * 0.5 + 0.5) * rect.width,
+          y: rect.top + (-v.y * 0.5 + 0.5) * rect.height,
+        };
+      };
+      const pickAt = (ev) => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+        ray.setFromCamera(ndc, camera);
+        const hit = ray.intersectObjects(pickable, false);
+        return hit.length ? hit[0].object : null;
+      };
+      // needAbove: 위로 펼칠 때 필요한 높이. 뷰포트 상단 공간이 모자라면 점 아래로 뒤집는다.
+      const placeAt = (el, sx, sy, needAbove) => {
+        el.style.left = sx + 'px'; el.style.top = sy + 'px';
+        el.classList.toggle('below', sy < needAbove);
+      };
+      const showPop = (proxy) => {
+        const d = proxy.userData.dist;
+        pop.innerHTML =
+          '<span class="px">&times;</span>' +
+          '<div class="pn"></div>' +
+          (d != null
+            ? '<div class="pr"><span>코사인거리</span><b>' + d.toFixed(4) + '</b></div>' +
+              '<div class="pr"><span>유사도</span><b>' + ((1 - d) * 100).toFixed(1) + '%</b></div>'
+            : '<div class="pr"><span>거리 정보 없음</span></div>');
+        pop.querySelector('.pn').textContent = decodeEnt(proxy.userData.name);
+        pop.querySelector('.px').onclick = (e) => { e.stopPropagation(); pinned = null; pop.style.display = 'none'; };
+        pop.style.display = 'block';
+        const s = screenOf(proxy); placeAt(pop, s.x, s.y, 110);
+      };
+
+      const onMove = (ev) => {
+        const p = pickAt(ev);
+        const changed = p !== hovered;          // 점이 바뀔 때만 내용 재생성 (이미지 깜빡임 방지)
+        setHover(p);
+        if (p) {
+          if (changed) {
+            const d = p.userData.dist, img = p.userData.img;
+            tip.innerHTML =
+              (img ? '<img class="tg" src="' + encodeURI(img) + '" alt="" onerror="this.style.display=\'none\'">' : '') +
+              '<div class="tn"></div>' +
+              (d != null ? '<div class="ts">유사도 <b>' + ((1 - d) * 100).toFixed(1) + '%</b></div>' : '');
+            tip.querySelector('.tn').textContent = decodeEnt(p.userData.name);
+          }
+          const s = screenOf(p); placeAt(tip, s.x, s.y, 210); tip.style.display = 'block';
+          renderer.domElement.style.cursor = 'pointer';
+        } else {
+          tip.style.display = 'none';
+          renderer.domElement.style.cursor = '';
+        }
+      };
+      let downXY = null;
+      const onDown = (ev) => { downXY = [ev.clientX, ev.clientY]; };
+      const onUp = (ev) => {
+        if (!downXY) return;
+        const moved = Math.hypot(ev.clientX - downXY[0], ev.clientY - downXY[1]);
+        downXY = null;
+        if (moved > 6) return;            // 드래그(회전)는 클릭으로 취급 안 함
+        const p = pickAt(ev);
+        if (p) { pinned = p; showPop(p); }
+        else { pinned = null; pop.style.display = 'none'; }
+      };
+      const onEnter = () => { controls.autoRotate = false; };
+      const onLeave = () => { controls.autoRotate = true; setHover(null); tip.style.display = 'none'; renderer.domElement.style.cursor = ''; };
+      const dom = renderer.domElement;
+      dom.addEventListener('pointermove', onMove);
+      dom.addEventListener('pointerdown', onDown);
+      dom.addEventListener('pointerup', onUp);
+      dom.addEventListener('pointerenter', onEnter);
+      dom.addEventListener('pointerleave', onLeave);
+
+      const onResize = () => {
+        const w = host.clientWidth || W, h = host.clientHeight || H;
+        camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
+      };
+      window.addEventListener('resize', onResize);
+
+      const tick = () => {
+        _pca.raf = requestAnimationFrame(tick);
+        controls.update();
+        // 고정 팝업/툴팁은 회전·드래그에 맞춰 점 위치를 따라간다.
+        if (pinned) { const s = screenOf(pinned); placeAt(pop, s.x, s.y, 110); }
+        if (hovered && tip.style.display === 'block') { const s = screenOf(hovered); placeAt(tip, s.x, s.y, 210); }
+        renderer.render(scene, camera);
+      };
+      _pca = { renderer, controls, raf: 0, onResize, tip, pop };
+      tick();
+    }).catch(err => {
+      host.innerHTML = '<div class="rp-graph-empty">3D 그래프를 불러오지 못했습니다<br>(네트워크 확인)</div>';
+      console.error(err);
+    });
+  }
+
+  // ── 추천 사유 팝업 ──────────────────────────────────────────
+  function showReason(e, el) {
+    e.preventDefault();
+    e.stopPropagation();
+    const persp = el.dataset.persp;
+    const isHybrid = el.dataset.mode === 'hybrid';
+    document.getElementById('rp-name').textContent  = el.dataset.name || '—';
+    document.getElementById('rp-persp').textContent = perspLabel[persp] || persp || '—';
+    document.getElementById('rp-sim').textContent   = el.dataset.sim || '—';
+    // 라벨/주석을 모드에 맞춰 변경
+    document.getElementById('rp-sim-lbl').textContent = isHybrid ? '랭킹 점수' : '유사도';
+    document.getElementById('rp-dist').textContent  = isHybrid
+      ? '(결과셋 내 융합점수 상대비율 · top=100%)'
+      : (el.dataset.dist ? `코사인거리 ${el.dataset.dist}` : '');
+    document.getElementById('rp-desc').textContent  = el.dataset.desc || '—';
+
+    // 하이브리드 분해 블록 표시/숨김
+    const hb = document.getElementById('rp-hybrid-block');
+    if (isHybrid) {
+      hb.style.display = '';
+      const fusion = el.dataset.fusion || '?';
+      const alpha  = el.dataset.alpha !== '' ? Number(el.dataset.alpha).toFixed(2) : '?';
+      document.getElementById('rp-hybrid-mode-info').textContent =
+        `${fusion.toUpperCase()} · α=${alpha} (dense ${alpha} : sparse ${(1 - Number(alpha)).toFixed(2)})`;
+
+      // Dense: cosine 거리 → 유사도 %  (이력은 el.dataset.dist 로 폴백)
+      let dd = null;
+      if (el.dataset.denseDist) dd = Number(el.dataset.denseDist);
+      else if (el.dataset.dist) dd = Number(el.dataset.dist);
+      document.getElementById('rp-dense-pct').textContent =
+        (dd != null && !isNaN(dd)) ? ((1 - dd) * 100).toFixed(0) + '%' : '—';
+      document.getElementById('rp-dense-dist').textContent =
+        (dd != null && !isNaN(dd)) ? `코사인거리 ${dd.toFixed(4)}` : '';
+
+      // Sparse: % (결과셋 내 상대 강도) + raw 내적값 (<#>) 을 우측에.
+      // 이력에는 per-item sparse_ip 가 저장돼 있지 않음 → "이력 미저장 — 단어 상세 참조"
+      const sp = el.dataset.sparseIp ? Number(el.dataset.sparseIp) : null;
+      const sPct = el.dataset.sparsePct ? Number(el.dataset.sparsePct) : null;
+      document.getElementById('rp-sparse-pct').textContent =
+        sPct != null && el.dataset.sparseIp ? sPct + '%' : '—';
+      document.getElementById('rp-sparse-ip-raw').textContent =
+        sp != null ? `<#> ${sp.toFixed(4)}` : '이력엔 미저장 — 아래 단어 상세 참조';
+
+      // 융합 점수 + 순위(RRF 일 때만 의미 있음). 이력은 미저장.
+      const sc = el.dataset.score ? Number(el.dataset.score) : null;
+      document.getElementById('rp-score').textContent = sc != null ? sc.toFixed(5) : '—';
+      const rd = el.dataset.rankDense;
+      const rs = el.dataset.rankSparse;
+      document.getElementById('rp-rank').textContent =
+        (rd && rs) ? `(dense ${rd}위 · sparse ${rs}위)` :
+        (!sc ? '이력 — 점수 미저장 (단어 상세는 가능)' : '');
+
+      // 설명문도 모드에 맞춰 교체
+      document.getElementById('rp-explain').innerHTML =
+        `BGE-M3 모델 한 번으로 <b style="color:#374151;">dense(의미 1024d) + sparse(어휘 25만d)</b>를 동시에 뽑아<br>` +
+        `각각 거리를 계산한 뒤 <b style="color:#374151;">${fusion.toUpperCase()}</b> 방식으로 결합합니다 (α=${alpha}).<br>` +
+        `오른쪽 3D 좌표는 <b style="color:#374151;">dense(의미) 공간</b>의 PCA 투영 —<br>` +
+        `sparse 점수는 위 분해에 별도 표시됩니다.`;
+    } else {
+      hb.style.display = 'none';
+      // dense 모드 — 원래 설명문 복원
+      document.getElementById('rp-explain').innerHTML =
+        `BGE-M3 임베딩 모델로 쿼리와 상품 설명을 각각 벡터화한 뒤<br>` +
+        `<b style="color:#374151;">유사도 = 1 − 코사인거리</b>로 계산합니다.<br>` +
+        `같은 상품이라도 4개 관점(상황·소재·디자인·페르소나) 중<br>` +
+        `쿼리 벡터에 가장 가까운 설명 하나가 대표로 사용됩니다.`;
+    }
+    // sparse 단어 상세 — 매번 초기화(이전 상품 데이터/캐시 안 보이게)
+    resetWordToggle(isHybrid ? (el.dataset.query || '') : '',
+                    isHybrid ? (el.dataset.descRaw || el.dataset.desc || '') : '');
+
+    document.getElementById('reason-overlay').classList.add('open');
+
+    const pid = el.dataset.pid !== '' ? parseInt(el.dataset.pid, 10) : null;
+    const idx = parseInt(el.dataset.idx, 10);
+    const store = pid != null ? recoStore.get(pid) : null;
+    renderPcaGraph(store ? store.items : null,
+                   store ? store.query_coord3d : null,
+                   isNaN(idx) ? -1 : idx);
+  }
+  function closeReason() {
+    document.getElementById('reason-overlay').classList.remove('open');
+    disposePcaGraph();
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeReason(); });
+
+  // ── Sparse 단어별 상세보기 ────────────────────────────────────
+  function resetWordToggle(query, doc) {
+    const btn = document.getElementById('rp-word-toggle');
+    if (!btn) return;
+    btn.dataset.query = query || '';
+    btn.dataset.doc = doc || '';
+    btn.dataset.loaded = '';
+    document.getElementById('rp-word-toggle-icon').textContent = '▸';
+    document.getElementById('rp-word-panel').style.display = 'none';
+    document.getElementById('rp-word-content').style.display = 'none';
+    document.getElementById('rp-word-content').innerHTML = '';
+    document.getElementById('rp-word-loading').style.display = '';
+    document.getElementById('rp-word-loading').textContent = '로딩 중…';
+  }
+
+  function renderSparseExplain(data) {
+    const matches = data.matches || [];
+    const ip = data.inner_product || 0;
+    const n  = data.n_matches || 0;
+    if (!matches.length) {
+      return `<div style="font-size:11.5px;color:#9CA3AF;">매칭된 단어가 없습니다 (쿼리와 상품 설명에 공통 토큰이 없음).</div>`;
+    }
+    const maxC = Math.max(...matches.map(m => m.contribution));
+    const rows = matches.map((m, i) => {
+      const barW = maxC > 0 ? ((m.contribution / maxC) * 100).toFixed(0) : 0;
+      return `<tr style="border-top:${i===0?'none':'1px solid #F3F4F6'};">
+        <td style="padding:4px 6px;font-weight:600;color:#111;">${escHtml(m.text || m.token || '')}</td>
+        <td style="padding:4px 6px;text-align:right;color:#6B7280;font-variant-numeric:tabular-nums;">${m.q_weight.toFixed(3)}</td>
+        <td style="padding:4px 6px;text-align:right;color:#6B7280;font-variant-numeric:tabular-nums;">${m.d_weight.toFixed(3)}</td>
+        <td style="padding:4px 6px;text-align:right;color:#111;font-weight:600;font-variant-numeric:tabular-nums;">${m.contribution.toFixed(4)}</td>
+        <td style="padding:4px 6px;width:60px;"><div style="height:6px;background:#E5E7EB;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${barW}%;background:#7C3AED;"></div></div></td>
+      </tr>`;
+    }).join('');
+    return `
+      <div style="font-size:10.5px;color:#9CA3AF;margin-bottom:6px;letter-spacing:.02em;">
+        매칭 단어 ${n}개 · 내적 합 ${ip.toFixed(4)} (= sparse 점수 절대값)
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead><tr style="color:#9CA3AF;font-size:10px;text-transform:uppercase;letter-spacing:.05em;">
+          <th style="text-align:left;padding:4px 6px;font-weight:500;">단어</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:500;">쿼리W</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:500;">상품W</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:500;">기여도</th>
+          <th style="padding:4px 6px;"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  async function loadSparseExplain() {
+    const btn     = document.getElementById('rp-word-toggle');
+    const panel   = document.getElementById('rp-word-panel');
+    const content = document.getElementById('rp-word-content');
+    const loading = document.getElementById('rp-word-loading');
+    const icon    = document.getElementById('rp-word-toggle-icon');
+
+    // 토글
+    const isOpen = panel.style.display !== 'none';
+    if (isOpen) { panel.style.display = 'none'; icon.textContent = '▸'; return; }
+    panel.style.display = ''; icon.textContent = '▾';
+
+    if (btn.dataset.loaded === '1') return;  // 이미 로드됨
+
+    const query = btn.dataset.query || '';
+    const doc   = btn.dataset.doc || '';
+    if (!query || !doc) {
+      loading.textContent = '쿼리/설명문 데이터 없음 (이력 보기에서는 미지원)';
+      return;
+    }
+    try {
+      loading.style.display = ''; content.style.display = 'none';
+      const r = await fetch(EMBEDDER + '/sparse-explain', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, doc, top_k: 25 }),
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      content.innerHTML = renderSparseExplain(data);
+      loading.style.display = 'none'; content.style.display = '';
+      btn.dataset.loaded = '1';
+    } catch (e) {
+      loading.textContent = '로드 실패: ' + (e.message || e);
+    }
+  }
+
+  // (rp-word-toggle 클릭은 HTML 의 onclick="loadSparseExplain()" 로 처리 —
+  //  DOM 파싱 순서에 의존하지 않게 함. 이전 버전의 addEventListener 는 모달 HTML 이
+  //  스크립트 아래에 있어 null 참조 → TypeError 던져 initAdvertiser/loadRecentLogs 가
+  //  실행되지 않는 버그가 있었음.)
+
+  // ── 초기화 ───────────────────────────────────────────────────
+  initAdvertiser();
+  loadRecentLogs();
+</script>
+
+<!-- 추천 사유 팝업 -->
+<div class="reason-overlay" id="reason-overlay" onclick="if(event.target===this)closeReason()">
+  <div class="reason-box">
+    <div class="reason-head">
+      <span class="reason-head-title">◈ 추천 사유</span>
+      <span class="reason-close" onclick="closeReason()">×</span>
+    </div>
+    <div class="reason-main">
+    <div class="reason-body">
+      <div class="reason-product" id="rp-name"></div>
+      <div class="reason-sep"></div>
+      <div class="reason-rows">
+        <div class="reason-row">
+          <span class="reason-lbl">매칭 관점</span>
+          <span class="reason-val" id="rp-persp"></span>
+        </div>
+        <div class="reason-row">
+          <span class="reason-lbl" id="rp-sim-lbl">유사도</span>
+          <span class="reason-val">
+            <span id="rp-sim"></span>
+            <span class="dist" id="rp-dist"></span>
+          </span>
+        </div>
+      </div>
+      <!-- 하이브리드 모드 분해 (모드=hybrid 일 때만 노출) -->
+      <div id="rp-hybrid-block" style="display:none;">
+        <div class="reason-sep"></div>
+        <div class="reason-desc-lbl" style="margin-bottom:6px;">하이브리드 분해 — <span id="rp-hybrid-mode-info" style="color:#7C3AED;font-weight:600;text-transform:none;letter-spacing:0;"></span></div>
+        <div class="reason-rows">
+          <div class="reason-row">
+            <span class="reason-lbl">Dense</span>
+            <span class="reason-val">
+              <span id="rp-dense-pct"></span>
+              <span class="dist" id="rp-dense-dist"></span>
+            </span>
+          </div>
+          <div class="reason-row">
+            <span class="reason-lbl">Sparse</span>
+            <span class="reason-val">
+              <span id="rp-sparse-pct"></span>
+              <span class="dist" id="rp-sparse-ip-raw"></span>
+            </span>
+          </div>
+          <div class="reason-row">
+            <span class="reason-lbl">융합점수</span>
+            <span class="reason-val">
+              <span id="rp-score"></span>
+              <span class="dist" id="rp-rank"></span>
+            </span>
+          </div>
+        </div>
+        <!-- Sparse 단어별 상세보기 — 토글로 lazy 로딩 -->
+        <div style="margin-top:10px;">
+          <button type="button" id="rp-word-toggle"
+                  onclick="loadSparseExplain()"
+                  style="background:transparent;border:1px solid #E5E7EB;border-radius:6px;padding:5px 10px;font-size:11px;color:#6B7280;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+            <span id="rp-word-toggle-icon">▸</span>
+            <span>매칭 단어 상세 (sparse)</span>
+          </button>
+          <div id="rp-word-panel" style="display:none;margin-top:8px;border:1px solid #F3F4F6;border-radius:6px;padding:10px;background:#FAFAFA;">
+            <div id="rp-word-loading" style="font-size:11px;color:#9CA3AF;">로딩 중…</div>
+            <div id="rp-word-content" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="reason-sep"></div>
+      <div>
+        <div class="reason-desc-lbl">매칭 근거 — 이 설명이 쿼리와 가장 가까운 벡터였습니다</div>
+        <div class="reason-desc-text" id="rp-desc"></div>
+      </div>
+      <div class="reason-explain" id="rp-explain">
+        BGE-M3 임베딩 모델로 쿼리와 상품 설명을 각각 벡터화한 뒤<br>
+        <b style="color:#374151;">유사도 = 1 − 코사인거리</b>로 계산합니다.<br>
+        같은 상품이라도 4개 관점(상황·소재·디자인·페르소나) 중<br>
+        쿼리 벡터에 가장 가까운 설명 하나가 대표로 사용됩니다.
+      </div>
+    </div>
+    <div class="reason-graph-wrap">
+      <div class="reason-graph-title">임베딩 유사도 맵 · 질문 = 중심</div>
+      <div id="rp-graph"></div>
+      <div class="reason-graph-legend">
+        <span class="lg"><span class="dot q"></span>질문(중심)</span>
+        <span class="lg"><span class="dot cur"></span>현재 상품</span>
+        <span class="lg"><span class="dot oth"></span>다른 추천</span>
+      </div>
+      <div class="reason-graph-hint">드래그로 회전 · 휠로 확대 · 중심(질문)에 가까울수록 유사 · 방향은 상품 간 유사도(PCA)</div>
+    </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

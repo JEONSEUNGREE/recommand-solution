@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIRA · 대시보드</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  /* top tabs: 대시보드 / 상품 가져오기 */
+  .dash-tabs {
+    display: flex;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 18px;
+  }
+  .dash-tab {
+    appearance: none;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 2px;
+    margin-right: 22px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-3);
+    cursor: pointer;
+    transition: color 160ms ease, border-color 160ms ease;
+  }
+  .dash-tab:hover { color: var(--text); }
+  .dash-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+  }
+  #import-frame { width: 100%; height: calc(100vh - 132px); border: 0; border-radius: 8px; background: #fff; display: block; }
+
+  /* funnel table inside pipeline card */
+  .funnel-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .funnel-table td { padding: 10px 16px; border-bottom: 1px solid var(--line); color: var(--text-2); vertical-align: middle; }
+  .funnel-table tr:last-child td { border-bottom: none; }
+  .funnel-table .f-label { color: var(--text-3); font-size: 12px; }
+  .funnel-table .f-val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); font-size: 14px; }
+  .funnel-table .f-pct { text-align: right; font-size: 11.5px; color: var(--text-4); font-variant-numeric: tabular-nums; }
+  .funnel-bar {
+    height: 3px;
+    background: var(--surface-3, #EEEEEE);
+    border-radius: 2px;
+    margin-top: 5px;
+    overflow: hidden;
+  }
+  .funnel-bar > i { display: block; height: 100%; border-radius: 2px; background: var(--primary); }
+
+  /* zero-query list */
+  .zero-list { list-style: none; padding: 0; margin: 0; }
+  .zero-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    font-size: 12.5px;
+    gap: 12px;
+  }
+  .zero-list li:last-child { border-bottom: none; }
+  .zero-list .q-text { color: var(--text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .zero-list .q-cnt {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    color: var(--text-3);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 7px;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+  .zero-empty {
+    padding: 28px 16px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--text-4);
+  }
+
+  /* log table truncation */
+  .q-cell {
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* skeleton shimmer */
+  .skel {
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+    background-size: 200% 100%;
+    animation: skel-shimmer 1.4s infinite;
+    border-radius: 4px;
+    display: inline-block;
+  }
+  @keyframes skel-shimmer {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
+  }
+
+  .full-card { margin-bottom: 12px; }
+  .card-link-foot {
+    border-top: 1px solid var(--line);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    font-size: 12px;
+  }
+  .card-link-foot a {
+    color: var(--text-2);
+    font-weight: 600;
+    font-size: 12.5px;
+    transition: color 160ms ease;
+  }
+  .card-link-foot a:hover { color: var(--primary); }
+
+  /* loading / error states for sections */
+  .section-state {
+    padding: 28px 16px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--text-3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .section-state.err { color: var(--err); }
+  .mini-spinner {
+    width: 14px; height: 14px;
+    border: 2px solid var(--line);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body data-route="dashboard">
+  <div class="shell">
+    <div id="side-mount"></div>
+    <main class="main">
+      <div id="top-mount"></div>
+
+      <div class="page">
+
+        <!-- 상단 탭: 대시보드 / 상품 가져오기 -->
+        <div class="dash-tabs" id="dash-tabs">
+          <button class="dash-tab active" type="button" data-tab="dashboard">대시보드</button>
+          <button class="dash-tab" type="button" data-tab="import">상품 가져오기</button>
+        </div>
+
+        <section id="panel-dashboard">
+
+        <!-- HEAD -->
+        <div class="page-head">
+          <div>
+            <h1>대시보드</h1>
+            <div class="sub" id="page-sub">상품 파이프라인 현황과 검색 로그를 확인합니다.</div>
+          </div>
+          <div class="actions">
+            <button class="btn" id="btn-refresh">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>
+              새로고침
+            </button>
+            <button class="btn btn-primary" onclick="location.href='upload.html'">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
+              새 상품 업로드
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI STATS -->
+        <div class="stat-row" id="stat-row">
+          <div class="stat"><div class="l info"><span class="d"></span>전체 상품</div><div class="v" id="s-total"><span class="skel" style="width:48px;height:28px;">&nbsp;</span></div><div class="delta" id="s-total-d">—</div></div>
+          <div class="stat"><div class="l ok"><span class="d"></span>스크랩 완료</div><div class="v" id="s-scraped"><span class="skel" style="width:48px;height:28px;">&nbsp;</span></div><div class="delta" id="s-scraped-d">—</div></div>
+          <div class="stat"><div class="l purple"><span class="d"></span>총 검색 수</div><div class="v" id="s-search"><span class="skel" style="width:48px;height:28px;">&nbsp;</span></div><div class="delta" id="s-search-d">—</div></div>
+          <div class="stat"><div class="l warn"><span class="d"></span>누적 비용</div><div class="v" id="s-cost"><span class="skel" style="width:48px;height:28px;">&nbsp;</span></div><div class="delta" id="s-cost-d">—</div></div>
+        </div>
+
+        <!-- TWO-COL: pipeline + zero-queries -->
+        <div class="two-col">
+
+          <!-- Pipeline card -->
+          <div class="card">
+            <div class="card-head">
+              <span style="display:inline-flex;align-items:center;gap:8px;">
+                <span style="width:8px;height:8px;border-radius:2px;background:var(--primary);"></span>
+                상품 파이프라인 현황
+              </span>
+            </div>
+            <div id="pipeline-body">
+              <div class="section-state">
+                <div class="mini-spinner"></div>
+                불러오는 중...
+              </div>
+            </div>
+          </div>
+
+          <!-- Zero-query card -->
+          <div class="card">
+            <div class="card-head">
+              <span style="display:inline-flex;align-items:center;gap:8px;">
+                <span style="width:8px;height:8px;border-radius:2px;background:var(--err);"></span>
+                결과 0건 Top 쿼리
+              </span>
+            </div>
+            <div id="zero-body">
+              <div class="section-state">
+                <div class="mini-spinner"></div>
+                불러오는 중...
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- TOKEN & COST CARD (full-width) -->
+        <div class="card full-card" style="margin-bottom:12px;">
+          <div class="card-head">
+            <span style="display:inline-flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:2px;background:var(--warn,#D97706);"></span>
+              토큰 & 비용 현황
+            </span>
+          </div>
+          <div id="token-body">
+            <div class="section-state">
+              <div class="mini-spinner"></div>
+              불러오는 중...
+            </div>
+          </div>
+        </div>
+
+        <!-- RECENT SEARCH LOGS -->
+        <div class="card full-card">
+          <div class="card-head">
+            <span style="display:inline-flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:2px;background:var(--purple);"></span>
+              최근 검색 로그
+            </span>
+          </div>
+          <div id="log-body">
+            <div class="section-state">
+              <div class="mini-spinner"></div>
+              불러오는 중...
+            </div>
+          </div>
+          <div class="card-link-foot">
+            <a href="extractions.html">전체 검색 로그 →</a>
+          </div>
+        </div>
+
+        </section><!-- /panel-dashboard -->
+
+        <!-- PANEL: 상품 가져오기 — 광고주 목록 → 상품 정제 (sync 페이지 iframe 임베드) -->
+        <section id="panel-import" style="display:none;">
+          <iframe id="import-frame" title="상품 가져오기"></iframe>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="partials.js"></script>
+  <script src="enhance.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    const BACKEND = 'http://localhost:8001';
+    const SEARCH  = 'http://localhost:8001';
+
+    /* --------------------------------------------------------
+       Guard: advertiser must be selected
+    -------------------------------------------------------- */
+    var adv = null;
+    try {
+      var raw = localStorage.getItem('aira_adv');
+      if (raw) adv = JSON.parse(raw);
+    } catch (_) {}
+
+    if (!adv || !adv.id) {
+      location.href = 'login.html';
+    }
+
+    // Show advertiser name in subtitle
+    if (adv && adv.name) {
+      document.getElementById('page-sub').textContent =
+        adv.name + ' · 상품 파이프라인 현황과 검색 로그를 확인합니다.';
+    }
+
+    /* --------------------------------------------------------
+       Helpers
+    -------------------------------------------------------- */
+    function fmt(n) {
+      if (n == null || isNaN(n)) return '—';
+      return Number(n).toLocaleString('ko-KR');
+    }
+
+    function pct(part, total) {
+      if (!total) return '0%';
+      return Math.round(part / total * 100) + '%';
+    }
+
+    function setStatValue(id, val, unit) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (unit) {
+        el.innerHTML = val + '<small>' + unit + '</small>';
+      } else {
+        el.textContent = val;
+      }
+    }
+
+    function setStatDelta(id, html) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = html;
+    }
+
+    function timeStr(isoStr) {
+      if (!isoStr) return '—';
+      try {
+        var d = new Date(isoStr);
+        var h = String(d.getHours()).padStart(2, '0');
+        var m = String(d.getMinutes()).padStart(2, '0');
+        var mo = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return mo + '/' + day + ' ' + h + ':' + m;
+      } catch (_) { return isoStr; }
+    }
+
+    /* --------------------------------------------------------
+       1. Products API  → KPI + Pipeline
+    -------------------------------------------------------- */
+    function loadProducts() {
+      var url = BACKEND + '/advertisers-rv/' + adv.id + '/stats';
+      return fetch(url)
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (data) {
+          var total      = data.total      != null ? data.total      : 0;
+          var pending    = data.pending    != null ? data.pending    : 0;
+          var scraped    = data.scraped    != null ? data.scraped    : total - pending;
+          var llmEnr     = data.llm_enriched != null ? data.llm_enriched : 0;
+          var vectorized = data.vectorized != null ? data.vectorized : 0;
+
+          // KPI: total
+          setStatValue('s-total', fmt(total), '건');
+          setStatDelta('s-total-d', '전체 등록 상품');
+
+          // KPI: scraped
+          setStatValue('s-scraped', fmt(scraped), '건');
+          setStatDelta('s-scraped-d',
+            'LLM 정제 <b>' + fmt(llmEnr) + '</b>개 · 벡터 <b>' + fmt(vectorized) + '</b>개');
+
+          // Animate counts (enhance.js watches .stat .v)
+          document.querySelectorAll('.stat .v').forEach(function (el) {
+            var txt = el.textContent.trim();
+            if (/\d/.test(txt)) {
+              // already rendered — enhance.js will pick it up on next tick
+            }
+          });
+
+          // Pipeline card
+          renderPipeline({ total: total, scraped: scraped, llmEnr: llmEnr, vectorized: vectorized });
+        })
+        .catch(function (err) {
+          console.error('[dashboard] products API error:', err);
+          setStatValue('s-total', '—');
+          setStatDelta('s-total-d', '<span style="color:var(--err)">로드 실패</span>');
+          setStatValue('s-scraped', '—');
+          document.getElementById('pipeline-body').innerHTML =
+            '<div class="section-state err">상품 데이터를 불러오지 못했습니다. (' + err.message + ')</div>';
+        });
+    }
+
+    function renderPipeline(d) {
+      var stages = [
+        { label: '전체 상품',  val: d.total,      pctOf: d.total },
+        { label: '스크랩 완료', val: d.scraped,    pctOf: d.total },
+        { label: 'LLM 정제',   val: d.llmEnr,     pctOf: d.total },
+        { label: '벡터 완료',  val: d.vectorized, pctOf: d.total },
+      ];
+      var rows = stages.map(function (s) {
+        var p = d.total ? Math.round(s.val / d.total * 100) : 0;
+        return '<tr>' +
+          '<td class="f-label">' + s.label + '</td>' +
+          '<td class="f-val">' + fmt(s.val) + '</td>' +
+          '<td class="f-pct" style="width:80px;">' +
+            '<div style="text-align:right;margin-bottom:3px;">' + pct(s.val, d.total) + '</div>' +
+            '<div class="funnel-bar"><i style="width:' + p + '%;background:' + stageBg(s.label) + ';"></i></div>' +
+          '</td>' +
+        '</tr>';
+      }).join('');
+
+      document.getElementById('pipeline-body').innerHTML =
+        '<table class="funnel-table"><tbody>' + rows + '</tbody></table>';
+    }
+
+    function stageBg(label) {
+      if (label === '전체 상품')  return 'var(--info)';
+      if (label === '스크랩 완료') return 'var(--ok)';
+      if (label === 'LLM 정제')   return 'var(--purple)';
+      if (label === '벡터 완료')  return 'var(--primary)';
+      return 'var(--primary)';
+    }
+
+    /* --------------------------------------------------------
+       2. Search stats  → KPI + Zero queries + Token/Cost
+    -------------------------------------------------------- */
+    function loadSearchStats() {
+      return fetch(SEARCH + '/search-logs/stats')
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (data) {
+          var total      = data.total       != null ? data.total       : 0;
+          var zeroRes    = data.zero_results != null ? data.zero_results : 0;
+          var llmUsed    = data.llm_used     != null ? data.llm_used     : 0;
+          var avgResults = data.avg_results  != null ? data.avg_results  : 0;
+          var topZero    = Array.isArray(data.top_zero_queries) ? data.top_zero_queries : [];
+
+          var inputTok   = data.total_input_tokens  != null ? Number(data.total_input_tokens)  : 0;
+          var outputTok  = data.total_output_tokens != null ? Number(data.total_output_tokens) : 0;
+          var costUsd    = data.total_cost_usd      != null ? Number(data.total_cost_usd)      : 0;
+          var avgCostUsd = data.avg_cost_usd        != null ? Number(data.avg_cost_usd)        : 0;
+
+          // KPI: total search
+          setStatValue('s-search', fmt(total), '건');
+          setStatDelta('s-search-d',
+            '결과 0건 <b class="dn">' + fmt(zeroRes) + '</b>회');
+
+          // KPI: cumulative cost
+          var usdStr = '$' + costUsd.toFixed(4);
+          var krwStr = Math.round(costUsd * 1380).toLocaleString('ko-KR') + '원';
+          setStatValue('s-cost', usdStr);
+          setStatDelta('s-cost-d', '≈ ' + krwStr + ' (₩1,380/USD)');
+
+          // Zero-query list
+          renderZeroQueries(topZero);
+
+          // Token/cost detail card
+          renderTokenCard({
+            inputTok: inputTok, outputTok: outputTok,
+            costUsd: costUsd, avgCostUsd: avgCostUsd,
+            llmUsed: llmUsed, total: total
+          });
+        })
+        .catch(function (err) {
+          console.error('[dashboard] search-stats API error:', err);
+          setStatValue('s-search', '—');
+          setStatValue('s-cost', '—');
+          document.getElementById('zero-body').innerHTML =
+            '<div class="section-state err">검색 통계를 불러오지 못했습니다. (' + err.message + ')</div>';
+          document.getElementById('token-body').innerHTML =
+            '<div class="section-state err">토큰 데이터를 불러오지 못했습니다. (' + err.message + ')</div>';
+        });
+    }
+
+    function renderTokenCard(d) {
+      var KRW_RATE = 1380;
+      var totalTok  = d.inputTok + d.outputTok;
+      var krwTotal  = Math.round(d.costUsd * KRW_RATE).toLocaleString('ko-KR');
+      var krwAvg    = (d.avgCostUsd * KRW_RATE).toFixed(1);
+
+      var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--line);">';
+
+      function cell(label, val, sub) {
+        return '<div style="padding:16px 20px;border-right:1px solid var(--line);">' +
+          '<div style="font-size:11.5px;color:var(--text-3);margin-bottom:6px;">' + label + '</div>' +
+          '<div style="font-size:20px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-0.02em;">' + val + '</div>' +
+          (sub ? '<div style="font-size:11.5px;color:var(--text-4);margin-top:4px;">' + sub + '</div>' : '') +
+          '</div>';
+      }
+
+      html += cell('입력 토큰 (합계)',  fmt(d.inputTok) + ' tok',  'LLM 입력');
+      html += cell('출력 토큰 (합계)',  fmt(d.outputTok) + ' tok', 'LLM 생성');
+      html += cell('총 토큰 사용량',   fmt(totalTok) + ' tok',    '입력 + 출력');
+      html += cell('누적 비용',
+        '$' + d.costUsd.toFixed(4),
+        '≈ ₩' + krwTotal + ' | 건당 ₩' + krwAvg);
+
+      html += '</div>';
+
+      if (d.llmUsed > 0) {
+        var perSearch = (totalTok / d.llmUsed).toFixed(0);
+        html += '<div style="padding:10px 20px;font-size:12px;color:var(--text-3);border-top:1px solid var(--line);">' +
+          'LLM 사용 검색 <b style="color:var(--text);">' + fmt(d.llmUsed) + '</b>회 · ' +
+          '검색당 평균 토큰 <b style="color:var(--text);">' + fmt(perSearch) + '</b>tok · ' +
+          '환율 기준 ₩1,380/USD' +
+          '</div>';
+      }
+
+      document.getElementById('token-body').innerHTML = html;
+    }
+
+    function renderZeroQueries(list) {
+      if (!list || list.length === 0) {
+        document.getElementById('zero-body').innerHTML =
+          '<div class="zero-empty">결과 0건 검색어 없음</div>';
+        return;
+      }
+      var items = list.map(function (q) {
+        return '<li>' +
+          '<span class="q-text" title="' + escHtml(q.query || '') + '">' + escHtml(q.query || '(없음)') + '</span>' +
+          '<span class="q-cnt">' + fmt(q.cnt) + '회</span>' +
+        '</li>';
+      }).join('');
+      document.getElementById('zero-body').innerHTML =
+        '<ul class="zero-list">' + items + '</ul>';
+    }
+
+    /* --------------------------------------------------------
+       3. Search logs  → recent table
+    -------------------------------------------------------- */
+    function loadSearchLogs() {
+      return fetch(SEARCH + '/search-logs?page=0&size=8')
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (data) {
+          var rows = Array.isArray(data) ? data : (data.items || data.content || data.data || []);
+          renderLogTable(rows);
+        })
+        .catch(function (err) {
+          console.error('[dashboard] search-logs API error:', err);
+          document.getElementById('log-body').innerHTML =
+            '<div class="section-state err">검색 로그를 불러오지 못했습니다. (' + err.message + ')</div>';
+        });
+    }
+
+    function renderLogTable(rows) {
+      if (!rows || rows.length === 0) {
+        document.getElementById('log-body').innerHTML =
+          '<div class="section-state">최근 검색 로그가 없습니다.</div>';
+        return;
+      }
+
+      var trs = rows.map(function (r, i) {
+        var delay = (i * 40) + 'ms';
+        var llmBadge = r.llm_used
+          ? '<span class="badge purple"><span class="dot"></span>LLM</span>'
+          : '<span class="badge muted"><span class="dot"></span>기본</span>';
+        var resultCnt = r.result_count != null ? r.result_count : (r.results_count != null ? r.results_count : '—');
+        var backend   = r.backend || r.search_backend || '—';
+        var ts        = timeStr(r.created_at || r.timestamp || r.searched_at);
+        return '<tr style="animation-delay:' + delay + ';">' +
+          '<td class="q-cell" title="' + escHtml(r.query || '') + '">' + escHtml(r.query || '—') + '</td>' +
+          '<td>' + llmBadge + '</td>' +
+          '<td class="dim">' + escHtml(backend) + '</td>' +
+          '<td class="num tnum">' + resultCnt + '</td>' +
+          '<td class="dim">' + ts + '</td>' +
+        '</tr>';
+      }).join('');
+
+      document.getElementById('log-body').innerHTML =
+        '<table>' +
+        '<thead><tr>' +
+          '<th>검색어</th>' +
+          '<th>LLM 여부</th>' +
+          '<th>백엔드</th>' +
+          '<th class="num">결과수</th>' +
+          '<th>시각</th>' +
+        '</tr></thead>' +
+        '<tbody>' + trs + '</tbody>' +
+        '</table>';
+    }
+
+    /* --------------------------------------------------------
+       Utility
+    -------------------------------------------------------- */
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    /* --------------------------------------------------------
+       Boot
+    -------------------------------------------------------- */
+    function loadAll() {
+      loadProducts();
+      loadSearchStats();
+      loadSearchLogs();
+    }
+
+    loadAll();
+
+    document.getElementById('btn-refresh').addEventListener('click', function () {
+      // Reset KPI to skeleton
+      ['s-total', 's-scraped', 's-search', 's-cost'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.innerHTML = '<span class="skel" style="width:48px;height:28px;">&nbsp;</span>';
+      });
+      ['s-total-d', 's-scraped-d', 's-search-d', 's-cost-d'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = '—';
+      });
+      document.getElementById('pipeline-body').innerHTML =
+        '<div class="section-state"><div class="mini-spinner"></div>불러오는 중...</div>';
+      document.getElementById('zero-body').innerHTML =
+        '<div class="section-state"><div class="mini-spinner"></div>불러오는 중...</div>';
+      document.getElementById('token-body').innerHTML =
+        '<div class="section-state"><div class="mini-spinner"></div>불러오는 중...</div>';
+      document.getElementById('log-body').innerHTML =
+        '<div class="section-state"><div class="mini-spinner"></div>불러오는 중...</div>';
+      loadAll();
+    });
+
+  })();
+  </script>
+
+  <script>
+  /* 상단 탭 전환: 대시보드 ↔ 상품 가져오기 (iframe은 최초 진입 시 lazy 로드) */
+  (function () {
+    'use strict';
+    var tabs = document.getElementById('dash-tabs');
+    if (!tabs) return;
+    var panelDash   = document.getElementById('panel-dashboard');
+    var panelImport = document.getElementById('panel-import');
+    var frame       = document.getElementById('import-frame');
+    var loaded = false;
+
+    tabs.addEventListener('click', function (e) {
+      var btn = e.target.closest('.dash-tab');
+      if (!btn) return;
+      var showImport = btn.dataset.tab === 'import';
+
+      tabs.querySelectorAll('.dash-tab').forEach(function (b) {
+        b.classList.toggle('active', b === btn);
+      });
+      panelDash.style.display   = showImport ? 'none' : '';
+      panelImport.style.display = showImport ? '' : 'none';
+
+      if (showImport && !loaded) {
+        frame.src = 'sync/index.html?embed=1';
+        loaded = true;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIRA · 상품 정제</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="../styles.css">
+<style>
+/* ── Progress bar ── */
+.prog-wrap { height:6px; background:var(--surface-3); border-radius:3px; overflow:hidden; margin-top:8px; }
+.prog-bar  { height:100%; border-radius:3px; transition:width 0.4s var(--ease); }
+.prog-blue   { background:var(--info); }
+.prog-purple { background:var(--purple); }
+.prog-ok     { background:var(--ok); }
+.prog-err    { background:var(--err); }
+.prog-warn   { background:var(--warn); }
+
+/* ── Batch panel ── */
+.batch-panel { background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:14px; }
+.batch-panel .bp-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; font-weight:700; font-size:13px; }
+.batch-panel .bp-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.bp-label { font-size:12px; color:var(--text-3); white-space:nowrap; }
+.bp-input { height:30px; border:1px solid var(--line-2); border-radius:4px; padding:0 8px; font-size:12.5px; background:#fff; color:var(--text); width:72px; text-align:right; }
+.bp-input:focus { outline:none; border-color:var(--primary); }
+.bp-select { height:30px; border:1px solid var(--line-2); border-radius:4px; padding:0 6px; font-size:12.5px; background:#fff; color:var(--text); cursor:pointer; }
+.bp-sep { width:1px; height:20px; background:var(--line); margin:0 2px; }
+
+/* ── Product row ── */
+.prod-img { width:44px; height:44px; object-fit:cover; border-radius:4px; background:var(--surface-2); flex-shrink:0; }
+.prod-img-ph { width:44px; height:44px; border-radius:4px; background:var(--surface-2); flex-shrink:0; }
+.prod-cell { display:flex; align-items:center; gap:10px; }
+.prod-info .pname { font-weight:600; color:var(--text); font-size:13px; line-height:1.3; max-width:360px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.prod-info .pcode { font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--text-4); margin-top:2px; }
+.prod-actions { display:flex; gap:4px; flex-wrap:wrap; }
+.prod-actions .btn { font-size:11px; padding:4px 8px; }
+
+/* ── Status badges ── */
+.badge { display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border-radius:4px; font-size:11.5px; font-weight:600; white-space:nowrap; }
+.badge .dot { width:5px; height:5px; border-radius:50%; background:currentColor; flex-shrink:0; }
+.badge.ok     { background:var(--ok-soft);     color:var(--ok);     }
+.badge.warn   { background:var(--warn-soft);   color:var(--warn);   }
+.badge.err    { background:var(--err-soft);    color:var(--err);    }
+.badge.info   { background:var(--info-soft);   color:var(--info);   }
+.badge.purple { background:var(--purple-soft); color:var(--purple); }
+.badge.muted  { background:var(--surface-3);   color:var(--text-3); }
+
+/* ── Tabs (filter bar) ── */
+.ftabs { display:flex; gap:2px; background:var(--surface-2); padding:3px; border-radius:6px; border:1px solid var(--line); }
+.ftab { padding:5px 12px; border-radius:4px; font-size:12px; font-weight:500; color:var(--text-3); cursor:pointer; transition:all var(--dur) var(--ease); white-space:nowrap; }
+.ftab:hover { color:var(--text); background:rgba(255,255,255,0.7); }
+.ftab.active { background:#fff; color:var(--text); font-weight:700; box-shadow:0 1px 3px rgba(10,10,10,0.08); }
+
+/* ── Main tab nav ── */
+.main-tabs { display:flex; gap:2px; margin-bottom:14px; }
+.mtab { padding:7px 16px; border-radius:6px; font-size:13px; font-weight:500; color:var(--text-3); cursor:pointer; border:1px solid transparent; transition:all var(--dur) var(--ease); }
+.mtab:hover { background:var(--surface-2); color:var(--text); }
+.mtab.active { background:#fff; color:var(--text); font-weight:700; border-color:var(--line); box-shadow:0 1px 3px rgba(10,10,10,0.06); }
+.mtab-panel { display:none; } .mtab-panel.active { display:block; }
+
+/* ── Pagination ── */
+.pgn-row { display:flex; align-items:center; gap:6px; padding:10px 16px; border-top:1px solid var(--line); font-size:12.5px; color:var(--text-3); }
+.pgn-row .sp { flex:1; }
+.pgn-btn { width:28px; height:28px; border:1px solid var(--line); border-radius:4px; display:grid; place-items:center; cursor:pointer; background:#fff; transition:all var(--dur) var(--ease); }
+.pgn-btn:hover { background:var(--surface-2); border-color:var(--text-4); }
+.pgn-btn:disabled { opacity:0.35; cursor:not-allowed; }
+.pgn-btn svg { width:13px; height:13px; stroke-width:1.8; fill:none; stroke:currentColor; }
+
+/* ── Common images ── */
+.img-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; }
+.img-thumb { border:1px solid var(--line); border-radius:6px; overflow:hidden; background:#fff; cursor:pointer; transition:all var(--dur) var(--ease); position:relative; }
+.img-thumb:hover { border-color:var(--primary); box-shadow:0 2px 8px rgba(10,10,10,0.1); }
+.img-thumb.blocked { border-color:var(--err); opacity:0.7; }
+.img-thumb img { width:100%; height:80px; object-fit:cover; display:block; background:var(--surface-2); }
+.img-thumb .img-meta { padding:5px 7px; font-size:10.5px; }
+.img-thumb .img-cnt { color:var(--warn); font-weight:700; }
+.img-thumb .img-name { color:var(--text-4); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+.img-thumb .blocked-badge { position:absolute; top:4px; right:4px; background:var(--err); color:#fff; font-size:9.5px; font-weight:700; padding:2px 5px; border-radius:3px; }
+.img-chk { position:absolute; top:4px; left:4px; }
+
+/* ── Modal ── */
+.modal-bg { position:fixed; inset:0; background:rgba(10,10,10,0.55); z-index:100; display:flex; align-items:center; justify-content:center; padding:20px; backdrop-filter:blur(2px); animation:fadein 180ms var(--ease); }
+.modal { background:#fff; border-radius:10px; max-width:540px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 24px 60px -12px rgba(10,10,10,0.35); }
+.modal-head { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
+.modal-head h3 { font-size:15px; font-weight:700; }
+.modal-body { padding:16px 20px; }
+.modal-foot { padding:12px 20px; border-top:1px solid var(--line); display:flex; gap:8px; justify-content:flex-end; }
+.x-btn { width:28px; height:28px; display:grid; place-items:center; border-radius:5px; color:var(--text-3); cursor:pointer; transition:all var(--dur) var(--ease); border:none; background:none; }
+.x-btn:hover { background:var(--surface-2); color:var(--text); }
+.x-btn svg { width:16px; height:16px; stroke-width:1.8; fill:none; stroke:currentColor; }
+
+/* ── Enriched detail modal sections ── */
+.detail-section { margin-bottom:16px; }
+.detail-section h4 { font-size:12px; font-weight:700; color:var(--text-3); letter-spacing:0.05em; text-transform:uppercase; margin-bottom:8px; }
+.attr-chips { display:flex; flex-wrap:wrap; gap:5px; }
+.attr-chip { font-size:11.5px; padding:3px 8px; border-radius:4px; background:var(--surface-2); border:1px solid var(--line); color:var(--text-2); }
+.desc-block { border-left:3px solid var(--line-2); padding:8px 12px; border-radius:0 4px 4px 0; background:var(--surface-2); font-size:12.5px; line-height:1.6; color:var(--text-2); margin-bottom:6px; }
+.desc-block.situation { border-color:var(--info); }
+.desc-block.material  { border-color:var(--teal); }
+.desc-block.style     { border-color:var(--warn); }
+.desc-block.persona   { border-color:var(--purple); }
+.desc-block .dl { font-size:10.5px; font-weight:700; color:var(--text-4); letter-spacing:0.05em; text-transform:uppercase; margin-bottom:4px; }
+
+/* ── Filter tabs for common images ── */
+.img-filter-tabs { display:flex; gap:2px; background:var(--surface-2); padding:2px; border-radius:5px; border:1px solid var(--line); }
+.ift { padding:4px 10px; border-radius:4px; font-size:11.5px; font-weight:500; cursor:pointer; color:var(--text-3); transition:all var(--dur) var(--ease); }
+.ift.active { background:#fff; color:var(--text); font-weight:700; box-shadow:0 1px 2px rgba(10,10,10,0.06); }
+.ift.active.blocked-tab { background:var(--err); color:#fff; }
+
+.spin { display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--text-3); border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.note { background:var(--surface-2); border:1px solid var(--line); border-radius:6px; padding:10px 14px; font-size:12px; color:var(--text-3); margin-top:16px; }
+</style>
+</head>
+<body data-route="sync-products" data-depth="1">
+  <div class="shell">
+    <div id="side-mount"></div>
+    <main class="main">
+      <div id="top-mount"></div>
+      <div class="page">
+
+        <!-- HEAD -->
+        <div class="page-head">
+          <div>
+            <h1 id="page-title">상품 정제</h1>
+            <div class="sub" id="page-sub">광고주 상품의 스크랩 → LLM Enrich → 벡터 임베딩 파이프라인을 운영합니다.</div>
+          </div>
+          <div class="actions">
+            <a href="index.html" class="btn">← 광고주 목록</a>
+            <button class="btn" id="btn-reload">
+              <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>
+              새로고침
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI -->
+        <div class="stat-row">
+          <div class="stat"><div class="l"><span class="d"></span>전체 상품</div><div class="v"><span id="st-total">—</span></div><div class="delta" id="st-delta">로딩 중…</div></div>
+          <div class="stat"><div class="l warn"><span class="d"></span>미스크랩</div><div class="v"><span id="st-pending">—</span></div><div class="delta">스크랩 대기</div></div>
+          <div class="stat"><div class="l ok"><span class="d"></span>스크랩 완료</div><div class="v"><span id="st-scraped">—</span></div><div class="delta">HTML + 이미지 수집됨</div></div>
+          <div class="stat"><div class="l purple"><span class="d"></span>LLM 정제</div><div class="v"><span id="st-enrich">—</span><small id="st-vec"></small></div><div class="delta">product_enriched · 벡터 완료</div></div>
+        </div>
+
+        <!-- MAIN TABS -->
+        <div class="main-tabs">
+          <div class="mtab active" data-panel="scrape">📥 크롤링</div>
+          <div class="mtab" data-panel="enrich">🤖 Enrich</div>
+          <div class="mtab" data-panel="images">🖼️ 공통 이미지 <span id="img-tab-cnt" style="font-size:11px;color:var(--text-4);"></span></div>
+        </div>
+
+        <!-- ─── SCRAPE PANEL ─── -->
+        <div class="mtab-panel active" id="panel-scrape">
+          <div class="batch-panel" id="scrape-batch-panel">
+            <div class="bp-head">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              스크랩 배치
+              <div id="scrape-status-badge"></div>
+            </div>
+            <div class="bp-row" id="scrape-controls">
+              <span class="bp-label">모드</span>
+              <select class="bp-select" id="sc-mode"><option value="api">API (빠름)</option><option value="page">Page</option></select>
+              <div class="bp-sep"></div>
+              <span class="bp-label">개수</span>
+              <input class="bp-input" type="number" id="sc-count" value="500" min="1" max="10000">
+              <span class="bp-label">묶음</span>
+              <input class="bp-input" type="number" id="sc-batchsize" value="100" min="1" max="200">
+              <span class="bp-label">워커</span>
+              <input class="bp-input" type="number" id="sc-concur" value="4" min="1" max="32">
+              <span class="bp-label">sleep</span>
+              <input class="bp-input" type="number" id="sc-interval" value="1000" min="0" max="10000" style="width:60px;">
+              <span class="bp-label">ms</span>
+              <button class="btn btn-primary btn-sm" id="btn-start-scrape">시작</button>
+            </div>
+            <div id="scrape-progress" style="display:none;">
+              <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-top:10px;">
+                <span id="sp-label">준비 중…</span>
+                <span id="sp-nums">—</span>
+              </div>
+              <div class="prog-wrap"><div class="prog-bar prog-blue" id="sp-bar" style="width:0%"></div></div>
+              <div style="margin-top:8px;display:flex;gap:6px;">
+                <button class="btn btn-sm btn-danger" id="btn-cancel-scrape">취소</button>
+                <span id="sp-err" style="font-size:11.5px;color:var(--err);"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─── ENRICH PANEL ─── -->
+        <div class="mtab-panel" id="panel-enrich">
+          <div class="batch-panel" id="enrich-batch-panel">
+            <div class="bp-head">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M17 7l5-5"/><path d="M22 2h-5v5"/></svg>
+              LLM Enrich 배치
+              <div id="enrich-status-badge"></div>
+            </div>
+            <div class="bp-row" id="enrich-controls">
+              <span class="bp-label">모델</span>
+              <select class="bp-select" id="ec-model"><option value="haiku">haiku (저렴)</option><option value="sonnet">sonnet (정확)</option><option value="opus">opus (최고급)</option></select>
+              <span class="bp-label">개수</span>
+              <input class="bp-input" type="number" id="ec-count" value="20" min="1" max="10000">
+              <span class="bp-label">이미지</span>
+              <input class="bp-input" type="number" id="ec-images" value="10" min="1" max="100">
+              <span class="bp-label">워커</span>
+              <input class="bp-input" type="number" id="ec-concur" value="2" min="1" max="8">
+              <span class="bp-label">sleep</span>
+              <input class="bp-input" type="number" id="ec-interval" value="0" min="0" max="10000" style="width:56px;">
+              <span class="bp-label">ms &nbsp; 벡터</span>
+              <select class="bp-select" id="ec-embed"><option value="bge">bge (로컬)</option><option value="openai">openai</option><option value="both">both</option></select>
+              <button class="btn btn-primary btn-sm" id="btn-start-enrich">시작</button>
+            </div>
+            <div id="enrich-progress" style="display:none;">
+              <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-top:10px;">
+                <span id="ep-label">준비 중…</span>
+                <span id="ep-nums">—</span>
+              </div>
+              <div class="prog-wrap"><div class="prog-bar prog-purple" id="ep-bar" style="width:0%"></div></div>
+              <div style="margin-top:8px;display:flex;gap:6px;">
+                <button class="btn btn-sm btn-danger" id="btn-cancel-enrich">취소</button>
+                <span id="ep-err" style="font-size:11.5px;color:var(--err);"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─── IMAGES PANEL ─── -->
+        <div class="mtab-panel" id="panel-images">
+          <div style="background:var(--warn-soft);border:1px solid #e0d0a0;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:var(--warn);">
+            <b>⚠️ 공통 이미지 감지</b> — 여러 상품 페이지에 동일 URL로 반복 등장하는 이미지입니다. 배너·공지·이벤트 이미지일 수 있습니다. LLM enrich 시 자동 제외됩니다.
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+            <span style="font-size:12.5px;color:var(--text-3);">최소 상품 수</span>
+            <input class="bp-input" type="number" id="img-min" value="3" min="2" max="100" style="width:56px;">
+            <button class="btn btn-sm" id="btn-img-reload">새로고침</button>
+            <span id="img-total-cnt" style="font-size:12px;color:var(--text-3);"></span>
+            <div class="img-filter-tabs" id="img-filter-tabs">
+              <div class="ift active" data-f="all">전체</div>
+              <div class="ift" data-f="unblocked">미차단</div>
+              <div class="ift blocked-tab" data-f="blocked">차단됨</div>
+            </div>
+            <div id="img-bulk-bar" style="display:none;display:flex;gap:6px;align-items:center;">
+              <span id="img-sel-cnt" style="font-size:12px;color:var(--warn);font-weight:700;"></span>
+              <button class="btn btn-sm btn-danger" id="btn-bulk-block">선택 차단 등록</button>
+              <button class="btn btn-sm btn-ghost" id="btn-sel-clear">선택 해제</button>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+            <label style="font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:5px;cursor:pointer;">
+              <input type="checkbox" id="img-chk-all" class="chk"> 전체 선택
+            </label>
+          </div>
+          <div id="img-loading" style="text-align:center;padding:30px;color:var(--text-4);display:none;"><span class="spin"></span> 로딩 중…</div>
+          <div class="img-grid" id="img-grid"></div>
+          <div id="img-empty" style="text-align:center;padding:40px;color:var(--text-4);display:none;">공통 이미지 없음</div>
+        </div>
+
+        <!-- FILTER BAR + TABLE (scrape/enrich 공통) -->
+        <div id="list-section">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+            <div class="ftabs" id="filter-tabs">
+              <div class="ftab active" data-f="">전체</div>
+              <div class="ftab" data-f="to_scrape">미스크랩</div>
+              <div class="ftab" data-f="to_enrich">스크랩됨/미정제</div>
+              <div class="ftab" data-f="done">정제 완료</div>
+            </div>
+
+            <!-- Row-level enrich settings -->
+            <div style="display:flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--line);border-radius:5px;background:rgba(78,64,120,0.06);margin-left:auto;">
+              <span style="font-size:11px;color:var(--purple);font-weight:600;">행별 LLM</span>
+              <select class="bp-select" id="row-model" style="height:26px;font-size:11.5px;">
+                <option value="haiku">haiku</option><option value="sonnet">sonnet</option><option value="opus">opus</option>
+              </select>
+              <input class="bp-input" type="number" id="row-images" value="10" min="1" max="100" style="width:52px;height:26px;font-size:11.5px;">
+              <span style="font-size:11px;color:var(--text-4);">장</span>
+            </div>
+          </div>
+
+          <div class="list-card">
+            <div class="list-head">
+              <span class="total">총 <b id="tbl-total">—</b>개 &nbsp;·&nbsp; 페이지 <b id="tbl-page">1</b> / <b id="tbl-pages">1</b></span>
+              <span class="sp"></span>
+              <div class="ctrl">
+                <button class="pgn-btn" id="pgn-prev" disabled><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+                <button class="pgn-btn" id="pgn-next" disabled><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
+              </div>
+            </div>
+
+            <div id="tbl-loading" style="text-align:center;padding:32px;color:var(--text-4);"><span class="spin"></span> 로딩 중…</div>
+            <div id="tbl-empty" style="text-align:center;padding:40px;color:var(--text-4);display:none;">상품이 없습니다.</div>
+
+            <table id="prod-table" style="display:none;">
+              <thead>
+                <tr>
+                  <th style="width:52px;">이미지</th>
+                  <th>상품</th>
+                  <th>상태</th>
+                  <th style="width:200px;text-align:right;">액션</th>
+                </tr>
+              </thead>
+              <tbody id="prod-tbody"></tbody>
+            </table>
+
+            <div class="pgn-row" id="pgn-foot" style="display:none;">
+              <span class="sp"></span>
+              <button class="pgn-btn" id="pgn-prev2" disabled><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+              <button class="pgn-btn" id="pgn-next2" disabled><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /page -->
+    </main>
+  </div>
+
+  <!-- ── ENRICH DETAIL MODAL ── -->
+  <div class="modal-bg" id="detail-modal" style="display:none;" onclick="closeDetailModal()">
+    <div class="modal" style="max-width:680px;" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <h3 id="detail-title">상품 상세</h3>
+        <button class="x-btn" onclick="closeDetailModal()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-body" id="detail-body"><div style="text-align:center;padding:30px;"><span class="spin"></span></div></div>
+    </div>
+  </div>
+
+  <!-- ── COMMON IMAGE POPUP (grid click) ── -->
+  <div class="modal-bg" id="img-popup" style="display:none;" onclick="closeImgPopup()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <h3>공통 이미지 상세</h3>
+        <button class="x-btn" onclick="closeImgPopup()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-body" id="img-popup-body"></div>
+      <div class="modal-foot" id="img-popup-foot"></div>
+    </div>
+  </div>
+
+  <script src="../partials.js"></script>
+  <script src="../enhance.js"></script>
+  <script>
+  (() => {
+    const API      = 'http://localhost:8090';
+    const EMBEDDER = 'http://192.168.101.27:8001';
+    const params   = new URLSearchParams(location.search);
+    const ADV      = parseInt(params.get('adv') || '1', 10);
+
+    // ── state ──────────────────────────────────────────────────
+    let curPage = 0, pageSize = 20, curFilter = '';
+    let pageData = null;
+    let enrichedIds = new Set(), embeddedIds = new Set();
+    let batchTimer = null;
+    let activeMainTab = 'scrape';
+
+    // images tab state
+    let commonImages = null, blockPatterns = [];
+    let checkedSrcs = new Set(), imgFilter = 'all';
+    let selectedCommonImg = null;
+
+    // ── init ───────────────────────────────────────────────────
+    document.getElementById('page-title').textContent = `광고주 #${ADV} · 상품 정제`;
+    document.getElementById('page-sub').textContent   = `Spring Boot localhost:8090 · Embedder 192.168.101.27:8001`;
+
+    // ── helpers ────────────────────────────────────────────────
+    const $ = (id) => document.getElementById(id);
+    const fmt = (n) => n == null ? '—' : Number(n).toLocaleString();
+
+    function badge(text, cls) {
+      return `<span class="badge ${cls}"><span class="dot"></span>${text}</span>`;
+    }
+
+    function isBlocked(url) {
+      return blockPatterns.some(b => b.enabled && url.includes(b.pattern));
+    }
+    function getBlockEntry(url) {
+      return blockPatterns.find(b => b.enabled && url.includes(b.pattern));
+    }
+
+    // ── MAIN TABS ──────────────────────────────────────────────
+    document.querySelectorAll('.mtab').forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('.mtab').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.mtab-panel').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        activeMainTab = t.dataset.panel;
+        $('panel-' + activeMainTab).classList.add('active');
+        $('list-section').style.display = activeMainTab === 'images' ? 'none' : 'block';
+        if (activeMainTab === 'images') {
+          if (!commonImages) loadCommonImages();
+          loadBlockPatterns();
+        }
+      });
+    });
+
+    // ── FILTER TABS ────────────────────────────────────────────
+    document.querySelectorAll('#filter-tabs .ftab').forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('#filter-tabs .ftab').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        curFilter = t.dataset.f;
+        curPage = 0;
+        loadProducts();
+      });
+    });
+
+    // ── IMG FILTER TABS ────────────────────────────────────────
+    document.querySelectorAll('#img-filter-tabs .ift').forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('#img-filter-tabs .ift').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        imgFilter = t.dataset.f;
+        renderImages();
+      });
+    });
+
+    // ── PAGINATION ─────────────────────────────────────────────
+    function updatePagination() {
+      const total = pageData?.total ?? 0;
+      const pages = Math.max(1, Math.ceil(total / pageSize));
+      $('tbl-total').textContent = fmt(total);
+      $('tbl-page').textContent  = curPage + 1;
+      $('tbl-pages').textContent = pages;
+      [$('pgn-prev'),$('pgn-prev2')].forEach(b => b.disabled = curPage === 0);
+      [$('pgn-next'),$('pgn-next2')].forEach(b => b.disabled = curPage >= pages - 1);
+    }
+    [$('pgn-prev'),$('pgn-prev2')].forEach(b => b.addEventListener('click', () => { if (curPage > 0) { curPage--; loadProducts(); }}));
+    [$('pgn-next'),$('pgn-next2')].forEach(b => b.addEventListener('click', () => { curPage++; loadProducts(); }));
+
+    // ── LOAD PRODUCTS ──────────────────────────────────────────
+    async function loadProducts() {
+      $('tbl-loading').style.display = 'block';
+      $('tbl-empty').style.display = 'none';
+      $('prod-table').style.display = 'none';
+      $('pgn-foot').style.display = 'none';
+
+      try {
+        const qs = new URLSearchParams({ page: curPage, size: pageSize, filter: curFilter });
+        const res = await fetch(`${API}/advertisers/${ADV}/products?${qs}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        pageData = await res.json();
+
+        enrichedIds = new Set(pageData.enrichedIds || []);
+        embeddedIds = new Set(pageData.embeddedIds || []);
+        if (pageData.counts) {
+          $('st-total').textContent   = fmt(pageData.counts.total);
+          $('st-pending').textContent = fmt(pageData.counts.pending);
+          $('st-scraped').textContent = fmt(pageData.counts.total - pageData.counts.pending);
+          $('st-enrich').textContent  = fmt(pageData.counts.llm_enriched);
+          $('st-vec').textContent     = ` · 벡터 ${fmt(pageData.counts.vectorized)}`;
+          $('st-delta').textContent   = `정제 완료 ${fmt(pageData.counts.done)}개`;
+        }
+
+        updatePagination();
+        renderTable();
+
+      } catch(e) {
+        $('tbl-empty').textContent = `오류: ${e.message}`;
+        $('tbl-empty').style.display = 'block';
+      } finally {
+        $('tbl-loading').style.display = 'none';
+      }
+    }
+
+    // ── RENDER TABLE ───────────────────────────────────────────
+    function renderTable() {
+      const items = pageData?.items ?? [];
+      if (items.length === 0) { $('tbl-empty').style.display = 'block'; return; }
+
+      const model  = $('row-model').value;
+      const images = $('row-images').value;
+
+      const rows = items.map(p => {
+        const isEnriched = enrichedIds.has(p.id);
+        const isEmbedded = embeddedIds.has(p.id);
+        const sStatus = p.scrapeStatus === 'scraped'
+          ? badge('스크랩됨', 'ok')
+          : p.scrapeStatus === 'failed'
+          ? badge('실패', 'err')
+          : badge('미스크랩', 'muted');
+        const eStatus = isEmbedded
+          ? badge('벡터 완료', 'ok')
+          : isEnriched
+          ? badge('LLM 정제됨', 'purple')
+          : '';
+
+        const actFetch   = `<button class="btn btn-sm" onclick="actScrape('${p.productCode}')">1) Fetch</button>`;
+        const actEnrich  = p.scrapeStatus === 'scraped'
+          ? `<button class="btn btn-sm btn-primary" onclick="actEnrich('${p.productCode}',false)" title="모델:${model} 이미지:${images}장">🤖 Enrich</button>`
+          : '';
+        const actReanalyze = isEnriched
+          ? `<button class="btn btn-sm" style="background:var(--warn-soft);color:var(--warn);border-color:var(--warn);" onclick="actEnrich('${p.productCode}',true)" title="재분석 (비용 발생)">🔄 재분석</button>`
+          : '';
+        const actDetail = isEnriched
+          ? `<button class="btn btn-sm" onclick="openDetailModal(${p.id})">🔍 상세</button>`
+          : '';
+
+        const img = p.imageUrl
+          ? `<img class="prod-img" src="${p.imageUrl}" alt="" onerror="this.style.display='none'">`
+          : `<div class="prod-img-ph"></div>`;
+
+        return `<tr>
+          <td style="padding:10px 10px;">${img}</td>
+          <td>
+            <div class="prod-cell">
+              <div class="prod-info">
+                <div class="pname" title="${esc(p.productName)}">${esc(p.productName)}</div>
+                <div class="pcode">#${p.productCode} &nbsp;·&nbsp; 이미지 ${p.imageLocalCount || 0}장 &nbsp;·&nbsp; 본문 ${(p.bodyTextLen||0).toLocaleString()}자</div>
+              </div>
+            </div>
+            <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap;">
+              ${sStatus} ${eStatus}
+            </div>
+          </td>
+          <td><a href="${esc(p.productUrl||'')}" target="_blank" style="font-size:11px;color:var(--info);" title="${esc(p.productUrl||'')}">↗ 상품 페이지</a></td>
+          <td style="text-align:right;">
+            <div class="prod-actions" style="justify-content:flex-end;">
+              ${actFetch}${actEnrich}${actReanalyze}${actDetail}
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+
+      $('prod-tbody').innerHTML = rows;
+      $('prod-table').style.display = 'table';
+      $('pgn-foot').style.display = 'flex';
+    }
+
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    // ── SINGLE ACTIONS ─────────────────────────────────────────
+    async function actScrape(code) {
+      try {
+        const r = await fetch(`${API}/advertisers/${ADV}/products/${code}/scrape`, { method:'POST' });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`);
+        await loadProducts();
+      } catch(e) { alert(`스크랩 실패: ${e.message}`); }
+    }
+    window.actScrape = actScrape;
+
+    async function actEnrich(code, force) {
+      const model = $('row-model').value;
+      const images = $('row-images').value;
+      if (force && !confirm(`이미 enriched된 상품입니다. 재분석 시 LLM 비용이 발생합니다.\n계속하시겠습니까?`)) return;
+      try {
+        const qs = new URLSearchParams({ model, imageLimit: images, force: String(force) });
+        const r = await fetch(`${API}/advertisers/${ADV}/products/${code}/enrich/llm?${qs}`, { method:'POST' });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.message || `HTTP ${r.status}`);
+        await loadProducts();
+      } catch(e) { alert(`Enrich 실패: ${e.message}`); }
+    }
+    window.actEnrich = actEnrich;
+
+    // ── DETAIL MODAL ───────────────────────────────────────────
+    async function openDetailModal(rvId) {
+      $('detail-title').textContent = '상품 상세 로딩 중…';
+      $('detail-body').innerHTML = '<div style="text-align:center;padding:30px;"><span class="spin"></span></div>';
+      $('detail-modal').style.display = 'flex';
+      try {
+        const r = await fetch(`${EMBEDDER}/products-rv/${rvId}/detail`);
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`);
+        $('detail-title').textContent = j.product_name || `rv_id=${rvId}`;
+        $('detail-body').innerHTML = renderDetail(j);
+      } catch(e) {
+        $('detail-body').innerHTML = `<p style="color:var(--err);">오류: ${e.message}</p>`;
+      }
+    }
+    window.openDetailModal = openDetailModal;
+    window.closeDetailModal = () => { $('detail-modal').style.display = 'none'; };
+
+    function renderDetail(d) {
+      const chips = (arr) => arr.filter(Boolean).map(t => `<span class="attr-chip">${esc(String(t))}</span>`).join('');
+      const descBlock = (key, label) => d['desc_'+key]
+        ? `<div class="desc-block ${key}"><div class="dl">${label}</div>${esc(d['desc_'+key])}</div>` : '';
+      return `
+        <div class="detail-section">
+          <h4>카테고리 / 공통 속성</h4>
+          <div class="attr-chips">
+            ${chips([d.category && `${d.category} (${(d.category_confidence||0).toFixed(2)})`, d.brand, d.brand_tier, d.target_gender, d.origin_country, d.manufacturer])}
+            ${d.model_used ? `<span class="attr-chip mono">${d.model_used}</span>` : ''}
+            ${d.cost_usd ? `<span class="attr-chip">$${d.cost_usd.toFixed(4)}</span>` : ''}
+          </div>
+        </div>
+        ${d.tags && d.tags.length ? `
+        <div class="detail-section">
+          <h4>태그 (${d.tags.length}개)</h4>
+          <div class="attr-chips">${d.tags.map(t => `<span class="attr-chip" style="font-size:11px;" title="${t.tag_category}">${esc(t.tag)}</span>`).join('')}</div>
+        </div>` : ''}
+        <div class="detail-section">
+          <h4>다관점 설명문</h4>
+          ${descBlock('situation','상황')}
+          ${descBlock('material','소재')}
+          ${descBlock('style','스타일')}
+          ${descBlock('persona','페르소나')}
+        </div>
+        ${d.category_attributes && Object.keys(d.category_attributes).length ? `
+        <div class="detail-section">
+          <h4>category_attributes</h4>
+          <pre style="font-size:11.5px;background:var(--surface-2);padding:10px;border-radius:5px;overflow-x:auto;border:1px solid var(--line);">${esc(JSON.stringify(d.category_attributes,null,2))}</pre>
+        </div>` : ''}
+        <div style="font-size:11.5px;color:var(--text-3);font-family:'JetBrains Mono',monospace;margin-top:8px;">
+          rv_id=${d.rv_product_id} · enriched ${d.enriched_at?.slice(0,16)||'?'} · ${d.duration_ms||'?'}ms
+        </div>`;
+    }
+
+    // ── BATCH SCRAPE ───────────────────────────────────────────
+    $('btn-start-scrape').addEventListener('click', async () => {
+      const mode      = $('sc-mode').value;
+      const count     = +$('sc-count').value;
+      const batchsize = +$('sc-batchsize').value;
+      const concur    = +$('sc-concur').value;
+      const interval  = +$('sc-interval').value;
+      const estMin = Math.round(count * (mode==='api' ? 0.3 : 8/concur + interval/1000) / 60);
+      if (!confirm(`미스크랩 ${count}개 배치 시작\nmode=${mode} · 워커 ${concur} · sleep ${interval}ms\n예상 ~${estMin}분`)) return;
+      const qs = new URLSearchParams({ count, intervalMs:interval, concurrency:concur, mode, batchSize:batchsize });
+      await fetch(`${API}/advertisers/${ADV}/products/batch-fetch?${qs}`, { method:'POST' });
+      startBatchPoll();
+    });
+
+    $('btn-cancel-scrape').addEventListener('click', async () => {
+      if (!confirm('스크랩 배치 취소?')) return;
+      await fetch(`${API}/advertisers/${ADV}/products/batch-fetch/cancel`, { method:'POST' });
+    });
+
+    // ── BATCH ENRICH ───────────────────────────────────────────
+    $('btn-start-enrich').addEventListener('click', async () => {
+      const model    = $('ec-model').value;
+      const count    = +$('ec-count').value;
+      const images   = +$('ec-images').value;
+      const concur   = +$('ec-concur').value;
+      const interval = +$('ec-interval').value;
+      const embed    = $('ec-embed').value;
+      const perMin   = {haiku:40,sonnet:120,opus:180}[model] || 40;
+      const estMin   = Math.round(count * perMin / (60 * concur));
+      if (!confirm(`Enrich+Embed 배치 시작\nmodel=${model} · ${count}개 · 이미지 ${images}장 · embed=${embed}\n예상 ~${estMin}분`)) return;
+      const qs = new URLSearchParams({ count, model, imageLimit:images, concurrency:concur, intervalMs:interval, embedBackend:embed });
+      await fetch(`${API}/advertisers/${ADV}/products/batch-enrich?${qs}`, { method:'POST' });
+      startBatchPoll();
+    });
+
+    $('btn-cancel-enrich').addEventListener('click', async () => {
+      if (!confirm('Enrich 배치 취소?')) return;
+      await fetch(`${API}/advertisers/${ADV}/products/batch-enrich/cancel`, { method:'POST' });
+    });
+
+    // ── BATCH POLLING ──────────────────────────────────────────
+    async function pollBatch() {
+      try {
+        const [rs, re] = await Promise.all([
+          fetch(`${API}/advertisers/${ADV}/products/batch-fetch/status`).then(r => r.ok ? r.json() : null),
+          fetch(`${API}/advertisers/${ADV}/products/batch-enrich/status`).then(r => r.ok ? r.json() : null),
+        ]);
+        renderBatchProgress(rs, 'scrape');
+        renderBatchProgress(re, 'enrich');
+        const running = (rs?.status==='RUNNING') || (re?.status==='RUNNING');
+        if (running) loadProducts();
+        return running;
+      } catch { return false; }
+    }
+
+    function renderBatchProgress(s, type) {
+      if (!s || s.status === 'IDLE') return;
+      const prog = $(type + '-progress');
+      const controls = $(type + '-controls');
+      const badge = $(type === 'scrape' ? 'scrape-status-badge' : 'enrich-status-badge');
+      const isRunning = s.status === 'RUNNING';
+
+      const pct = s.total > 0 ? Math.round(s.done / s.total * 100) : 0;
+      const barCls = isRunning ? (type==='scrape' ? 'prog-blue' : 'prog-purple')
+        : s.status==='COMPLETED' ? 'prog-ok' : 'prog-err';
+
+      const clsMap = { RUNNING:'info', COMPLETED:'ok', FAILED:'err', CANCELLED:'warn' };
+      const lblMap = { RUNNING:'실행 중', COMPLETED:'완료', FAILED:'실패', CANCELLED:'취소됨', IDLE:'대기' };
+      badge.innerHTML = `<span class="badge ${clsMap[s.status]||'muted'}" style="font-size:11px;"><span class="dot"></span>${lblMap[s.status]||s.status}</span>`;
+
+      $(type + '-progress').style.display = 'block';
+      $(type + '-controls').style.opacity = isRunning ? '0.5' : '1';
+      $(type + '-controls').style.pointerEvents = isRunning ? 'none' : 'auto';
+
+      const elapsed = Math.floor(s.elapsedMs / 1000);
+      const eta = isRunning && s.done > 0 ? Math.round((s.total - s.done) * (s.elapsedMs / s.done) / 60000) : 0;
+      $(type==='scrape' ? 'sp-label' : 'ep-label').textContent =
+        `${s.done.toLocaleString()} / ${s.total.toLocaleString()} · 성공 ${s.ok} · 실패 ${s.fail}${s.currentCode ? ` · ${s.currentCode}` : ''}`;
+      $(type==='scrape' ? 'sp-nums' : 'ep-nums').textContent =
+        `${elapsed}초 경과${eta > 0 ? ` · 잔여 ~${eta}분` : ''}`;
+
+      const bar = $(type==='scrape' ? 'sp-bar' : 'ep-bar');
+      bar.className = 'prog-bar ' + barCls;
+      bar.style.width = pct + '%';
+
+      const errEl = $(type==='scrape' ? 'sp-err' : 'ep-err');
+      errEl.textContent = s.lastError ? `오류: ${s.lastError.slice(0,80)}` : '';
+    }
+
+    function startBatchPoll() {
+      if (batchTimer) return;
+      batchTimer = setInterval(async () => {
+        const running = await pollBatch();
+        if (!running) { clearInterval(batchTimer); batchTimer = null; loadProducts(); }
+      }, 2000);
+      pollBatch();
+    }
+
+    // ── COMMON IMAGES ──────────────────────────────────────────
+    async function loadBlockPatterns() {
+      try {
+        const r = await fetch(`${EMBEDDER}/enrich-llm/image-blocks/${ADV}`);
+        if (r.ok) blockPatterns = await r.json();
+        renderImages();
+      } catch {}
+    }
+
+    async function loadCommonImages(minProducts) {
+      const min = minProducts || +$('img-min').value || 3;
+      $('img-loading').style.display = 'block';
+      $('img-grid').innerHTML = '';
+      $('img-empty').style.display = 'none';
+      try {
+        const r = await fetch(`${EMBEDDER}/enrich-llm/common-images/${ADV}?min_products=${min}&limit=300`);
+        if (r.ok) commonImages = await r.json();
+        $('img-tab-cnt').textContent = commonImages ? `(${commonImages.length})` : '';
+        renderImages();
+      } catch(e) {
+        $('img-empty').textContent = `오류: ${e.message}`;
+        $('img-empty').style.display = 'block';
+      } finally {
+        $('img-loading').style.display = 'none';
+      }
+    }
+
+    function filteredImages() {
+      if (!commonImages) return [];
+      return commonImages.filter(i =>
+        imgFilter === 'all' ? true :
+        imgFilter === 'blocked' ? isBlocked(i.src_url) :
+        !isBlocked(i.src_url)
+      );
+    }
+
+    function renderImages() {
+      const list = filteredImages();
+      updateImgFilterCounts();
+      updateImgBulkBar();
+
+      const chkAll = $('img-chk-all');
+      if (chkAll) chkAll.checked = list.length > 0 && list.every(i => checkedSrcs.has(i.src_url));
+
+      if (!list.length) {
+        $('img-grid').innerHTML = '';
+        $('img-empty').style.display = 'block';
+        const msg = !commonImages ? '' :
+          imgFilter === 'blocked' ? '차단된 이미지 없음' :
+          imgFilter === 'unblocked' ? '미차단 이미지 없음' : '공통 이미지 없음';
+        $('img-empty').textContent = msg;
+        return;
+      }
+      $('img-empty').style.display = 'none';
+
+      $('img-grid').innerHTML = list.map(img => {
+        const blocked = isBlocked(img.src_url);
+        const checked = checkedSrcs.has(img.src_url);
+        return `<div class="img-thumb ${blocked ? 'blocked' : ''} ${checked ? 'ring-sel' : ''}"
+            style="${checked ? 'border-color:var(--warn);box-shadow:0 0 0 2px rgba(138,106,26,0.2);' : ''}"
+            data-src="${esc(img.src_url)}">
+          ${blocked ? `<div class="blocked-badge">차단됨</div>` : ''}
+          <div class="img-chk" onclick="event.stopPropagation();toggleImgCheck('${esc(img.src_url)}')">
+            <input type="checkbox" class="chk" ${checked ? 'checked' : ''} onclick="event.stopPropagation();">
+          </div>
+          <img src="${esc(img.src_url)}" alt="" loading="lazy" onerror="this.style.opacity='0.2'" onclick="openImgPopup('${esc(img.src_url)}',${img.product_count})">
+          <div class="img-meta">
+            <div class="img-cnt">${img.product_count}개 상품</div>
+            <div class="img-name">${esc(img.src_url.split('/').pop() || img.src_url)}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function updateImgFilterCounts() {
+      if (!commonImages) return;
+      document.querySelectorAll('#img-filter-tabs .ift').forEach(t => {
+        const f = t.dataset.f;
+        if (f === 'all') return;
+        const n = commonImages.filter(i => f === 'blocked' ? isBlocked(i.src_url) : !isBlocked(i.src_url)).length;
+        t.textContent = `${f === 'blocked' ? '차단됨' : '미차단'} (${n})`;
+      });
+      $('img-total-cnt').textContent = `총 ${commonImages.length}개 URL`;
+    }
+
+    function updateImgBulkBar() {
+      const bar = $('img-bulk-bar');
+      if (checkedSrcs.size > 0) {
+        bar.style.display = 'flex';
+        $('img-sel-cnt').textContent = `${checkedSrcs.size}개 선택됨`;
+      } else {
+        bar.style.display = 'none';
+      }
+    }
+
+    window.toggleImgCheck = function(src) {
+      if (checkedSrcs.has(src)) checkedSrcs.delete(src); else checkedSrcs.add(src);
+      renderImages();
+    };
+
+    $('img-chk-all').addEventListener('change', (e) => {
+      const list = filteredImages();
+      list.forEach(i => e.target.checked ? checkedSrcs.add(i.src_url) : checkedSrcs.delete(i.src_url));
+      renderImages();
+    });
+
+    $('btn-img-reload').addEventListener('click', () => { commonImages = null; loadCommonImages(); loadBlockPatterns(); });
+    $('btn-bulk-block').addEventListener('click', async () => {
+      const srcs = [...checkedSrcs];
+      if (!confirm(`${srcs.length}개 URL을 차단 패턴으로 등록합니다.`)) return;
+      await fetch(`${EMBEDDER}/enrich-llm/image-blocks/${ADV}/batch`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ patterns: srcs }),
+      });
+      checkedSrcs.clear();
+      await loadBlockPatterns();
+    });
+    $('btn-sel-clear').addEventListener('click', () => { checkedSrcs.clear(); renderImages(); });
+
+    // ── IMAGE POPUP ────────────────────────────────────────────
+    window.openImgPopup = async function(src, cnt) {
+      selectedCommonImg = { src_url: src, product_count: cnt };
+      $('img-popup-body').innerHTML = `
+        <span class="badge purple" style="margin-bottom:10px;">${cnt}개 상품에 공통 등장</span>
+        <img src="${esc(src)}" alt="" style="max-width:100%;max-height:260px;display:block;object-fit:contain;border-radius:6px;border:1px solid var(--line);background:var(--surface-2);margin:8px auto;">
+        <p style="font-size:11px;color:var(--text-3);word-break:break-all;margin-top:6px;">${esc(src)}</p>
+        <div id="popup-products" style="margin-top:12px;border:1px solid var(--line);border-radius:5px;overflow:hidden;">
+          <div style="padding:8px 12px;background:var(--surface-2);border-bottom:1px solid var(--line);font-size:11.5px;font-weight:700;color:var(--text-3);">사용 상품 (최대 5개)</div>
+          <div style="padding:10px;text-align:center;color:var(--text-4);"><span class="spin"></span></div>
+        </div>`;
+      renderImgPopupFoot(src);
+      $('img-popup').style.display = 'flex';
+      try {
+        const r = await fetch(`${EMBEDDER}/enrich-llm/image-products/${ADV}?src_url=${encodeURIComponent(src)}&limit=5`);
+        const products = r.ok ? await r.json() : [];
+        const rows = products.map(p =>
+          `<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line);font-size:12px;">
+            <span class="mono" style="font-size:10.5px;color:var(--text-4);">#${p.product_code}</span>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.product_name||'')}</span>
+            ${p.product_url ? `<a href="${esc(p.product_url)}" target="_blank" class="btn btn-sm">↗</a>` : ''}
+          </div>`
+        ).join('') || '<div style="padding:10px 12px;color:var(--text-4);font-size:12px;">상품 정보 없음</div>';
+        $('popup-products').innerHTML =
+          `<div style="padding:8px 12px;background:var(--surface-2);border-bottom:1px solid var(--line);font-size:11.5px;font-weight:700;color:var(--text-3);">사용 상품 (최대 5개)</div>${rows}`;
+      } catch {}
+    };
+    window.closeImgPopup = () => { $('img-popup').style.display = 'none'; selectedCommonImg = null; };
+
+    function renderImgPopupFoot(src) {
+      const blocked = isBlocked(src);
+      const entry   = getBlockEntry(src);
+      $('img-popup-foot').innerHTML = blocked
+        ? `<button class="btn" onclick="unblockImg(${entry.id})">🔓 차단 해제</button>`
+        : `<button class="btn btn-danger" onclick="blockImg('${esc(src)}')">🚫 차단 등록</button>`;
+    }
+
+    window.blockImg = async function(src) {
+      if (!confirm(`차단 패턴에 등록합니다.\n${src}`)) return;
+      await fetch(`${EMBEDDER}/enrich-llm/image-blocks/${ADV}`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ patterns: [src] }),
+      });
+      await loadBlockPatterns();
+      closeImgPopup();
+    };
+    window.unblockImg = async function(blockId) {
+      if (!confirm('차단을 해제합니다.')) return;
+      await fetch(`${EMBEDDER}/enrich-llm/image-blocks/${ADV}/${blockId}`, { method:'DELETE' });
+      await loadBlockPatterns();
+      closeImgPopup();
+    };
+
+    // ── RELOAD ─────────────────────────────────────────────────
+    $('btn-reload').addEventListener('click', loadProducts);
+
+    // ── BOOT ──────────────────────────────────────────────────
+    loadProducts();
+    startBatchPoll();
+  })();
+  </script>
+</body>
+</html>

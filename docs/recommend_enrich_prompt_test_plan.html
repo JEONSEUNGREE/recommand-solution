@@ -1,0 +1,1122 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>추천상품 Enrich 프롬프트/테스트 설계</title>
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --surface: #ffffff;
+      --surface-2: #f0f4f8;
+      --ink: #17202a;
+      --muted: #607080;
+      --line: #d9e1e8;
+      --accent: #147c74;
+      --accent-2: #be5a2a;
+      --danger: #b42318;
+      --warn: #9a6500;
+      --ok: #087443;
+      --code-bg: #111827;
+      --code-ink: #e5e7eb;
+      --shadow: 0 10px 28px rgba(23, 32, 42, 0.08);
+      --radius: 8px;
+      --font: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+      --mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font);
+      line-height: 1.6;
+      letter-spacing: 0;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 24px 18px;
+      background: #16212a;
+      color: #edf4f7;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .brand {
+      padding: 0 8px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      margin-bottom: 18px;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1.35;
+    }
+
+    .brand span {
+      display: block;
+      margin-top: 8px;
+      color: #b9c8d3;
+      font-size: 13px;
+    }
+
+    nav a {
+      display: block;
+      padding: 9px 10px;
+      border-radius: 6px;
+      color: #dce8ee;
+      font-size: 14px;
+    }
+
+    nav a:hover,
+    nav a:focus {
+      background: rgba(255, 255, 255, 0.1);
+      outline: none;
+    }
+
+    main {
+      min-width: 0;
+      padding: 36px 42px 80px;
+    }
+
+    .hero {
+      max-width: 1120px;
+      margin: 0 auto 22px;
+      padding: 30px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    h1 {
+      margin: 10px 0 12px;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 860px;
+      margin: 0;
+      color: #405160;
+      font-size: 17px;
+    }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 22px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: #334250;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    section {
+      max-width: 1120px;
+      margin: 18px auto;
+      padding: 26px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: 0 6px 18px rgba(23, 32, 42, 0.04);
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 24px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 22px 0 10px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    ul,
+    ol {
+      margin: 10px 0 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin: 7px 0;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .grid.cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid.cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfcfd;
+      padding: 16px;
+    }
+
+    .card h3 {
+      margin-top: 0;
+    }
+
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: #eef8f6;
+      padding: 14px 16px;
+      border-radius: 6px;
+      color: #1f4e49;
+    }
+
+    .warning {
+      border-left-color: var(--warn);
+      background: #fff8e8;
+      color: #5d3b00;
+    }
+
+    .danger {
+      border-left-color: var(--danger);
+      background: #fff0ee;
+      color: #6f1d16;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(130px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .step {
+      min-height: 118px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfcfd;
+    }
+
+    .step b {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--accent);
+      font-size: 14px;
+    }
+
+    .step span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .matrix {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .matrix th,
+    .matrix td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    .matrix th {
+      background: #eef3f7;
+      color: #24313d;
+      font-weight: 800;
+    }
+
+    .matrix tr:last-child td {
+      border-bottom: 0;
+    }
+
+    details {
+      margin: 12px 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfcfd;
+    }
+
+    summary {
+      cursor: pointer;
+      padding: 14px 16px;
+      font-weight: 800;
+      color: #21303c;
+    }
+
+    details[open] summary {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .details-body {
+      padding: 16px;
+    }
+
+    .code-wrap {
+      position: relative;
+      margin: 12px 0 2px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--code-bg);
+    }
+
+    pre {
+      margin: 0;
+      padding: 18px;
+      overflow-x: auto;
+      color: var(--code-ink);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre;
+    }
+
+    code {
+      font-family: var(--mono);
+    }
+
+    .copy {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      min-width: 62px;
+      height: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .copy:hover,
+    .copy:focus {
+      background: rgba(255, 255, 255, 0.18);
+      outline: none;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-right: 6px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      vertical-align: 1px;
+    }
+
+    .badge.ok {
+      background: #e8f6ef;
+      color: var(--ok);
+    }
+
+    .badge.warn {
+      background: #fff3d8;
+      color: var(--warn);
+    }
+
+    .badge.danger {
+      background: #ffe4e0;
+      color: var(--danger);
+    }
+
+    .footer {
+      max-width: 1120px;
+      margin: 24px auto 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        position: relative;
+        height: auto;
+      }
+
+      nav {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 4px;
+      }
+
+      main {
+        padding: 24px 16px 56px;
+      }
+
+      .hero,
+      section {
+        padding: 20px;
+      }
+
+      .grid.cols-2,
+      .grid.cols-3,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside>
+      <div class="brand">
+        <strong>추천상품 Enrich<br>프롬프트/테스트 설계</strong>
+        <span>Claude 이미지 감사 결과를 기반으로 본상품 데이터만 안전하게 enrich하는 기준</span>
+      </div>
+      <nav aria-label="문서 목차">
+        <a href="#summary">요약</a>
+        <a href="#principles">핵심 원칙</a>
+        <a href="#flow">권장 흐름</a>
+        <a href="#risks">위험 케이스</a>
+        <a href="#audit-prompt">Claude 이미지 감사 프롬프트</a>
+        <a href="#enrich-prompt">최종 Enrich 요청 프롬프트</a>
+        <a href="#payload">요청 Payload</a>
+        <a href="#tests">자동 테스트 설계</a>
+        <a href="#fixtures">Fixture 묶음</a>
+        <a href="#ops">운영 판정 기준</a>
+        <a href="#code-notes">코드 반영 메모</a>
+      </nav>
+    </aside>
+
+    <main>
+      <header class="hero" id="summary">
+        <div class="eyebrow">작성일 2026-05-19</div>
+        <h1>추천 검색을 오염시키지 않는 Enrich 설계</h1>
+        <p class="lead">
+          상세 이미지에 여러 인포그래픽, 다른 상품 광고, 추천 상품 카드, 배송/결제 안내가 섞여도
+          본 상품에 관한 사실만 `product_enriched`와 `product_descriptions`에 들어가도록 만드는 프롬프트와 테스트 기준입니다.
+        </p>
+        <div class="meta-row">
+          <span class="pill">본상품/다른상품 분리</span>
+          <span class="pill">Claude 이미지 감사</span>
+          <span class="pill">증거 기반 Enrich</span>
+          <span class="pill">검색 품질 테스트</span>
+        </div>
+      </header>
+
+      <section id="principles">
+        <h2>1. 핵심 원칙</h2>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>본상품만 저장</h3>
+            <ul>
+              <li>`보이는 것`과 `판매 구성`은 다르다.</li>
+              <li>다른 상품, 공통 안내, 브랜드 광고는 `ignored_observations`, `related_products`, `image_audit`에만 남긴다.</li>
+              <li>불확실한 값은 채우지 않는다. 누락보다 환각이 더 위험하다.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>증거 우선순위</h3>
+            <ol>
+              <li>상품 메타, 상품명, 가격 DB</li>
+              <li>상세 본문 텍스트</li>
+              <li>본 상품 이미지 OCR</li>
+              <li>이미지 추론</li>
+            </ol>
+          </div>
+        </div>
+        <div class="callout danger" style="margin-top: 14px;">
+          `desc_situation`, `desc_material`, `desc_style`, `desc_persona`는 임베딩 입력입니다.
+          광고 문구, 근거 없는 사회적 증명, 다른 상품 정보가 들어가면 검색 결과 전체가 오염됩니다.
+        </div>
+      </section>
+
+      <section id="flow">
+        <h2>2. 권장 흐름</h2>
+        <div class="flow">
+          <div class="step">
+            <b>1. HTML/URL 사전 제거</b>
+            <span>recommend, related, banner, delivery, payment 등은 낮은 우선순위로 보내고 사유를 남긴다.</span>
+          </div>
+          <div class="step">
+            <b>2. Claude 이미지 감사</b>
+            <span>이미지별 `decision`, `product_scope`, `usable_facts`, `rejected_facts`를 받는다.</span>
+          </div>
+          <div class="step">
+            <b>3. 최종 Enrich</b>
+            <span>`use|use_limited`이며 본상품 scope인 증거만 속성으로 사용한다.</span>
+          </div>
+          <div class="step">
+            <b>4. 검증</b>
+            <span>LLM 검증과 deterministic 교차검사를 같이 둔다.</span>
+          </div>
+          <div class="step">
+            <b>5. 임베딩</b>
+            <span>`validated` 이후의 4개 설명문만 임베딩한다.</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="risks">
+        <h2>3. 반드시 막아야 하는 케이스</h2>
+        <div class="grid cols-3">
+          <div class="card">
+            <h3>상품 정체성</h3>
+            <ul>
+              <li>귀걸이 상품 착용컷에 목걸이/반지/팔찌가 같이 보이는 경우</li>
+              <li>SET 상품과 모델 코디 상품이 섞이는 경우</li>
+              <li>호환 상품, 리필, 케이스, 본체를 본 상품으로 오인하는 경우</li>
+              <li>사은품/패키지/쇼핑백을 판매 구성으로 오인하는 경우</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>이미지 오염</h3>
+            <ul>
+              <li>여러 인포그래픽 중 일부가 다른 상품을 설명하는 경우</li>
+              <li>하단 추천상품 카드, 같이 사면 좋은 상품, 베스트 랭킹 이미지</li>
+              <li>배송/교환/반품/고객센터 안내 이미지</li>
+              <li>브랜드 룩북/캠페인 배너가 무드로 과하게 들어가는 경우</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>속성 오염</h3>
+            <ul>
+              <li>`14K 골드`, `14K 도금`, `골드필드`, `925 실버` 혼동</li>
+              <li>`큐빅`, `다이아몬드`, `모이사나이트`, `진주`, `인공진주` 과장 변환</li>
+              <li>근거 없는 `알러지프리`, `백화점 정품`, `명품` 생성</li>
+              <li>모델 성별을 구매자 성별 `target_gender`로 오인</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>검색 쿼리에서 잘 새는 부분</h3>
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th>쿼리 유형</th>
+              <th>위험</th>
+              <th>기대 동작</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>남자연예인 착용 귀걸이</td>
+              <td>남성용 귀걸이로 해석</td>
+              <td>연예인 성별은 `target_gender`가 아니다.</td>
+            </tr>
+            <tr>
+              <td>추천상품 말고 본상품만</td>
+              <td>하단 추천상품이 검색 결과에 섞임</td>
+              <td>related/ignored 상품을 제외한다.</td>
+            </tr>
+            <tr>
+              <td>세트 사진에 나온 반지도 같이 있는 상품</td>
+              <td>사진 속 코디 상품을 구성품으로 오인</td>
+              <td>명시된 구성품과 코디 노출을 분리한다.</td>
+            </tr>
+            <tr>
+              <td>14K 도금 말고 14K 골드</td>
+              <td>소재 문구를 비슷한 것으로 매칭</td>
+              <td>must-match 소재로 보고 근거 없는 결과는 탈락시킨다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="audit-prompt">
+        <h2>4. Claude 이미지 감사 프롬프트</h2>
+        <p>
+          기존 `call_claude_filter`처럼 sha1 keep 배열만 받으면, 이미지 하나에 여러 상품이 들어간 상황을 다루기 어렵습니다.
+          아래처럼 이미지별 사용 가능 사실과 제외 사실을 분리해서 받아야 합니다.
+        </p>
+
+        <details open>
+          <summary>System Prompt</summary>
+          <div class="details-body">
+            <div class="code-wrap">
+              <button class="copy" type="button">복사</button>
+              <pre><code>당신은 한국 쇼핑몰 상품 상세 이미지 QA 담당입니다.
+
+목표:
+- 각 이미지가 실제 판매 중인 본 상품 정보를 담는지 판정한다.
+- 다른 상품, 추천 상품, 광고, 공통 안내, 배송/교환 안내, 리뷰, 브랜드 캠페인 정보를 본상품 정보와 분리한다.
+- 본 상품 속성 추출에 써도 되는 사실과 쓰면 안 되는 사실을 따로 기록한다.
+
+중요 규칙:
+1. 페이지에 수집된 이미지라고 해서 모두 본 상품 이미지가 아니다.
+2. 하나의 이미지 안에 본 상품과 다른 상품이 같이 있으면, 본 상품으로 확실한 사실만 usable_facts에 넣고 나머지는 rejected_facts에 넣는다.
+3. 모델이 착용한 다른 주얼리/의류/소품은 본 상품 구성품으로 보지 않는다.
+4. SET/패키지 상품은 텍스트에 구성품이 명시된 경우에만 set_component로 본다.
+5. 배송, 결제, 반품, 고객센터, 이벤트, 쿠폰, 추천상품, 베스트상품, 룩북, 브랜드 광고는 본 상품 속성에 사용하지 않는다.
+6. 불확실하면 decision=review 또는 ignore로 둔다. 추측하지 않는다.
+7. 출력은 JSON 한 덩어리만. 코드펜스와 설명 문장 금지.</code></pre>
+            </div>
+          </div>
+        </details>
+
+        <details>
+          <summary>User Prompt + 출력 스키마</summary>
+          <div class="details-body">
+            <div class="code-wrap">
+              <button class="copy" type="button">복사</button>
+              <pre><code>다음 상품 페이지의 이미지들을 감사하라.
+
+[상품 메타]
+- rv_product_id: {rv_product_id}
+- 상품명: {product_name}
+- 상품코드: {product_code}
+- URL: {url}
+- 가격: {price}
+
+[페이지 텍스트 요약]
+{page_text_or_summary}
+
+[이미지 파일 경로]
+{image_path_list}
+
+[출력 JSON 스키마]
+{
+  "product_identity": {
+    "main_product_name": "string",
+    "main_category_hint": "string|null",
+    "set_or_single": "single|set|bundle|unknown",
+    "confidence": 0.0
+  },
+  "images": [
+    {
+      "sha1": "파일명에서 확장자 제외",
+      "image_role": "main|lifestyle|detail|infographic|size_chart|color_options|spec_table|care_guide|certification|packaging|related_product|ad_banner|store_policy|review|noise|unknown",
+      "product_scope": "main_product|set_component|option_variant|model_styling_item|related_product|compatible_product|brand_generic|store_policy|unknown",
+      "decision": "use|use_limited|ignore|review",
+      "is_main_product": true,
+      "usable_facts": [
+        {
+          "fact": "본 상품 속성에 써도 되는 사실",
+          "field_hint": "category|material|stone|color|size|component|option|style|situation|care|certification|other",
+          "confidence": 0.0
+        }
+      ],
+      "rejected_facts": [
+        {
+          "fact": "보이지만 본 상품 속성에 쓰면 안 되는 사실",
+          "reason": "다른 상품|추천 상품|모델 코디 소품|브랜드 공통|배송 안내|광고|불확실|기타"
+        }
+      ],
+      "visible_other_products": [
+        {
+          "name_or_type": "string",
+          "relation": "worn_together|recommended|compatible|same_line|unknown"
+        }
+      ],
+      "ocr_text_summary": "이미지 내 핵심 텍스트 요약. 전체 OCR 장문 복붙 금지",
+      "rejection_reason": "decision이 ignore/review이면 필수",
+      "confidence": 0.0
+    }
+  ],
+  "global_warnings": [
+    "본상품/다른상품 구분에서 주의할 점"
+  ]
+}</code></pre>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section id="enrich-prompt">
+        <h2>5. Claude 결과 기반 최종 Enrich 요청 프롬프트</h2>
+        <div class="callout">
+          핵심은 Claude output을 다시 무비판적으로 믿지 않는 것입니다.
+          최종 LLM은 `decision=use|use_limited`이고 `product_scope=main_product|set_component|option_variant`인 증거만 사용합니다.
+        </div>
+
+        <details open>
+          <summary>System Prompt</summary>
+          <div class="details-body">
+            <div class="code-wrap">
+              <button class="copy" type="button">복사</button>
+              <pre><code>당신은 추천 검색용 상품 데이터 Enrich 엔진입니다.
+
+입력:
+- 상품 메타: DB/API에서 온 상품명, 가격, 코드, URL
+- 페이지 텍스트: HTML에서 추출한 상품 상세 텍스트
+- Claude 이미지 감사 결과: 이미지별 사용 가능 사실, 제외해야 할 사실, 다른 상품 정보
+
+목표:
+- 본 상품에 관한 구조화 데이터만 JSON으로 만든다.
+- 추천 검색과 임베딩에 들어갈 설명문 4종을 만든다.
+- 다른 상품, 광고, 공통 안내, 추천상품, 모델 코디 소품은 본 상품 속성에 절대 섞지 않는다.
+
+증거 사용 규칙:
+1. 본 상품 속성에는 아래 증거만 사용할 수 있다.
+   - page_text에서 본 상품 영역으로 확인되는 텍스트
+   - image_audit.images[].decision이 use 또는 use_limited
+   - product_scope가 main_product, set_component, option_variant 중 하나
+   - usable_facts에 들어간 사실
+2. 아래 정보는 본 상품 속성, tags, descriptions에 절대 사용하지 않는다.
+   - image_audit.images[].rejected_facts
+   - product_scope가 related_product, compatible_product, model_styling_item, brand_generic, store_policy, unknown인 정보
+   - 배송/교환/반품/결제/쿠폰/이벤트/추천상품/베스트상품/리뷰/브랜드 광고
+3. 상품 메타와 이미지 OCR이 충돌하면 상품 메타/본문을 우선하고 conflict를 기록한다.
+4. 연예인/셀럽/인플루언서 착용, 방송 협찬, 베스트셀러, 명품, 프리미엄, 백화점 정품, 니켈프리, 알러지프리 같은 주장은 원문 근거가 명시적일 때만 쓴다.
+5. 모델 착용자 성별은 target_gender가 아니다. target_gender는 구매자/착용 대상 성별이 명시된 경우에만 채운다.
+6. SET 상품은 구성품이 텍스트나 감사 결과에서 명시된 경우에만 set_components에 넣는다. 같이 보이는 상품은 related_products로 보낸다.
+7. 불확실하면 null, 빈 배열, needs_review=true로 둔다. 추측 금지.
+
+설명문 규칙:
+- descriptions는 임베딩 입력이다. 광고 카피가 아니라 사실 묘사여야 한다.
+- 각 설명문은 30~100자, 1~2문장.
+- situation/material/style/persona 네 관점은 서로 겹치지 않게 쓴다.
+- ignored/rejected 정보에 나온 단어를 descriptions에 넣지 않는다.
+
+태그 규칙:
+- tags는 situation, mood, feature 세 종류만 사용한다.
+- 고유명사/소재/기능 태그는 근거가 있을 때만 넣는다.
+- "스타", "연예인 스타일", "인기", "명품", "완벽", "필수템" 같은 근거 약한 태그 금지.
+
+출력:
+- JSON 한 덩어리만 출력한다.
+- 코드펜스, 머리말, 설명 문장 금지.
+- 모든 주요 필드에는 evidence_ids 또는 evidence_notes를 남긴다.</code></pre>
+            </div>
+          </div>
+        </details>
+
+        <details>
+          <summary>User Prompt + 출력 스키마</summary>
+          <div class="details-body">
+            <div class="code-wrap">
+              <button class="copy" type="button">복사</button>
+              <pre><code>다음 입력을 기반으로 최종 상품 enrich JSON을 작성하라.
+
+[상품 메타]
+{product_meta_json}
+
+[페이지 텍스트]
+{page_text}
+
+[Claude 이미지 감사 결과]
+{claude_image_audit_json}
+
+[기존 DB 스키마 힌트]
+- product_enriched: category, brand, brand_tier, price_tier, target_gender, target_age_min, target_age_max, origin_country, manufacturer, category_attributes, tags, desc_situation, desc_material, desc_style, desc_persona, compatible_products, set_components, image_types
+- product_descriptions: situation/material/style/persona 4개 설명문만 임베딩
+
+[출력 JSON 스키마]
+{
+  "acceptance": {
+    "needs_review": false,
+    "review_reasons": [],
+    "confidence": 0.0
+  },
+  "product": {
+    "name": "정제된 상품명",
+    "price": null,
+    "sale_price": null,
+    "currency": "KRW",
+    "options": {}
+  },
+  "category": {
+    "name": "leaf 또는 path",
+    "path": "string|null",
+    "confidence": 0.0
+  },
+  "common_attributes": {
+    "brand": null,
+    "brand_tier": null,
+    "price_tier": null,
+    "target_gender": null,
+    "target_age_min": null,
+    "target_age_max": null,
+    "origin_country": null,
+    "manufacturer": null,
+    "is_premium": null,
+    "is_best_seller": null
+  },
+  "category_attributes": {},
+  "set_components": [
+    {
+      "name": "string",
+      "type": "string",
+      "attributes": {},
+      "evidence_ids": []
+    }
+  ],
+  "related_products": [
+    {
+      "relation_type": "compatible_with|same_line_variant|goes_well_with|shown_in_image_but_not_this|recommended_product|model_styling_item",
+      "target_name": "string",
+      "evidence_ids": []
+    }
+  ],
+  "tags": [
+    {
+      "tag": "string",
+      "tag_category": "situation|mood|feature",
+      "confidence": 0.0,
+      "evidence_ids": []
+    }
+  ],
+  "descriptions": [
+    {
+      "perspective": "situation",
+      "description": "string",
+      "evidence_ids": []
+    },
+    {
+      "perspective": "material",
+      "description": "string",
+      "evidence_ids": []
+    },
+    {
+      "perspective": "style",
+      "description": "string",
+      "evidence_ids": []
+    },
+    {
+      "perspective": "persona",
+      "description": "string",
+      "evidence_ids": []
+    }
+  ],
+  "images": [
+    {
+      "sha1": "string",
+      "image_type": "main|lifestyle|detail|infographic|size_chart|color_options|spec_table|care_guide|certification|packaging|related_product|noise|other",
+      "is_main_product": true,
+      "used_for_attributes": true,
+      "rejection_reason": ""
+    }
+  ],
+  "ignored_observations": [
+    {
+      "sha1": "string",
+      "observed": "string",
+      "reason": "string"
+    }
+  ],
+  "field_evidence": {
+    "category": [],
+    "brand": [],
+    "target_gender": [],
+    "category_attributes": {},
+    "descriptions": {}
+  },
+  "quality_flags": [
+    {
+      "flag": "possible_image_contamination|conflicting_evidence|weak_material_evidence|marketing_claim_removed|needs_price_check|needs_manual_review",
+      "detail": "string"
+    }
+  ],
+  "trap_detection": {
+    "is_trap": false,
+    "trap_type": "",
+    "explanation": "",
+    "is_set_or_combo": false
+  }
+}
+
+[최종 검수]
+출력 전에 스스로 확인하라.
+1. rejected_facts에 있던 정보가 tags/descriptions/category_attributes에 들어갔는가? 들어갔다면 제거.
+2. related_product/model_styling_item/store_policy 정보를 본상품 속성에 썼는가? 썼다면 제거.
+3. 근거 없는 연예인/인기/명품/프리미엄/알러지/정품 표현이 있는가? 있으면 제거.
+4. SET 구성품과 같이 보이는 코디 상품을 섞었는가? 섞었다면 분리.
+5. evidence가 없는 핵심 속성이 있는가? 있으면 null 또는 needs_review.</code></pre>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section id="payload">
+        <h2>6. 요청 Payload 형태</h2>
+        <p>
+          우리 LLM에 넘길 때는 `claude_output`을 통째로 넣되, 최종 LLM이 사용할 수 있는 증거 범위를 프롬프트에서 제한합니다.
+        </p>
+        <div class="code-wrap">
+          <button class="copy" type="button">복사</button>
+          <pre><code>{
+  "product_meta": {
+    "rv_product_id": 123,
+    "advertiser_id": 7,
+    "product_code": "EA1234",
+    "product_name": "14K 핑크골드 귀걸이 EA1234",
+    "price": 69000,
+    "url": "https://example.com/product/EA1234"
+  },
+  "page_text": {
+    "title": "14K 핑크골드 귀걸이 EA1234",
+    "body_text": "상세 본문에서 추출한 텍스트...",
+    "text_source": "extracted.json"
+  },
+  "claude_output": {
+    "product_identity": {
+      "main_product_name": "14K 핑크골드 귀걸이",
+      "set_or_single": "single",
+      "confidence": 0.91
+    },
+    "images": [
+      {
+        "sha1": "aaa111",
+        "decision": "use",
+        "product_scope": "main_product",
+        "image_role": "main",
+        "usable_facts": [
+          {
+            "fact": "핑크골드 톤의 귀걸이",
+            "field_hint": "color",
+            "confidence": 0.9
+          }
+        ],
+        "rejected_facts": []
+      },
+      {
+        "sha1": "bbb222",
+        "decision": "ignore",
+        "product_scope": "related_product",
+        "image_role": "related_product",
+        "usable_facts": [],
+        "rejected_facts": [
+          {
+            "fact": "추천 목걸이 NA9999 39,000원",
+            "reason": "추천 상품"
+          }
+        ]
+      }
+    ],
+    "global_warnings": [
+      "하단 추천상품 카드가 포함됨"
+    ]
+  }
+}</code></pre>
+        </div>
+      </section>
+
+      <section id="tests">
+        <h2>7. 자동 테스트 설계</h2>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>Enrich 산출물 테스트</h3>
+            <ul>
+              <li>모든 입력 이미지 sha1이 `images[]`에 한 번 이상 등장해야 한다.</li>
+              <li>`used_for_attributes=false` 이미지의 OCR/관찰 단어가 `tags`, `descriptions`, `category_attributes`에 들어가면 실패.</li>
+              <li>`related_products.target_name`이 본상품 `product.name` 또는 `set_components`로 들어가면 실패.</li>
+              <li>`target_gender`는 구매자/착용 대상 근거가 있을 때만 값이 있어야 한다.</li>
+              <li>`acceptance.needs_review=true`인 상품은 임베딩 배치에서 제외한다.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>검색 파서 테스트</h3>
+            <ul>
+              <li>특정 연예인 이름이 들어간 쿼리는 `keyword_filters`에 이름이 들어가야 한다.</li>
+              <li>`남자연예인`, `여자연예인`은 `target_gender`로 가지 않아야 한다.</li>
+              <li>`여자친구 선물`, `남자친구 선물`은 구매자 성별로 강제하지 않는다.</li>
+              <li>명시 소재 `14K`, `925`, `니켈프리`, `알러지프리`는 근거가 없으면 상위 노출 실패.</li>
+              <li>must-match 쿼리에서 필터 relax가 발생하면 실패 후보로 기록한다.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="fixtures">
+        <h2>8. 테스트 케이스 묶음</h2>
+        <details open>
+          <summary>이미지 오염 Fixture</summary>
+          <div class="details-body">
+            <table class="matrix">
+              <thead>
+                <tr>
+                  <th>케이스</th>
+                  <th>기대 결과</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>본상품 귀걸이 + 모델 착용 목걸이</td>
+                  <td>목걸이는 `model_styling_item`, 귀걸이만 본상품.</td>
+                </tr>
+                <tr>
+                  <td>SET 상품 귀걸이+목걸이 + 추천 반지 카드</td>
+                  <td>귀걸이/목걸이는 `set_components`, 반지는 `related_products`.</td>
+                </tr>
+                <tr>
+                  <td>상세 인포그래픽 5장 중 2장이 다른 상품</td>
+                  <td>다른 상품 OCR은 `ignored_observations`, 설명문 미사용.</td>
+                </tr>
+                <tr>
+                  <td>배송/교환/반품 안내 이미지</td>
+                  <td>`image_type=store_policy|noise`, `used_for_attributes=false`.</td>
+                </tr>
+                <tr>
+                  <td>브랜드 캠페인 배너에 BEST, 연예인 PICK 표시</td>
+                  <td>본상품 근거 아니면 `is_best_seller=null`, 연예인 태그 없음.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+
+        <details>
+          <summary>속성 Fixture</summary>
+          <div class="details-body">
+            <ul>
+              <li>`14K 골드` vs `14K 도금` vs `골드필드` - 서로 섞지 않음.</li>
+              <li>`큐빅`을 다이아몬드처럼 표현하는 광고 문구 - stone=큐빅, diamond 태그 없음.</li>
+              <li>`인공진주`와 `진주` 혼재 - 원문 그대로, 불확실하면 review.</li>
+              <li>`니켈프리/알러지프리`가 공통 문구 - 본상품 근거 아니면 feature 태그 금지.</li>
+              <li>`백화점 정품`, `명품`, `프리미엄` 원문 근거 없음 - 설명문/태그 생성 금지.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details>
+          <summary>검색 쿼리 Fixture</summary>
+          <div class="details-body">
+            <div class="code-wrap">
+              <button class="copy" type="button">복사</button>
+              <pre><code>1. 추천상품 말고 본상품만 보여줘
+2. 모델이 같이 착용한 목걸이는 빼고 귀걸이만
+3. 세트 사진에 보이는 반지도 포함된 상품
+4. 귀걸이 단품인데 목걸이랑 같이 코디된 사진은 제외
+5. 남자연예인이 착용한 여성용 말고 그냥 착용 귀걸이
+6. 여자친구 선물용이지만 남성용은 제외
+7. 14K 도금 말고 14K 골드 귀걸이
+8. 큐빅 말고 다이아몬드 귀걸이
+9. 인공진주 말고 천연 진주 반지
+10. 알러지프리라고 확인된 귀걸이
+11. 백화점 정품이라고 명시된 주얼리
+12. 무료배송 문구 말고 실제 무료배송 상품
+13. 당일출고 가능한 상품만
+14. 하단 추천상품에 나온 목걸이 말고 현재 상품
+15. 상세 이미지에 여러 상품 있는 것 중 본상품만</code></pre>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section id="ops">
+        <h2>9. 운영 판정 기준</h2>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>임베딩 제외</h3>
+            <ul>
+              <li><span class="badge danger">중단</span>`acceptance.confidence < 0.75`</li>
+              <li><span class="badge danger">중단</span>`needs_review=true`</li>
+              <li><span class="badge warn">검수</span>`possible_image_contamination`</li>
+              <li><span class="badge warn">검수</span>`conflicting_evidence`</li>
+              <li><span class="badge warn">검수</span>`needs_manual_review`</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>배치 로그</h3>
+            <ul>
+              <li>image_count, used_image_count, ignored_image_count</li>
+              <li>ignored_observations count</li>
+              <li>related_products count</li>
+              <li>quality_flags</li>
+              <li>desc_* 금지어 검출 결과</li>
+              <li>검색 시 `keyword_filter_relaxed`, `pe_filter_relaxed`</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="code-notes">
+        <h2>10. 코드 반영 메모</h2>
+        <div class="callout warning">
+          현재 `call_claude_filter`는 실패하면 전체 이미지를 fallback으로 사용합니다.
+          운영 품질 관점에서는 이 fallback이 오염 원인이 될 수 있습니다.
+        </div>
+        <ul>
+          <li>다음 개선은 단순 keep-list 대신 `image_audit` JSON을 반환하는 방식이 적합하다.</li>
+          <li>DB 컬럼을 당장 늘리지 않아도 `raw_response`에 `field_evidence`, `quality_flags`, `image_audit`를 넣을 수 있다.</li>
+          <li>운영 검수가 필요해지면 별도 컬럼으로 승격한다.</li>
+          <li>`validate_claude.py`에는 `ignored_observations`와 `desc_*`/`tags` 교차 검사를 deterministic validator로 추가하는 것이 좋다.</li>
+        </ul>
+      </section>
+
+      <p class="footer">
+        원본 문서: docs/recommend_enrich_prompt_test_plan.md
+      </p>
+    </main>
+  </div>
+
+  <script>
+    document.querySelectorAll(".copy").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const code = button.parentElement.querySelector("code").innerText;
+        try {
+          await navigator.clipboard.writeText(code);
+          const previous = button.textContent;
+          button.textContent = "복사됨";
+          window.setTimeout(() => {
+            button.textContent = previous;
+          }, 1200);
+        } catch (error) {
+          button.textContent = "실패";
+          window.setTimeout(() => {
+            button.textContent = "복사";
+          }, 1200);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIRA · 추천 채팅</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .chat-layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 14px;
+    height: calc(100vh - 52px - 28px - 90px); /* topbar + page padding + page-head */
+    min-height: 480px;
+  }
+  .chat-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .chat-card .ch {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center;
+    font-size: 13px;
+  }
+  .chat-card .ch .ck {
+    width: 18px; height: 18px;
+    border-radius: 4px;
+    background: var(--primary-soft);
+    color: var(--primary);
+    display: grid; place-items: center;
+    font-size: 11px; font-weight: 700;
+    margin-right: 8px;
+  }
+  .chat-card .ch .title { font-weight: 600; }
+  .chat-card .ch .sub {
+    margin-left: 10px;
+    color: var(--text-4);
+    font-family: ui-monospace, monospace;
+    font-size: 11.5px;
+  }
+  .chat-card .ch .right {
+    margin-left: auto;
+    display: flex; gap: 6px; align-items: center;
+  }
+
+  .msgs {
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex; flex-direction: column;
+    gap: 18px;
+    min-height: 0;
+  }
+  .msgs::-webkit-scrollbar { width: 8px; }
+  .msgs::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+
+  .day-divider {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--text-4);
+    font-size: 11px;
+    font-family: ui-monospace, monospace;
+    margin: 2px 0 8px;
+  }
+  .day-divider::before, .day-divider::after {
+    content: ""; flex: 1; height: 1px; background: var(--line);
+  }
+
+  .msg { display: flex; gap: 10px; max-width: 78%; align-items: flex-start; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .msg .av {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    font-size: 11px; font-weight: 700;
+    color: var(--text-3);
+  }
+  .msg.user .av { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .msg.ai   .av { background: var(--purple-soft); color: var(--purple); border-color: #E0D5FA; }
+
+  .msg .body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .msg.user .body { align-items: flex-end; }
+
+  .bubble {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    line-height: 1.6;
+    word-break: break-word;
+  }
+  .msg.user .bubble {
+    background: var(--primary);
+    color: #fff;
+    border-bottom-right-radius: 2px;
+  }
+  .msg.ai .bubble {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-bottom-left-radius: 2px;
+  }
+
+  .meta {
+    font-size: 11px;
+    font-family: ui-monospace, monospace;
+    color: var(--text-4);
+    display: flex; gap: 6px;
+  }
+  .meta b { color: var(--text-3); font-weight: 500; }
+
+  .reco-cards { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; width: 100%; min-width: 320px; }
+  .reco-card {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.1s;
+    text-decoration: none;
+  }
+  .reco-card:hover { border-color: var(--primary); background: var(--primary-soft); }
+  .reco-thumb {
+    width: 44px; height: 44px;
+    border-radius: 5px;
+    background: repeating-linear-gradient(135deg, var(--surface-2) 0 8px, var(--surface-3) 8px 16px);
+    border: 1px solid var(--line);
+    flex-shrink: 0;
+    display: grid; place-items: center;
+    color: var(--text-4);
+    font-family: ui-monospace, monospace; font-size: 9px;
+    overflow: hidden;
+  }
+  .reco-thumb img { width: 44px; height: 44px; object-fit: cover; }
+  .reco-info { flex: 1; min-width: 0; }
+  .reco-info .rn { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .reco-info .rc { font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
+  .reco-right { text-align: right; flex-shrink: 0; }
+  .reco-right .rp {
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+    color: var(--text); font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .reco-right .rs {
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--ok);
+    margin-top: 2px;
+  }
+
+  /* INPUT AREA */
+  .input-wrap {
+    padding: 12px 16px 14px;
+    border-top: 1px solid var(--line);
+    background: #fff;
+  }
+  .suggest { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .suggest-chip {
+    background: #fff;
+    border: 1px solid var(--line);
+    color: var(--text-2);
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .suggest-chip:hover { border-color: var(--primary); color: var(--primary); }
+
+  .input-row {
+    display: flex; gap: 8px; align-items: flex-end;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 6px 6px 12px;
+  }
+  .input-row:focus-within { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,0.12); }
+  .input-row textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    resize: none;
+    font-size: 13.5px;
+    color: var(--text);
+    min-height: 28px;
+    max-height: 120px;
+    line-height: 1.5;
+    padding: 6px 0;
+    outline: none;
+  }
+  .input-row textarea::placeholder { color: var(--text-4); }
+  .send-btn {
+    width: 32px; height: 32px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 5px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    transition: background var(--dur) var(--ease);
+  }
+  .send-btn:hover { background: var(--primary-h); }
+  .send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .send-btn svg { width: 14px; height: 14px; stroke-width: 2; fill: none; stroke: currentColor; }
+
+  /* SIDE — recent search logs */
+  .recent-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    display: flex; flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .recent-card .ch {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .recent-card .ch .right { margin-left: auto; }
+  .recent-list {
+    overflow-y: auto;
+    min-height: 0;
+    flex: 1;
+  }
+  .recent-item {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .recent-item:hover { background: var(--surface-2); }
+  .recent-item .rh {
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 3px;
+  }
+  .recent-item .rq {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+  .recent-item .t {
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--text-4);
+    flex-shrink: 0;
+  }
+  .recent-item .mt {
+    margin-top: 3px;
+    font-size: 11px;
+    display: flex; gap: 6px; align-items: center;
+  }
+  .recent-foot {
+    padding: 10px 14px;
+    border-top: 1px solid var(--line);
+    display: flex; gap: 6px;
+  }
+
+  /* loading spinner inline */
+  .spin-inline {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--line);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body data-route="chat">
+  <div class="shell">
+    <div id="side-mount"></div>
+    <main class="main">
+      <div id="top-mount"></div>
+
+      <div class="page" style="padding:14px 22px 14px;">
+
+        <div class="page-head" style="margin-bottom:12px;">
+          <div>
+            <h1>추천 채팅</h1>
+            <div class="sub" id="page-sub">자연어 질의 → 의도 분석 → 벡터 검색 → 추천</div>
+          </div>
+          <div class="actions">
+            <button class="btn" id="new-chat-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
+              새 대화
+            </button>
+          </div>
+        </div>
+
+        <div class="chat-layout">
+
+          <!-- CHAT CARD -->
+          <div class="chat-card">
+            <div class="ch">
+              <span class="ck">A</span>
+              <span class="title">AIRA</span>
+              <span class="sub" id="chat-sub">bge · groq LLM</span>
+              <span class="right">
+                <span class="badge ok"><span class="dot"></span>벡터 검색 정상</span>
+              </span>
+            </div>
+
+            <div class="msgs" id="msgs">
+              <div class="day-divider" id="day-div"></div>
+              <div class="msg ai" id="welcome-msg">
+                <div class="av">AI</div>
+                <div class="body">
+                  <div class="bubble">
+                    안녕하세요! 찾으시는 상품을 자연어로 말씀해주세요.<br>
+                    예) "등산할 때 입을 바람막이" 처럼 상황이나 용도를 알려주시면 추천해드릴게요.
+                  </div>
+                  <div class="meta"><b>AI</b></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="input-wrap">
+              <div class="search-opts" style="display:flex;gap:12px;align-items:center;margin-bottom:8px;font-size:11.5px;color:var(--text-3);font-family:ui-monospace,monospace;flex-wrap:wrap;">
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+                  <input type="checkbox" id="opt-hybrid"> 하이브리드 검색 <span style="color:var(--text-4);">(dense+sparse)</span>
+                </label>
+                <span id="hybrid-extra" style="display:none;gap:12px;align-items:center;">
+                  <label style="display:flex;align-items:center;gap:5px;">융합
+                    <select id="opt-fusion" style="font-family:inherit;font-size:11px;padding:2px 4px;border:1px solid var(--line);border-radius:4px;background:#fff;">
+                      <option value="rrf">RRF</option>
+                      <option value="alpha">α-가중합</option>
+                    </select>
+                  </label>
+                  <label style="display:flex;align-items:center;gap:6px;">
+                    sparse
+                    <input type="range" id="opt-alpha" min="0" max="1" step="0.05" value="0.5" style="width:90px;vertical-align:middle;">
+                    dense
+                    <b id="alpha-val" style="color:var(--primary);min-width:54px;">α=0.50</b>
+                  </label>
+                </span>
+              </div>
+              <div class="suggest">
+                <div class="suggest-chip">등산용 바람막이</div>
+                <div class="suggest-chip">여름 수영복</div>
+                <div class="suggest-chip">5만원대 캐주얼 의류</div>
+                <div class="suggest-chip">선물용 화장품</div>
+              </div>
+              <div class="input-row">
+                <textarea id="inp" placeholder="찾으시는 상품을 자연어로 입력하세요…  Enter로 전송, Shift+Enter로 줄바꿈"></textarea>
+                <button class="send-btn" id="send-btn">
+                  <svg viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
+                </button>
+              </div>
+              <div style="margin-top:8px;display:flex;justify-content:space-between;font-size:11px;color:var(--text-4);font-family:ui-monospace,monospace;">
+                <span>의도분석 → 임베딩 검색 → 큐레이션 응답</span>
+                <span id="session-info">광고주 로드 중…</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- RECENT SEARCH LOGS -->
+          <div class="recent-card">
+            <div class="ch">
+              <span>최근 검색 이력</span>
+              <span class="right">
+                <button class="btn btn-sm btn-ghost" id="refresh-logs-btn">새로고침</button>
+              </span>
+            </div>
+            <div class="recent-list" id="recent-list">
+              <div style="padding:20px;text-align:center;color:var(--text-4);font-size:12px;">
+                <span class="spin-inline"></span> 로딩 중…
+              </div>
+            </div>
+            <div class="recent-foot">
+              <button class="btn btn-sm btn-primary" style="flex:1;justify-content:center;" onclick="document.getElementById('new-chat-btn').click()">새 대화</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="partials.js"></script>
+  <script src="enhance.js"></script>
+  <script>
+    const EMBEDDER = 'http://localhost:8001';
+    const inp = document.getElementById('inp');
+    const msgs = document.getElementById('msgs');
+    const sendBtn = document.getElementById('send-btn');
+    let isSending = false;
+    let advId = null;
+    let advName = null;
+
+    // --- init advertiser from localStorage ---
+    function initAdvertiser() {
+      try {
+        const raw = localStorage.getItem('aira_adv');
+        if (!raw) { location.href = 'login.html'; return; }
+        const adv = JSON.parse(raw);
+        advId = adv.id;
+        advName = adv.name;
+        document.getElementById('page-sub').textContent =
+          '자연어 질의 → 벡터 검색 → 추천  |  광고주: ' + (advName || advId);
+        document.getElementById('session-info').textContent =
+          '광고주 ' + (advName || advId);
+      } catch (e) {
+        location.href = 'login.html';
+      }
+    }
+
+    // --- today date divider ---
+    (function setDayDiv() {
+      const d = new Date();
+      const fmt = d.getFullYear() + '. ' + String(d.getMonth() + 1).padStart(2, '0') + '. ' + String(d.getDate()).padStart(2, '0') + '. · 오늘';
+      document.getElementById('day-div').textContent = fmt;
+    })();
+
+    // --- textarea auto-resize ---
+    inp.addEventListener('input', () => {
+      inp.style.height = 'auto';
+      inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+    });
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+
+    // --- suggest chips ---
+    document.querySelectorAll('.suggest-chip').forEach((c) => {
+      c.addEventListener('click', () => { inp.value = c.textContent; inp.focus(); });
+    });
+
+    // --- hybrid search options ---
+    const optHybrid = document.getElementById('opt-hybrid');
+    const hybridExtra = document.getElementById('hybrid-extra');
+    const optFusion = document.getElementById('opt-fusion');
+    const optAlpha = document.getElementById('opt-alpha');
+    const alphaVal = document.getElementById('alpha-val');
+    function syncSearchOpts() {
+      hybridExtra.style.display = optHybrid.checked ? 'inline-flex' : 'none';
+      alphaVal.textContent = 'α=' + Number(optAlpha.value).toFixed(2);
+      const sub = document.getElementById('chat-sub');
+      if (sub) sub.textContent = (optHybrid.checked ? 'hybrid·' + optFusion.value + ' · ' : 'dense · ') + 'bge · groq LLM';
+    }
+    optHybrid.addEventListener('change', syncSearchOpts);
+    optFusion.addEventListener('change', syncSearchOpts);
+    optAlpha.addEventListener('input', syncSearchOpts);
+    syncSearchOpts();
+
+    // --- new chat ---
+    document.getElementById('new-chat-btn').addEventListener('click', () => {
+      msgs.innerHTML = '';
+      // re-add divider and welcome
+      const div = document.createElement('div');
+      div.className = 'day-divider';
+      const d = new Date();
+      div.textContent = d.getFullYear() + '. ' + String(d.getMonth()+1).padStart(2,'0') + '. ' + String(d.getDate()).padStart(2,'0') + '. · 오늘';
+      msgs.appendChild(div);
+      appendAIMsg('안녕하세요! 찾으시는 상품을 자연어로 말씀해주세요.<br>예) "등산할 때 입을 바람막이" 처럼 상황이나 용도를 알려주시면 추천해드릴게요.');
+    });
+
+    // --- refresh logs ---
+    document.getElementById('refresh-logs-btn').addEventListener('click', loadRecentLogs);
+
+    // --- 이력 항목 클릭 (이벤트 위임 — innerHTML 교체 후에도 동작) ---
+    document.getElementById('recent-list').addEventListener('click', function(e) {
+      const item = e.target.closest('.recent-item');
+      if (!item || !item.dataset.log) return;
+      try {
+        const log = JSON.parse(item.dataset.log);
+        loadHistoryConversation(log.id, log.query, log.result_count, log.created_at, log.semantic_query, log.llm_used);
+      } catch (err) {
+        console.error('[recent-item click]', err);
+      }
+    });
+
+    // --- send ---
+    sendBtn.addEventListener('click', send);
+
+    function escHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function now() {
+      const d = new Date();
+      return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+    }
+
+    function appendUserMsg(txt) {
+      const el = document.createElement('div');
+      el.className = 'msg user';
+      el.innerHTML = `
+        <div class="av">${escHtml(advName ? advName.slice(0,2).toUpperCase() : 'ME')}</div>
+        <div class="body">
+          <div class="bubble"></div>
+          <div class="meta"><span>${now()}</span></div>
+        </div>`;
+      el.querySelector('.bubble').textContent = txt;
+      msgs.appendChild(el);
+      msgs.scrollTop = msgs.scrollHeight;
+      return el;
+    }
+
+    function appendAIMsg(htmlContent, metaHtml) {
+      const el = document.createElement('div');
+      el.className = 'msg ai';
+      el.innerHTML = `
+        <div class="av">AI</div>
+        <div class="body">
+          <div class="bubble">${htmlContent}</div>
+          <div class="meta"><b>AI</b>${metaHtml ? '<span>·</span>' + metaHtml : ''}</div>
+        </div>`;
+      msgs.appendChild(el);
+      msgs.scrollTop = msgs.scrollHeight;
+      return el;
+    }
+
+    function appendAILoading() {
+      const el = document.createElement('div');
+      el.className = 'msg ai';
+      el.innerHTML = `
+        <div class="av">AI</div>
+        <div class="body">
+          <div class="bubble" style="display:flex;align-items:center;gap:8px;">
+            <span class="spin-inline"></span>
+            <span style="color:var(--text-3);">벡터 검색 중…</span>
+          </div>
+          <div class="meta"><b>AI</b><span>·</span><span>처리중</span></div>
+        </div>`;
+      msgs.appendChild(el);
+      msgs.scrollTop = msgs.scrollHeight;
+      return el;
+    }
+
+    function buildRecoCards(items) {
+      if (!items || !items.length) return '';
+      return '<div class="reco-cards">' + items.map(p => {
+        const thumbHtml = p.image_url
+          ? `<img src="${escHtml(p.image_url)}" alt="" onerror="this.style.display='none'">`
+          : '';
+        const price = p.sale_price ?? p.price;
+        const priceStr = price != null ? '₩' + Number(price).toLocaleString('ko-KR') : '';
+        const sim = p.distance != null ? ((1 - p.distance) * 100).toFixed(0) + '%' : '—';
+        const href = p.product_url ? escHtml(p.product_url) : '#';
+        return `<a class="reco-card" href="${href}" target="_blank" rel="noopener">
+          <div class="reco-thumb">${thumbHtml}</div>
+          <div class="reco-info">
+            <div class="rn">${escHtml(p.product_name || '—')}</div>
+            <div class="rc">${escHtml(p.category || '')}${p.brand ? ' · ' + escHtml(p.brand) : ''}</div>
+          </div>
+          <div class="reco-right">
+            ${priceStr ? `<div class="rp">${priceStr}</div>` : ''}
+            <div class="rs">유사도 ${sim}</div>
+          </div>
+        </a>`;
+      }).join('') + '</div>';
+    }
+
+    async function send() {
+      const txt = inp.value.trim();
+      if (!txt || isSending) return;
+      isSending = true;
+      sendBtn.disabled = true;
+      inp.value = '';
+      inp.style.height = 'auto';
+
+      appendUserMsg(txt);
+      const loadingEl = appendAILoading();
+
+      try {
+        const body = {
+          query: txt,
+          advertiser_id: advId,
+          k: 10,
+          backend: 'bge',
+          llm_provider: 'groq',
+          mode: optHybrid.checked ? 'hybrid' : 'dense',
+          fusion: optFusion.value,
+          alpha: Number(optAlpha.value),
+        };
+        const res = await fetch(EMBEDDER + '/search-rv-llm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        const items = data.items || [];
+        const resultCount = data.result_count ?? items.length;
+        const llmUsed = data.llm_used ?? false;
+        const semanticQ = data.parsed?.semantic_query || '';
+
+        let bubbleHtml = '';
+        let metaHtml = '';
+
+        if (items.length > 0) {
+          bubbleHtml = `<span>${resultCount}개 상품을 찾았어요.</span>`;
+          if (semanticQ) {
+            bubbleHtml += `<div style="margin-top:6px;font-size:11.5px;color:var(--text-4);">의미 쿼리: "${escHtml(semanticQ)}"</div>`;
+          }
+          bubbleHtml += buildRecoCards(items);
+        } else {
+          bubbleHtml = '검색 결과가 없습니다. 다른 표현으로 다시 시도해보세요.';
+        }
+        // 하이브리드 폴백 등 안내
+        if (data.hybrid_note) {
+          bubbleHtml = `<div style="margin-bottom:6px;font-size:11px;color:var(--err);">⚠ ${escHtml(data.hybrid_note)}</div>` + bubbleHtml;
+        }
+
+        const modeBadge = data.mode === 'hybrid'
+          ? `<span style="font-size:10.5px;background:#e6f4ea;color:#1a7f37;border:1px solid #b7e1c4;padding:1px 6px;border-radius:3px;">HYBRID·${escHtml(data.fusion || '')}·α${data.alpha}</span>`
+          : '<span style="font-size:10.5px;color:var(--text-4);">dense</span>';
+        metaHtml = (llmUsed ? '<span class="badge" style="background:var(--purple-soft);color:var(--purple);border:1px solid #E0D5FA;font-size:10.5px;padding:1px 6px;border-radius:3px;">LLM</span>' : '') +
+          modeBadge +
+          '<span>' + now() + '</span>';
+
+        // replace loading bubble
+        const bodyEl = loadingEl.querySelector('.body');
+        bodyEl.querySelector('.bubble').innerHTML = bubbleHtml;
+        bodyEl.querySelector('.meta').innerHTML = '<b>AI</b><span>·</span>' + metaHtml;
+        msgs.scrollTop = msgs.scrollHeight;
+
+        loadRecentLogs();
+      } catch (e) {
+        const bodyEl = loadingEl.querySelector('.body');
+        bodyEl.querySelector('.bubble').innerHTML = '<span style="color:var(--err);">오류가 발생했습니다: ' + escHtml(e.message) + '</span>';
+        bodyEl.querySelector('.meta').innerHTML = '<b>AI</b><span>·</span><span>' + now() + '</span>';
+      } finally {
+        isSending = false;
+        sendBtn.disabled = false;
+        inp.focus();
+      }
+    }
+
+    // --- recent search logs (right panel) ---
+    async function loadRecentLogs() {
+      const list = document.getElementById('recent-list');
+      try {
+        const qs = new URLSearchParams({ size: 20, ...(advId ? { advertiser_id: advId } : {}) });
+        const data = await fetch(EMBEDDER + '/search-logs?' + qs).then(r => r.json());
+        const items = data.items || data.content || data || [];
+        if (!items.length) {
+          list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-4);font-size:12px;">검색 이력이 없습니다.</div>';
+          return;
+        }
+
+        // 날짜별 그룹핑
+        const groups = {};
+        items.forEach(log => {
+          const ts = log.searched_at || log.created_at || '';
+          const d  = ts ? new Date(ts) : new Date();
+          const today    = new Date();
+          const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+          let dayKey;
+          if (d.toDateString() === today.toDateString()) dayKey = '오늘';
+          else if (d.toDateString() === yesterday.toDateString()) dayKey = '어제';
+          else dayKey = (d.getMonth()+1) + '/' + d.getDate();
+          if (!groups[dayKey]) groups[dayKey] = [];
+          groups[dayKey].push({ log, d });
+        });
+
+        list.innerHTML = Object.entries(groups).map(([day, rows]) => {
+          const header = `<div style="padding:5px 14px 3px;font-size:10px;font-weight:700;color:var(--text-4);letter-spacing:.05em;background:var(--surface-2);border-bottom:1px solid var(--line);">${day}</div>`;
+          const rowsHtml = rows.map(({ log, d }) => {
+            const isZero   = (log.result_count ?? 0) === 0;
+            const cntColor = isZero ? 'var(--err)' : 'var(--ok)';
+            const cntLabel = (log.result_count ?? 0) + '건';
+            const llmBadge = log.llm_used
+              ? '<span style="font-size:10px;background:var(--purple-soft);color:var(--purple);border:1px solid #E0D5FA;padding:1px 5px;border-radius:3px;flex-shrink:0;">LLM</span>'
+              : '';
+            const timeStr = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+            // data-log 속성에 JSON 저장 (single-quote 감쌈 — JSON은 " 만 사용하므로 안전)
+            const logData = JSON.stringify({
+              id: log.id, query: log.query || '',
+              result_count: log.result_count ?? 0,
+              created_at: log.searched_at || log.created_at || '',
+              semantic_query: log.semantic_query || '',
+              llm_used: log.llm_used ? 1 : 0,
+            });
+            return `<div class="recent-item" data-log-id="${log.id}" data-log='${logData}'>
+              <div class="rh">
+                <span class="rq">${escHtml(log.query || '—')}</span>
+                <span class="t">${timeStr}</span>
+              </div>
+              <div class="mt">
+                <span style="color:${cntColor};font-weight:600;">${cntLabel}</span>
+                ${llmBadge}
+              </div>
+            </div>`;
+          }).join('');
+          return header + rowsHtml;
+        }).join('');
+      } catch (e) {
+        list.innerHTML = '<div style="padding:16px;color:var(--err);font-size:12px;">이력 로드 실패</div>';
+      }
+    }
+
+    // 이력 항목 클릭 → 해당 검색의 대화 복원
+    async function loadHistoryConversation(logId, query, resultCount, createdAt, semanticQ, llmUsed) {
+      // 현재 대화 클리어
+      msgs.innerHTML = '';
+      const d = createdAt ? new Date(createdAt) : new Date();
+      const divEl = document.createElement('div');
+      divEl.className = 'day-divider';
+      const isToday = d.toDateString() === new Date().toDateString();
+      divEl.textContent = d.getFullYear() + '. ' + String(d.getMonth()+1).padStart(2,'0') + '. ' + String(d.getDate()).padStart(2,'0') + '. · ' + (isToday ? '오늘' : '과거 대화');
+      msgs.appendChild(divEl);
+
+      // 사용자 메시지
+      const uEl = document.createElement('div');
+      uEl.className = 'msg user';
+      uEl.innerHTML = `
+        <div class="av">${escHtml(advName ? advName.slice(0,2).toUpperCase() : 'ME')}</div>
+        <div class="body">
+          <div class="bubble"></div>
+          <div class="meta"><span>${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}</span></div>
+        </div>`;
+      uEl.querySelector('.bubble').textContent = query;
+      msgs.appendChild(uEl);
+
+      // AI 로딩 표시
+      const loadEl = appendAILoading();
+      loadEl.querySelector('span[style*="text-3"]').textContent = '이전 결과 불러오는 중…';
+
+      try {
+        const r = await fetch(`${EMBEDDER}/search-logs/${logId}/results`);
+        const data = r.ok ? await r.json() : {};
+        const items = data.items || [];
+
+        let bubbleHtml = '';
+        if (items.length > 0) {
+          bubbleHtml = `<span>${resultCount}개 상품을 찾았어요.</span>`;
+          if (semanticQ) {
+            bubbleHtml += `<div style="margin-top:6px;font-size:11.5px;color:var(--text-4);">의미 쿼리: "${escHtml(semanticQ)}"</div>`;
+          }
+          bubbleHtml += buildRecoCards(items);
+        } else if (resultCount > 0) {
+          // 결과 스냅샷이 없으면 재검색
+          bubbleHtml = `<span style="color:var(--text-4);font-size:12px;">저장된 결과 없음 — 다시 검색하려면 아래에 입력하세요.</span>`;
+        } else {
+          bubbleHtml = '이 검색에서는 결과가 없었습니다.';
+        }
+
+        const llmBadge = llmUsed
+          ? '<span class="badge" style="background:var(--purple-soft);color:var(--purple);border:1px solid #E0D5FA;font-size:10.5px;padding:1px 6px;border-radius:3px;">LLM</span>'
+          : '';
+        const timeStr = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+        const metaHtml = llmBadge + `<span>${timeStr}</span>`;
+
+        const bodyEl = loadEl.querySelector('.body');
+        bodyEl.querySelector('.bubble').innerHTML = bubbleHtml;
+        bodyEl.querySelector('.meta').innerHTML   = '<b>AI</b><span>·</span>' + metaHtml;
+        msgs.scrollTop = msgs.scrollHeight;
+
+        // 하이라이트: 클릭된 항목 표시
+        document.querySelectorAll('.recent-item').forEach(el => el.style.background = '');
+        const activeItem = document.querySelector(`.recent-item[data-log-id="${logId}"]`);
+        if (activeItem) activeItem.style.background = 'var(--primary-soft)';
+
+        // 입력창에 쿼리 채워두기 (재검색 편의)
+        inp.value = query;
+        inp.style.height = 'auto';
+        inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+      } catch (e) {
+        const bodyEl = loadEl.querySelector('.body');
+        bodyEl.querySelector('.bubble').innerHTML = '<span style="color:var(--err);">결과 로드 실패: ' + escHtml(e.message) + '</span>';
+      }
+    }
+
+    // --- init ---
+    initAdvertiser();
+    loadRecentLogs();
+    msgs.scrollTop = msgs.scrollHeight;
+  </script>
+</body>
+</html>
