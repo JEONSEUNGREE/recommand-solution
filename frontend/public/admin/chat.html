@@ -677,6 +677,13 @@
                 <input type="range" id="alpha-inp" min="0" max="1" step="0.05" value="0.5" style="width:80px;vertical-align:middle;accent-color:#7C3AED;">
                 <span class="ctrl-lbl" id="alpha-val" style="font-variant-numeric:tabular-nums;min-width:32px;text-align:right;">0.50</span>
               </div>
+              <div class="ctrl-pill" id="morph-pill" style="display:none;">
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:inherit;">
+                  <input type="checkbox" id="morph-chk" style="accent-color:#7C3AED;">
+                  <span class="ctrl-lbl">형태소</span>
+                  <span class="ctrl-lbl" style="color:#9CA3AF;">한국어 단어</span>
+                </label>
+              </div>
               <span class="ctrl-spacer"></span>
               <span class="ctrl-adv" id="session-info">광고주 로드 중…</span>
             </div>
@@ -722,7 +729,8 @@
       <h4 style="margin:0 0 6px;font-size:13px;color:#111;">검색 모드</h4>
       <ul style="margin:0 0 14px 18px;padding:0;">
         <li><b>Dense</b> — 기존 의미 검색(코사인 거리 1024d). 분위기·맥락에 강함.</li>
-        <li><b>Hybrid (D+S)</b> — dense + sparse(어휘 가중치). 정확한 단어·품번·고유명사 매칭이 추가로 반영됨.</li>
+        <li><b>Hybrid (D+S)</b> — dense + sparse(BGE 어휘 가중치). 영문·숫자·품번 매칭에 강함.</li>
+        <li><b>형태소 체크</b> — 추가로 Kiwi 한국어 형태소 매칭(TF-IDF)을 켬. "여름·가방·목걸이" 같은 <b>한국어 단어 단위</b> 매칭. BGE sparse 가 음절로 쪼개 놓치는 부분을 보완.</li>
       </ul>
 
       <h4 style="margin:0 0 6px;font-size:13px;color:#111;">융합(fusion) — 두 점수를 합치는 방식</h4>
@@ -801,6 +809,8 @@
   const alphaVal   = document.getElementById('alpha-val');
   const fusionPill = document.getElementById('fusion-pill');
   const alphaPill  = document.getElementById('alpha-pill');
+  const morphPill  = document.getElementById('morph-pill');
+  const morphChk   = document.getElementById('morph-chk');
 
   let isSending = false;
   let advId = null, advName = null;
@@ -814,7 +824,10 @@
   function updateHeadSub() {
     const llm   = llmSel.value === 'openai' ? 'GPT-4o-mini' : 'Llama-3.3 (Groq)';
     const embed = embedSel.value === 'openai' ? 'OpenAI ada' : 'BGE-M3';
-    const mode  = modeSel.value === 'hybrid' ? ('hybrid·' + fusionSel.value) : 'dense';
+    let mode = 'dense';
+    if (modeSel.value === 'hybrid') {
+      mode = 'hybrid·' + fusionSel.value + (morphChk.checked ? '+형태소' : '');
+    }
     document.getElementById('chat-head-sub').textContent = mode + ' · ' + embed + ' · ' + llm;
   }
   llmSel.addEventListener('change', updateHeadSub);
@@ -825,12 +838,14 @@
     const on = modeSel.value === 'hybrid';
     fusionPill.style.display = on ? '' : 'none';
     alphaPill.style.display  = on ? '' : 'none';
+    morphPill.style.display  = on ? '' : 'none';
     alphaVal.textContent = Number(alphaInp.value).toFixed(2);
     updateHeadSub();
   }
   modeSel.addEventListener('change', syncHybridOpts);
   fusionSel.addEventListener('change', syncHybridOpts);
   alphaInp.addEventListener('input', syncHybridOpts);
+  morphChk.addEventListener('change', updateHeadSub);
   syncHybridOpts();
 
   // ── 광고주 초기화 ────────────────────────────────────────────
@@ -946,9 +961,12 @@
     let scoreMax = 0;
     // sparse 도 % 표시: |sparse_ip| / |min| × 100 (결과셋 내 상대 강도, top=100%)
     let sparseAbsMax = 0;
+    let morphAbsMax = 0;
+    const useMorph = !!(meta && meta.use_morpheme);
     if (isHybridLive) {
       scoreMax = Math.max(0, ...items.map(x => x.score || 0));
       sparseAbsMax = Math.max(0, ...items.map(x => Math.abs(x.sparse_ip || 0)));
+      morphAbsMax = Math.max(0, ...items.map(x => Math.abs(x.morph_ip || 0)));
     }
     const cards = items.map((p, idx) => {
       const price    = p.sale_price ?? p.price;
@@ -972,13 +990,21 @@
       // 이력(per-item 점수 미저장) 일 때는 "HYBRID" 배지만 작게 표시.
       let simExtra = '';
       let sparsePctNum = 0;
+      let morphPctNum = 0;
       if (isHybridLive) {
         const dPct = (p.dense_dist != null) ? ((1 - p.dense_dist) * 100).toFixed(0) + '%' : '—';
         if (sparseAbsMax > 0 && p.sparse_ip != null) {
           sparsePctNum = Math.round(Math.abs(p.sparse_ip) / sparseAbsMax * 100);
         }
         const sPct = (p.sparse_ip != null) ? sparsePctNum + '%' : '—';
-        simExtra = `<span style="font-size:9.5px;color:#9CA3AF;font-weight:500;line-height:1;letter-spacing:.02em;">D ${dPct} · S ${sPct}</span>`;
+        let mStr = '';
+        if (useMorph) {
+          if (morphAbsMax > 0 && p.morph_ip != null) {
+            morphPctNum = Math.round(Math.abs(p.morph_ip) / morphAbsMax * 100);
+          }
+          mStr = ` · M ${(p.morph_ip != null) ? morphPctNum + '%' : '—'}`;
+        }
+        simExtra = `<span style="font-size:9.5px;color:#9CA3AF;font-weight:500;line-height:1;letter-spacing:.02em;">D ${dPct} · S ${sPct}${mStr}</span>`;
       } else if (isHybrid) {
         simExtra = `<span style="font-size:9px;color:#7C3AED;font-weight:600;line-height:1;letter-spacing:.04em;">HYBRID</span>`;
       }
@@ -990,6 +1016,9 @@
                 data-dense-dist="${p.dense_dist != null ? p.dense_dist.toFixed(4) : ''}"
                 data-sparse-ip="${p.sparse_ip != null ? p.sparse_ip.toFixed(4) : ''}"
                 data-sparse-pct="${sparsePctNum}"
+                data-use-morph="${useMorph ? '1' : ''}"
+                data-morph-ip="${(useMorph && p.morph_ip != null) ? p.morph_ip.toFixed(4) : ''}"
+                data-morph-pct="${morphPctNum}"
                 data-score="${p.score != null ? p.score.toFixed(6) : ''}"
                 data-rank-dense="${p.rank_dense != null ? p.rank_dense : ''}"
                 data-rank-sparse="${p.rank_sparse != null ? p.rank_sparse : ''}"
@@ -1057,6 +1086,7 @@
         mode: modeSel.value,
         fusion: fusionSel.value,
         alpha: Number(alphaInp.value),
+        use_morpheme: morphChk.checked,
       };
       const res  = await fetch(EMBEDDER + '/search-rv-llm', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1085,6 +1115,7 @@
         loadEl.classList.add('wide');
         bubbleHtml = buildRecoCards(items, cnt, pId,
                                      { mode: data.mode, fusion: data.fusion, alpha: data.alpha,
+                                       use_morpheme: data.use_morpheme, weights: data.weights,
                                        query: data.raw_query || txt })
                     + pipelineBtn(pId);
         metaExtra  = `<span>${data.total_duration_ms != null ? data.total_duration_ms + 'ms' : ''}</span>`;
@@ -1655,6 +1686,24 @@
       document.getElementById('rp-sparse-ip-raw').textContent =
         sp != null ? `<#> ${sp.toFixed(4)}` : '이력엔 미저장 — 아래 단어 상세 참조';
 
+      // 형태소(한국어 단어) 행 — use_morph 일 때만 표시
+      const useMorph = el.dataset.useMorph === '1';
+      const morphRow = document.getElementById('rp-morph-row');
+      const morphWrap = document.getElementById('rp-morph-detail-wrap');
+      if (useMorph) {
+        morphRow.style.display = '';
+        morphWrap.style.display = '';
+        const mp = el.dataset.morphIp ? Number(el.dataset.morphIp) : null;
+        const mPct = el.dataset.morphPct ? Number(el.dataset.morphPct) : null;
+        document.getElementById('rp-morph-pct').textContent =
+          (mPct != null && el.dataset.morphIp) ? mPct + '%' : '—';
+        document.getElementById('rp-morph-ip-raw').textContent =
+          mp != null ? `<#> ${mp.toFixed(4)}` : '';
+      } else {
+        morphRow.style.display = 'none';
+        morphWrap.style.display = 'none';
+      }
+
       // 융합 점수 + 순위(RRF 일 때만 의미 있음). 이력은 미저장.
       const sc = el.dataset.score ? Number(el.dataset.score) : null;
       document.getElementById('rp-score').textContent = sc != null ? sc.toFixed(5) : '—';
@@ -1679,9 +1728,11 @@
         `같은 상품이라도 4개 관점(상황·소재·디자인·페르소나) 중<br>` +
         `쿼리 벡터에 가장 가까운 설명 하나가 대표로 사용됩니다.`;
     }
-    // sparse 단어 상세 — 매번 초기화(이전 상품 데이터/캐시 안 보이게)
-    resetWordToggle(isHybrid ? (el.dataset.query || '') : '',
-                    isHybrid ? (el.dataset.descRaw || el.dataset.desc || '') : '');
+    // sparse/형태소 단어 상세 — 매번 초기화(이전 상품 데이터/캐시 안 보이게)
+    const _q = isHybrid ? (el.dataset.query || '') : '';
+    const _doc = isHybrid ? (el.dataset.descRaw || el.dataset.desc || '') : '';
+    resetWordToggle(_q, _doc);
+    resetMorphToggle(_q, _doc);
 
     document.getElementById('reason-overlay').classList.add('open');
 
@@ -1789,6 +1840,85 @@
   //  스크립트 아래에 있어 null 참조 → TypeError 던져 initAdvertiser/loadRecentLogs 가
   //  실행되지 않는 버그가 있었음.)
 
+  // ── 형태소(한국어 단어) 매칭 상세 ─────────────────────────────
+  function resetMorphToggle(query, doc) {
+    const btn = document.getElementById('rp-morph-toggle');
+    if (!btn) return;
+    btn.dataset.query = query || '';
+    btn.dataset.doc = doc || '';
+    btn.dataset.loaded = '';
+    document.getElementById('rp-morph-toggle-icon').textContent = '▸';
+    document.getElementById('rp-morph-panel').style.display = 'none';
+    document.getElementById('rp-morph-content').style.display = 'none';
+    document.getElementById('rp-morph-content').innerHTML = '';
+    document.getElementById('rp-morph-loading').style.display = '';
+    document.getElementById('rp-morph-loading').textContent = '로딩 중…';
+  }
+
+  function renderMorphExplain(data) {
+    const matches = data.matches || [];
+    const ip = data.inner_product || 0;
+    const n  = data.n_matches || 0;
+    if (!matches.length) {
+      return `<div style="font-size:11.5px;color:#9CA3AF;">공통 형태소(단어)가 없습니다.</div>`;
+    }
+    const maxC = Math.max(...matches.map(m => m.contribution));
+    const rows = matches.map((m, i) => {
+      const barW = maxC > 0 ? ((m.contribution / maxC) * 100).toFixed(0) : 0;
+      return `<tr style="border-top:${i===0?'none':'1px solid #F3F4F6'};">
+        <td style="padding:4px 6px;font-weight:600;color:#111;">${escHtml(m.word || '')}</td>
+        <td style="padding:4px 6px;text-align:right;color:#6B7280;font-variant-numeric:tabular-nums;">${m.q_weight.toFixed(3)}</td>
+        <td style="padding:4px 6px;text-align:right;color:#6B7280;font-variant-numeric:tabular-nums;">${m.d_weight.toFixed(3)}</td>
+        <td style="padding:4px 6px;text-align:right;color:#111;font-weight:600;font-variant-numeric:tabular-nums;">${m.contribution.toFixed(4)}</td>
+        <td style="padding:4px 6px;width:60px;"><div style="height:6px;background:#E5E7EB;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${barW}%;background:#7C3AED;"></div></div></td>
+      </tr>`;
+    }).join('');
+    return `
+      <div style="font-size:10.5px;color:#9CA3AF;margin-bottom:6px;letter-spacing:.02em;">
+        매칭 단어 ${n}개 · TF-IDF 내적 ${ip.toFixed(4)} · Kiwi 형태소 (단어 단위)
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead><tr style="color:#9CA3AF;font-size:10px;text-transform:uppercase;letter-spacing:.05em;">
+          <th style="text-align:left;padding:4px 6px;font-weight:500;">단어</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:500;">쿼리W</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:500;">상품W</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:500;">기여도</th>
+          <th style="padding:4px 6px;"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  async function loadMorphExplain() {
+    const btn     = document.getElementById('rp-morph-toggle');
+    const panel   = document.getElementById('rp-morph-panel');
+    const content = document.getElementById('rp-morph-content');
+    const loading = document.getElementById('rp-morph-loading');
+    const icon    = document.getElementById('rp-morph-toggle-icon');
+
+    const isOpen = panel.style.display !== 'none';
+    if (isOpen) { panel.style.display = 'none'; icon.textContent = '▸'; return; }
+    panel.style.display = ''; icon.textContent = '▾';
+    if (btn.dataset.loaded === '1') return;
+
+    const query = btn.dataset.query || '';
+    const doc   = btn.dataset.doc || '';
+    if (!query || !doc) { loading.textContent = '쿼리/설명문 데이터 없음'; return; }
+    try {
+      loading.style.display = ''; content.style.display = 'none';
+      const r = await fetch(EMBEDDER + '/morpheme-explain', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, doc, top_k: 25 }),
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      content.innerHTML = renderMorphExplain(await r.json());
+      loading.style.display = 'none'; content.style.display = '';
+      btn.dataset.loaded = '1';
+    } catch (e) {
+      loading.textContent = '로드 실패: ' + (e.message || e);
+    }
+  }
+
   // ── 초기화 ───────────────────────────────────────────────────
   initAdvertiser();
   loadRecentLogs();
@@ -1837,6 +1967,13 @@
               <span class="dist" id="rp-sparse-ip-raw"></span>
             </span>
           </div>
+          <div class="reason-row" id="rp-morph-row" style="display:none;">
+            <span class="reason-lbl">형태소</span>
+            <span class="reason-val">
+              <span id="rp-morph-pct"></span>
+              <span class="dist" id="rp-morph-ip-raw"></span>
+            </span>
+          </div>
           <div class="reason-row">
             <span class="reason-lbl">융합점수</span>
             <span class="reason-val">
@@ -1851,11 +1988,24 @@
                   onclick="loadSparseExplain()"
                   style="background:transparent;border:1px solid #E5E7EB;border-radius:6px;padding:5px 10px;font-size:11px;color:#6B7280;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
             <span id="rp-word-toggle-icon">▸</span>
-            <span>매칭 단어 상세 (sparse)</span>
+            <span>매칭 단어 상세 (sparse 음절)</span>
           </button>
           <div id="rp-word-panel" style="display:none;margin-top:8px;border:1px solid #F3F4F6;border-radius:6px;padding:10px;background:#FAFAFA;">
             <div id="rp-word-loading" style="font-size:11px;color:#9CA3AF;">로딩 중…</div>
             <div id="rp-word-content" style="display:none;"></div>
+          </div>
+        </div>
+        <!-- 형태소 단어 상세 (한국어 단어) — use_morph 일 때만 -->
+        <div id="rp-morph-detail-wrap" style="margin-top:8px;display:none;">
+          <button type="button" id="rp-morph-toggle"
+                  onclick="loadMorphExplain()"
+                  style="background:transparent;border:1px solid #E0D5FA;border-radius:6px;padding:5px 10px;font-size:11px;color:#7C3AED;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+            <span id="rp-morph-toggle-icon">▸</span>
+            <span>매칭 단어 상세 (형태소 · 한국어 단어)</span>
+          </button>
+          <div id="rp-morph-panel" style="display:none;margin-top:8px;border:1px solid #F3F4F6;border-radius:6px;padding:10px;background:#FAF8FF;">
+            <div id="rp-morph-loading" style="font-size:11px;color:#9CA3AF;">로딩 중…</div>
+            <div id="rp-morph-content" style="display:none;"></div>
           </div>
         </div>
       </div>

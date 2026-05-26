@@ -13,12 +13,16 @@ from __future__ import annotations
 # ⚠️ 최상단 — pyarrow load-order segfault 회피
 import pyarrow  # noqa: F401
 
-from fastapi import FastAPI
+import os
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 import sparse_model
+import morpheme  # 한국어 형태소 sparse (Kiwi + TF-IDF)
 
-app = FastAPI(title="sparse-embedder", version="0.1.0")
+DSN = os.environ.get("DB_DSN", "postgresql://app:app@localhost:5433/recommend")
+
+app = FastAPI(title="sparse-embedder", version="0.2.0")
 
 
 class EmbedSparseRequest(BaseModel):
@@ -124,3 +128,82 @@ def sparse_explain(req: SparseExplainRequest):
         "query_tokens": _to_list(qlw, req.top_k),
         "doc_tokens": _to_list(dlw, req.top_k),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 한국어 형태소 sparse (Kiwi + TF-IDF) — BGE-M3 토크나이저 한계 보완
+# ─────────────────────────────────────────────────────────────────────
+
+class EmbedMorphemeRequest(BaseModel):
+    texts: list[str]
+
+
+@app.post("/embed-morpheme")
+def embed_morpheme(req: EmbedMorphemeRequest):
+    """텍스트 → 한국어 형태소 sparsevec 리터럴 리스트 (DB 의 morpheme_vocab 사용)."""
+    if not req.texts:
+        return {"sparse": [], "dim": morpheme.SPARSE_DIM, "vocab_size": 0}
+    try:
+        vocab, idf, _ = morpheme.get_cached_vocab(DSN)
+    except Exception as e:
+        raise HTTPException(503, f"morpheme_vocab 로드 실패: {e}")
+    if not vocab:
+        raise HTTPException(503, "morpheme_vocab 이 비어 있음 — build_morpheme_vocab.py 먼저 실행")
+    morpheme.get_kiwi()  # 워밍업
+    literals = [morpheme.encode_sparsevec(t, vocab, idf) for t in req.texts]
+    return {"sparse": literals, "dim": morpheme.SPARSE_DIM, "vocab_size": len(vocab)}
+
+
+class MorphemeExplainRequest(BaseModel):
+    query: str
+    doc: str
+    top_k: int = 30
+
+
+@app.post("/morpheme-explain")
+def morpheme_explain(req: MorphemeExplainRequest):
+    """쿼리·상품 텍스트의 형태소 매칭 분해 (BGE sparse 의 sparse-explain 형태소 버전).
+
+    반환:
+      - matches : 두 텍스트 공통 형태소 + 가중치 + 기여도
+      - inner_product : matches 기여도 합
+      - query_tokens / doc_tokens : 각 텍스트의 상위 형태소
+    """
+    try:
+        vocab, idf, vocab_inv = morpheme.get_cached_vocab(DSN)
+    except Exception as e:
+        raise HTTPException(503, f"morpheme_vocab 로드 실패: {e}")
+    if not vocab:
+        raise HTTPException(503, "morpheme_vocab 이 비어 있음")
+    morpheme.get_kiwi()
+
+    q_sp = morpheme.encode_tfidf(req.query, vocab, idf)
+    d_sp = morpheme.encode_tfidf(req.doc, vocab, idf)
+
+    matches_tuples = morpheme.explain_match(q_sp, d_sp, vocab_inv)
+    matches = [
+        {"word": w, "q_weight": round(qw, 5), "d_weight": round(dw, 5),
+         "contribution": round(c, 6)}
+        for w, qw, dw, c in matches_tuples
+    ]
+
+    def _top(sp: dict, top_k: int) -> list:
+        items = sorted(sp.items(), key=lambda x: -x[1])[:top_k]
+        return [{"word": vocab_inv[idx], "weight": round(w, 5)} for idx, w in items]
+
+    return {
+        "matches": matches[:req.top_k],
+        "n_matches": len(matches),
+        "inner_product": round(sum(m["contribution"] for m in matches), 5),
+        "query_tokens": _top(q_sp, req.top_k),
+        "doc_tokens": _top(d_sp, req.top_k),
+        "vocab_size": len(vocab),
+    }
+
+
+@app.post("/morpheme-reload-vocab")
+def morpheme_reload_vocab():
+    """morpheme_vocab 재구축 후 메모리 캐시 강제 리로드."""
+    morpheme.invalidate_cache()
+    vocab, idf, _ = morpheme.get_cached_vocab(DSN)
+    return {"ok": True, "vocab_size": len(vocab)}

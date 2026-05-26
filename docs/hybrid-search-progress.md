@@ -156,8 +156,51 @@ pyarrow 문제를 해결하고 서버가 뜬 뒤, `/search-rv`·`/embed`가 500�
 ## 남은 작업 (백필 완료 후)
 
 1. ✅ **백필** — `product_descriptions` 4,224행 `embedding_sparse` 채움 (위 참조).
-2. **`search_rv` 하이브리드 검색 로직** — dense 코사인(`<=>`) + sparse 내적(`<#>`)
-   결합. 검색 시 쿼리를 :8002 `/embed-sparse`로 인코딩(기존 :8001은 FlagEmbedding
-   불가). 점수 결합은 RRF 또는 정규화 α-가중합. `chat.html`에 dense/hybrid 토글.
-3. **검색 품질 평가** — `docs/search_quality_test_queries.md` 쿼리셋으로
-   dense-only vs hybrid 비교 (`search_logs`/`search_log_results` 활용).
+2. ✅ **`search_rv` 하이브리드 검색 로직** — dense 코사인(`<=>`) + sparse 내적(`<#>`)
+   결합. RRF / 정규화 α-가중합. :8002 `/embed-sparse`로 쿼리 인코딩. endorser
+   verified=false 필터. `chat.html`에 모드 토글·융합·α 슬라이더·사유 분해 완료.
+3. ✅ **한국어 형태소 sparse (3번째 신호)** — 아래 참조.
+4. **검색 품질 평가** — `docs/search_quality_test_queries.md` 쿼리셋으로
+   dense / hybrid(ds) / hybrid(dsm) 비교 (`search_logs` 의 backend 라벨로 모드 식별).
+
+---
+
+## 한국어 형태소 sparse (dense + sparse + morpheme 3-way) — 2026-05-26 이어서
+
+BGE-M3 의 XLM-R 토크나이저가 한국어를 **음절 단위**로 쪼개("로즈골드"→로/즈/골/드)
+단어 매칭이 약한 문제를, **Kiwi 형태소 분석 + TF-IDF** 의 별도 sparse 채널로 보완.
+
+### 구성 (전부 격리 — `sparse-embedder/`)
+| 파일 | 역할 |
+|--|--|
+| `morpheme.py` | Kiwi 형태소 추출 + TF-IDF + sparsevec 변환 + DB vocab 캐시 |
+| `build_morpheme_vocab.py` | description 전체 분석 → `morpheme_vocab` 테이블 구축(1회) |
+| `backfill_morpheme.py` | `embedding_morpheme` 컬럼 백필(멱등, dense/sparse 무손상) |
+| `morpheme_poc/` | 최초 PoC (100상품 효과 검증) |
+| migration `019_product_descriptions_morpheme.sql` | `morpheme_vocab` + `embedding_morpheme sparsevec(65536)` |
+
+### 핵심 결정/수치
+- **품사 필터**: NNG/NNP/VV/VA/MAG/SL/SN/SH/NNB 만 유지 (조사·어미 제외). stopword 컷.
+- **가중치**: TF-IDF (smoothed IDF = log((N+1)/(df+1))+1). 흔한 단어 자동 감쇄.
+- **vocab**: 4,224 description → **2,019 단어** (min_df=3). sparsevec dim=65536.
+- **백필 속도**: vocab 구축 11s + 백필 **16.7s** (253행/s) — BGE sparse(25분) 대비 압도적.
+- **Windows 한글 경로 이슈**: Kiwi C++ 확장이 한글 경로 모델 못 엶 →
+  모델을 `C:\kiwi_model` 로 복사하고 `KIWI_MODEL_PATH` 로 가리킴.
+
+### 검색 통합 (`search_rv.py`)
+- `SearchRvLlmReq`: `use_morpheme`, `w_dense/w_sparse/w_morpheme` 추가.
+- `_run_hybrid`: 사용하는 신호만 SELECT (dense `<=>`, sparse `<#>`, morpheme `<#>`).
+- `_fuse`: RRF·alpha 모두 3-신호 일반화. 가중치 `_resolve_weights()` 로 정규화
+  (명시 가중치 없으면 alpha 로 유도, morpheme 켜면 1/3 배정).
+- :8002 신규 엔드포인트: `/embed-morpheme`, `/morpheme-explain`, `/morpheme-reload-vocab`.
+- :8001 프록시: `/morpheme-explain`.
+- 폴백: morpheme 서비스 무응답 → sparse 만, 둘 다 없으면 dense.
+
+### 검증
+- 3-way 검색 (dense / ds / dsm / morph-heavy) 모두 정상, morpheme 가 랭킹에 실제 기여.
+- `/morpheme-explain`: "여름 데이트 가방" → 가방(1.15)·여름(0.77)·데이트(0.26) 단어 매칭.
+- `chat.html`: 형태소 체크박스 + 카드 `D·S·M %` + 사유 팝업 형태소 행/단어 상세.
+
+### vocab 갱신 주의
+- 신규 상품 추가 시 vocab 미등재 단어(신조어/브랜드명)는 매칭 안 됨.
+  → 주기적으로 `build_morpheme_vocab.py` 재실행 + `/morpheme-reload-vocab` 호출 필요.

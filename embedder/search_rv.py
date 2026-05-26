@@ -139,6 +139,26 @@ def _embed_sparse(text: str) -> Optional[str]:
         return None
 
 
+def _embed_morpheme(text: str) -> Optional[str]:
+    """:8002 /embed-morpheme — 한국어 형태소(Kiwi+TF-IDF) sparsevec 리터럴 획득.
+
+    BGE-M3 가 음절로 쪼개 못 잡는 단어 단위 매칭용. 미기동/오류 시 None.
+    """
+    try:
+        r = requests.post(
+            f"{SPARSE_BASE}/embed-morpheme",
+            json={"texts": [text]},
+            timeout=20,
+        )
+        r.raise_for_status()
+        arr = r.json().get("sparse") or []
+        return arr[0] if arr else None
+    except Exception as e:
+        import sys
+        print(f"[search_rv] morpheme embed 실패 (해당 신호 생략): {e}", file=sys.stderr)
+        return None
+
+
 def _project_for_viz(qvec: list[float], item_vecs: list[list[float]],
                      distances: list[float]) -> tuple[list[float], list[list[float]]]:
     """질문 중심 임베딩 유사도 맵 좌표를 만든다.
@@ -528,17 +548,38 @@ def sparse_explain_proxy(req: SparseExplainReq):
         raise HTTPException(503, f"sparse-embedder 응답 실패: {e}")
 
 
+@router.post("/morpheme-explain")
+def morpheme_explain_proxy(req: SparseExplainReq):
+    """:8002 /morpheme-explain 프록시 — 한국어 형태소 단어 매칭 분해."""
+    try:
+        r = requests.post(
+            f"{SPARSE_BASE}/morpheme-explain",
+            json={"query": req.query, "doc": req.doc, "top_k": req.top_k},
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        raise HTTPException(503, f"morpheme-explain 응답 실패: {e}")
+
+
 class SearchRvLlmReq(BaseModel):
     query: str
     advertiser_id: Optional[int] = None
     backend: Literal["bge", "openai"] = "bge"
     llm_provider: Literal["groq", "openai"] = "groq"
     k: int = 10
-    # 하이브리드 검색 (dense + sparse). hybrid 는 backend="bge" 일 때만 동작.
+    # 하이브리드 검색. hybrid 는 backend="bge" 일 때만 동작.
+    # 신호: dense(의미) + sparse(BGE 어휘) + morpheme(한국어 형태소, 선택).
     mode: Literal["dense", "hybrid"] = "dense"
     fusion: Literal["rrf", "alpha"] = "rrf"
-    # dense 가중치(0~1). sparse 가중치 = 1-alpha. rrf/alpha 양쪽에서 dense:sparse 비중으로 사용.
+    # dense:sparse 비중 (morpheme 끌 때). dense=alpha, sparse=1-alpha.
     alpha: float = 0.5
+    # 형태소 신호 포함 여부 + 명시 가중치(셋 다 주면 정규화해서 사용, 아니면 alpha 로 유도)
+    use_morpheme: bool = False
+    w_dense: Optional[float] = None
+    w_sparse: Optional[float] = None
+    w_morpheme: Optional[float] = None
 
 
 @router.post("/search-rv-llm")
@@ -561,19 +602,49 @@ def search_rv_llm(req: SearchRvLlmReq):
         col = "embedding_bge"
         dim = 1024
 
-    # 하이브리드: backend=bge 일 때만. sparse 쿼리 인코딩을 :8002 에 위임.
-    # 서비스 미기동이면 qsparse=None → dense-only 로 자동 폴백.
+    # 하이브리드: backend=bge 일 때만. sparse/morpheme 쿼리 인코딩을 :8002 에 위임.
+    # 서비스 미기동이면 해당 신호를 빼고 가능한 신호로 폴백(끝까지 없으면 dense-only).
     hybrid = req.mode == "hybrid" and req.backend == "bge"
     hybrid_note = None
     qsparse = None
+    qmorph = None
+    use_morph = bool(req.use_morpheme)
     if req.mode == "hybrid" and req.backend != "bge":
         hybrid = False
         hybrid_note = "hybrid 는 backend=bge 에서만 지원 — dense 로 진행"
     elif hybrid:
         qsparse = _embed_sparse(semantic_query)
-        if qsparse is None:
+        if use_morph:
+            qmorph = _embed_morpheme(semantic_query)
+            if qmorph is None:
+                use_morph = False
+                hybrid_note = "형태소 서비스 응답 없음 — sparse 만 사용"
+        if qsparse is None and qmorph is None:
             hybrid = False
             hybrid_note = "sparse-embedder(:8002) 응답 없음 — dense 로 폴백"
+
+    # 가중치 결정: (w_dense, w_sparse, w_morpheme), 합=1
+    def _resolve_weights() -> tuple[float, float, float]:
+        if not hybrid:
+            return (1.0, 0.0, 0.0)
+        wd, ws, wm = req.w_dense, req.w_sparse, req.w_morpheme
+        if wd is not None and ws is not None and (not use_morph or wm is not None):
+            wm = wm if (use_morph and wm is not None) else 0.0
+        else:
+            # alpha 로 유도: dense:sparse = alpha:(1-alpha), morpheme 켜면 1/3 배정
+            wm = (1.0 / 3.0) if use_morph else 0.0
+            wd = req.alpha * (1 - wm)
+            ws = (1 - req.alpha) * (1 - wm)
+        if qsparse is None:
+            ws = 0.0
+        if not use_morph or qmorph is None:
+            wm = 0.0
+        tot = wd + ws + wm
+        if tot <= 0:
+            return (1.0, 0.0, 0.0)
+        return (wd / tot, ws / tot, wm / tot)
+
+    w_dense, w_sparse, w_morph = _resolve_weights()
     embed_duration_ms = int((time.time() - t_embed) * 1000)
 
     where = [f"pd.{col} IS NOT NULL"]
@@ -727,64 +798,101 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
             out.append(d)
         return out
 
+    # 형태소 신호 사용 여부 (쿼리 인코딩 성공 시에만)
+    use_m = use_morph and qmorph is not None
+    use_s = qsparse is not None
+
     cols_h = ["rv_product_id", "advertiser_id", "perspective", "description",
-              "dense_dist", "sparse_ip",
+              "dense_dist", "sparse_ip", "morph_ip",
               "product_code", "product_name", "product_url", "image_url",
               "price", "sale_price",
               "category", "brand", "brand_tier", "target_gender",
               "target_age_min", "target_age_max", "tags", "desc_persona", "emb"]
 
     def _fuse(cands: list[dict]) -> list[dict]:
-        """dense_dist(작을수록 좋음) + sparse_ip(<#> 음수 내적, 작을수록 좋음) 결합.
+        """dense + sparse(+morpheme) 결합. 거리/내적은 모두 '작을수록 좋음'.
 
-        fusion="rrf"  : 각 점수 순위로 1/(60+rank) 가중합 (스케일 무관, robust).
-        fusion="alpha": 후보셋 내 min-max 정규화 후 α·dense + (1-α)·sparse.
-        둘 다 dense 비중 = req.alpha, sparse 비중 = 1-req.alpha.
+        fusion="rrf"  : 각 신호 순위로 w/(60+rank) 가중합 (스케일 무관, robust).
+        fusion="alpha": 후보셋 내 min-max 정규화 후 가중합.
+        가중치 = (w_dense, w_sparse, w_morph) — _resolve_weights() 에서 정규화됨.
         """
         if not cands:
             return []
-        a = max(0.0, min(1.0, req.alpha))
+        wd, ws, wm = w_dense, w_sparse, w_morph
+
         if req.fusion == "rrf":
             K = 60
-            by_dense = sorted(cands, key=lambda x: x["dense_dist"])
-            for i, c in enumerate(by_dense, 1):
+            for i, c in enumerate(sorted(cands, key=lambda x: x["dense_dist"]), 1):
                 c["rank_dense"] = i
-            by_sparse = sorted(cands, key=lambda x: x["sparse_ip"])
-            for i, c in enumerate(by_sparse, 1):
-                c["rank_sparse"] = i
+            if use_s:
+                for i, c in enumerate(sorted(cands, key=lambda x: x["sparse_ip"]), 1):
+                    c["rank_sparse"] = i
+            if use_m:
+                for i, c in enumerate(sorted(cands, key=lambda x: x["morph_ip"]), 1):
+                    c["rank_morph"] = i
             for c in cands:
-                c["score"] = a / (K + c["rank_dense"]) + (1 - a) / (K + c["rank_sparse"])
-        else:  # alpha — min-max 정규화 (둘 다 1=best 로 변환)
-            dd = [c["dense_dist"] for c in cands]
-            ss = [c["sparse_ip"] for c in cands]
-            mind, maxd, mins, maxs = min(dd), max(dd), min(ss), max(ss)
+                s = wd / (K + c["rank_dense"])
+                if use_s:
+                    s += ws / (K + c["rank_sparse"])
+                if use_m:
+                    s += wm / (K + c["rank_morph"])
+                c["score"] = s
+        else:  # alpha — min-max 정규화 (각 신호 1=best)
+            def _norm_key(key):
+                vals = [c[key] for c in cands]
+                lo, hi = min(vals), max(vals)
+                return lo, hi
+            dlo, dhi = _norm_key("dense_dist")
+            if use_s:
+                slo, shi = _norm_key("sparse_ip")
+            if use_m:
+                mlo, mhi = _norm_key("morph_ip")
             for c in cands:
-                dn = (maxd - c["dense_dist"]) / (maxd - mind) if maxd > mind else 1.0
-                sn = (maxs - c["sparse_ip"]) / (maxs - mins) if maxs > mins else 1.0
-                c["dense_norm"], c["sparse_norm"] = dn, sn
-                c["score"] = a * dn + (1 - a) * sn
+                dn = (dhi - c["dense_dist"]) / (dhi - dlo) if dhi > dlo else 1.0
+                c["dense_norm"] = dn
+                s = wd * dn
+                if use_s:
+                    sn = (shi - c["sparse_ip"]) / (shi - slo) if shi > slo else 1.0
+                    c["sparse_norm"] = sn
+                    s += ws * sn
+                if use_m:
+                    mn = (mhi - c["morph_ip"]) / (mhi - mlo) if mhi > mlo else 1.0
+                    c["morph_norm"] = mn
+                    s += wm * mn
+                c["score"] = s
         cands.sort(key=lambda x: x["score"], reverse=True)
         return cands[:req.k]
 
     def _run_hybrid(conn, where_list: list, where_params: list) -> list:
-        # 필터에 맞는 상품 전체의 dense+sparse 거리를 모아 Python 에서 융합.
-        # (현재 광고주당 ~1천 상품 규모 → 전량 페치 OK. 10만+ 시 후보 캡 도입 필요.)
+        # 필터에 맞는 상품 전체의 dense(+sparse+morpheme) 거리를 모아 Python 에서 융합.
+        # (광고주당 ~1천 상품 규모 → 전량 페치 OK. 10만+ 시 후보 캡 도입 필요.)
+        # 신호별 SQL 조각 — 사용하는 신호만 SELECT/파라미터에 포함.
+        sel_sparse = "pd.embedding_sparse <#> %s::sparsevec AS sparse_ip," if use_s else "0.0 AS sparse_ip,"
+        sel_morph  = "pd.embedding_morpheme <#> %s::sparsevec AS morph_ip," if use_m else "0.0 AS morph_ip,"
+        # 파라미터 순서: dense, [sparse], [morpheme], then where_params
+        vec_params: list = [qvec]
+        if use_s:
+            vec_params.append(qsparse)
+        if use_m:
+            vec_params.append(qmorph)
+
         sql = f"""
             WITH all_dist AS (
                 SELECT pd.rv_product_id, pd.advertiser_id, pd.perspective, pd.description,
-                       pd.embedding_bge   <=> %s::vector    AS dense_dist,
-                       pd.embedding_sparse <#> %s::sparsevec AS sparse_ip,
+                       pd.embedding_bge <=> %s::vector AS dense_dist,
+                       {sel_sparse}
+                       {sel_morph}
                        pd.embedding_bge::text AS emb
                   FROM product_descriptions pd
                   {rv_price_join}
                   {pe_join}
                  WHERE {' AND '.join(where_list)}
-                   AND pd.embedding_sparse IS NOT NULL
             ),
             ranked AS (
                 SELECT rv_product_id, advertiser_id,
                        MIN(dense_dist) AS dense_dist,
                        MIN(sparse_ip)  AS sparse_ip,
+                       MIN(morph_ip)   AS morph_ip,
                        (array_agg(perspective ORDER BY dense_dist))[1] AS perspective,
                        (array_agg(description ORDER BY dense_dist))[1] AS description,
                        (array_agg(emb ORDER BY dense_dist))[1] AS emb
@@ -792,7 +900,7 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
                  GROUP BY rv_product_id, advertiser_id
             )
             SELECT r.rv_product_id, r.advertiser_id, r.perspective, r.description,
-                   r.dense_dist, r.sparse_ip,
+                   r.dense_dist, r.sparse_ip, r.morph_ip,
                    rv.product_code, rv.product_name, rv.product_url, rv.image_url,
                    rv.price, rv.sale_price,
                    pe.category, pe.brand, pe.brand_tier, pe.target_gender,
@@ -803,13 +911,14 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
               LEFT JOIN product_enriched pe ON pe.rv_product_id = r.rv_product_id
         """
         with conn.cursor() as cur:
-            cur.execute(sql, [qvec, qsparse] + where_params)
+            cur.execute(sql, vec_params + where_params)
             rows = cur.fetchall()
         cands = []
         for r in rows:
             d = dict(zip(cols_h, r))
             d["dense_dist"] = float(d["dense_dist"])
             d["sparse_ip"] = float(d["sparse_ip"])
+            d["morph_ip"] = float(d["morph_ip"])
             cands.append(d)
         fused = _fuse(cands)
         for d in fused:
@@ -864,8 +973,14 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
         _usage = parsed.get("_usage") or {}
         total_ms = int((time.time() - t0) * 1000)
         _parsed_for_log = {k: v for k, v in parsed.items() if k != "_usage"}
-        # search_logs.backend 에 모드/융합 표기 (별도 컬럼 없이 가시화)
-        backend_label = f"{req.backend}+sparse:{req.fusion}(a={req.alpha:g})" if hybrid else req.backend
+        # search_logs.backend 에 모드/융합/가중치 표기 (별도 컬럼 없이 가시화)
+        if hybrid:
+            sig = "ds" + ("m" if use_m else "")  # dense+sparse(+morph)
+            backend_label = (f"{req.backend}+{sig}:{req.fusion}"
+                             f"(d={w_dense:.2g},s={w_sparse:.2g}"
+                             f"{f',m={w_morph:.2g}' if use_m else ''})")
+        else:
+            backend_label = req.backend
         _log_search(
             query=req.query, semantic_query=semantic_query, llm_used=True,
             llm_provider=req.llm_provider, backend=backend_label,
@@ -883,6 +998,9 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
             "mode": "hybrid" if hybrid else "dense",
             "fusion": req.fusion if hybrid else None,
             "alpha": req.alpha if hybrid else None,
+            "use_morpheme": use_m,
+            "weights": ({"dense": round(w_dense, 3), "sparse": round(w_sparse, 3),
+                         "morpheme": round(w_morph, 3)} if hybrid else None),
             "hybrid_note": hybrid_note,
             "dim": dim,
             "advertiser_id": req.advertiser_id,
