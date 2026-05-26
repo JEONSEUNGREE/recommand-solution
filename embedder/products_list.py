@@ -462,7 +462,7 @@ def get_log_results(log_id: int):
                    category, brand, distance, perspective, description,
                    tags, desc_persona,
                    dense_dist, sparse_ip, morph_ip, fusion_score AS score,
-                   rank_dense, rank_sparse, rank_morph
+                   colbert_score, rank_dense, rank_sparse, rank_morph
               FROM search_log_results
              WHERE log_id = %s
              ORDER BY rank

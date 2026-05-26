@@ -86,10 +86,10 @@ def _log_search(
                             image_url, product_url, price, sale_price,
                             category, brand, distance, perspective, description,
                             tags, desc_persona,
-                            dense_dist, sparse_ip, morph_ip, fusion_score,
+                            dense_dist, sparse_ip, morph_ip, fusion_score, colbert_score,
                             rank_dense, rank_sparse, rank_morph)
                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,
-                                   %s,%s,%s,%s,%s,%s,%s)""",
+                                   %s,%s,%s,%s,%s,%s,%s,%s)""",
                         (
                             log_id, rank,
                             item.get("rv_product_id"), item.get("product_name"), item.get("product_code"),
@@ -102,7 +102,7 @@ def _log_search(
                             item.get("desc_persona"),
                             # 하이브리드 신호별 점수 (dense 모드면 전부 None)
                             item.get("dense_dist"), item.get("sparse_ip"), item.get("morph_ip"),
-                            item.get("score"),
+                            item.get("score"), item.get("colbert_score"),
                             item.get("rank_dense"), item.get("rank_sparse"), item.get("rank_morph"),
                         ),
                     )
@@ -178,7 +178,7 @@ def _embed_colbert(text: str) -> list[list[float]] | None:
         r = requests.post(
             f"{COLBERT_BASE}/embed-colbert",
             json={"text": text},
-            timeout=15,
+            timeout=40,  # :8003 콜드스타트(BGE-M3 ~15-20s) 여유
         )
         r.raise_for_status()
         return r.json().get("colbert_vecs")
@@ -207,6 +207,7 @@ def _colbert_rerank(
     pairs_psp = [it.get("perspective") for it in items]
 
     try:
+        # 메인 conn 은 tuple-row 라 인덱스 접근 (dict 접근 금지).
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -218,10 +219,7 @@ def _colbert_rerank(
                 """,
                 (pairs_pid, pairs_psp),
             )
-            vecs_map = {
-                (r["rv_product_id"], r["perspective"]): r["colbert_vecs"]
-                for r in cur.fetchall()
-            }
+            vecs_map = {(r[0], r[1]): r[2] for r in cur.fetchall()}
     except Exception as e:
         import sys
         print(f"[colbert_rerank] colbert_vecs 조회 실패: {e}", file=sys.stderr)
@@ -666,6 +664,10 @@ class SearchRvLlmReq(BaseModel):
     w_dense: Optional[float] = None
     w_sparse: Optional[float] = None
     w_morpheme: Optional[float] = None
+    # ColBERT reranker(:8003) — 1차 후보(dense/hybrid)를 ColBERT MaxSim 으로 재정렬.
+    # colbert_top: rerank 할 후보 수(>=k). 서비스 미기동 시 1차 순서 유지(폴백).
+    use_colbert: bool = False
+    colbert_top: int = 50
 
 
 @router.post("/search-rv-llm")
@@ -731,6 +733,23 @@ def search_rv_llm(req: SearchRvLlmReq):
         return (wd / tot, ws / tot, wm / tot)
 
     w_dense, w_sparse, w_morph = _resolve_weights()
+
+    # ColBERT reranker — 1차 후보를 colbert_top 만큼 넓게 뽑은 뒤 MaxSim 재정렬.
+    # openai 백엔드는 colbert_vecs(BGE 기반)와 안 맞으므로 bge 일 때만.
+    use_colbert = bool(req.use_colbert) and req.backend == "bge"
+    qcolbert = None
+    colbert_note = None
+    if req.use_colbert and req.backend != "bge":
+        use_colbert = False
+        colbert_note = "ColBERT 는 backend=bge 에서만 지원"
+    elif use_colbert:
+        qcolbert = _embed_colbert(semantic_query)
+        if qcolbert is None:
+            use_colbert = False
+            colbert_note = "colbert-reranker(:8003) 응답 없음 — 1차 순서 유지"
+    # rerank 할 후보 수 — colbert 켜면 넓게, 아니면 k 그대로
+    cand_k = max(req.k, int(req.colbert_top)) if use_colbert else req.k
+
     embed_duration_ms = int((time.time() - t_embed) * 1000)
 
     where = [f"pd.{col} IS NOT NULL"]
@@ -875,7 +894,7 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
              LIMIT %s
         """
         with conn.cursor() as cur:
-            cur.execute(sql, [qvec] + where_params + [req.k])
+            cur.execute(sql, [qvec] + where_params + [cand_k])
             rows = cur.fetchall()
         out = []
         for r in rows:
@@ -947,7 +966,7 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
                     s += wm * mn
                 c["score"] = s
         cands.sort(key=lambda x: x["score"], reverse=True)
-        return cands[:req.k]
+        return cands[:cand_k]
 
     def _run_hybrid(conn, where_list: list, where_params: list) -> list:
         # 필터에 맞는 상품 전체의 dense(+sparse+morpheme) 거리를 모아 Python 에서 융합.
@@ -1038,6 +1057,19 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
             active_where = base_where
             active_params = base_params
 
+        # ColBERT 재정렬 — 1차 후보(cand_k개)를 MaxSim 으로 재정렬 후 k 개로 자른다.
+        # colbert_vecs 없는 행은 dense 점수로 폴백(_colbert_rerank 내부 처리).
+        colbert_applied = False
+        if use_colbert and qcolbert and items:
+            t_cb = time.time()
+            items = _colbert_rerank(qcolbert, items, conn)
+            colbert_applied = True
+            colbert_ms = int((time.time() - t_cb) * 1000)
+        else:
+            colbert_ms = None
+        # colbert 켰을 때만 넓게 뽑았으므로 최종 k 로 트림
+        items = items[:req.k]
+
         # 벡터 공간 시각화용 3D PCA — 쿼리 + 결과 상품 임베딩을 함께 투영.
         # 무거운 원본 임베딩(emb)은 좌표 계산에만 쓰고 응답/로그에서 제거한다.
         query_coord3d = None
@@ -1055,12 +1087,8 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
                 for it in items:
                     it.pop("emb", None)
 
-        # ColBERT 리랭킹 — dense(+hybrid) top-K를 MaxSim으로 재정렬.
-        # colbert-reranker(:8003) 미기동 시 graceful fallback(dense 순서 유지).
-        if items:
-            q_colbert = _embed_colbert(semantic_query or req.query)
-            if q_colbert:
-                items = _colbert_rerank(q_colbert, items, conn)
+        # (ColBERT 재정렬은 위 완화 단계 직후 use_colbert 토글에 따라 이미 적용됨.
+        #  여기서 다시 돌리지 않는다 — 토글 기반 단일 적용.)
 
         debug_sql = _build_debug_sql(active_where, active_params, qvec)
         _usage = parsed.get("_usage") or {}
@@ -1074,6 +1102,8 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
                              f"{f',m={w_morph:.2g}' if use_m else ''})")
         else:
             backend_label = req.backend
+        if colbert_applied:
+            backend_label += "+colbert"
         _log_search(
             query=req.query, semantic_query=semantic_query, llm_used=True,
             llm_provider=req.llm_provider, backend=backend_label,
@@ -1094,7 +1124,11 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
             "use_morpheme": use_m,
             "weights": ({"dense": round(w_dense, 3), "sparse": round(w_sparse, 3),
                          "morpheme": round(w_morph, 3)} if hybrid else None),
+            "use_colbert": colbert_applied,
+            "colbert_top": cand_k if colbert_applied else None,
+            "colbert_duration_ms": colbert_ms,
             "hybrid_note": hybrid_note,
+            "colbert_note": colbert_note,
             "dim": dim,
             "advertiser_id": req.advertiser_id,
             "k": req.k,

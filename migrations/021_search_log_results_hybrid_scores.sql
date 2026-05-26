@@ -7,6 +7,7 @@ ALTER TABLE search_log_results
     ADD COLUMN IF NOT EXISTS sparse_ip    real,   -- BGE sparse 내적 (<#>)
     ADD COLUMN IF NOT EXISTS morph_ip     real,   -- 형태소 sparse 내적 (<#>)
     ADD COLUMN IF NOT EXISTS fusion_score real,   -- 최종 융합 점수
+    ADD COLUMN IF NOT EXISTS colbert_score real,  -- ColBERT MaxSim 점수 (rerank 시)
     ADD COLUMN IF NOT EXISTS rank_dense   integer,
     ADD COLUMN IF NOT EXISTS rank_sparse  integer,
     ADD COLUMN IF NOT EXISTS rank_morph   integer;

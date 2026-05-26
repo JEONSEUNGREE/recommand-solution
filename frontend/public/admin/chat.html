@@ -684,6 +684,13 @@
                   <span class="ctrl-lbl" style="color:#9CA3AF;">한국어 단어</span>
                 </label>
               </div>
+              <div class="ctrl-pill" id="colbert-pill">
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:inherit;">
+                  <input type="checkbox" id="colbert-chk" style="accent-color:#0D9488;">
+                  <span class="ctrl-lbl">ColBERT</span>
+                  <span class="ctrl-lbl" style="color:#9CA3AF;">재정렬</span>
+                </label>
+              </div>
               <span class="ctrl-spacer"></span>
               <span class="ctrl-adv" id="session-info">광고주 로드 중…</span>
             </div>
@@ -731,6 +738,7 @@
         <li><b>Dense</b> — 기존 의미 검색(코사인 거리 1024d). 분위기·맥락에 강함.</li>
         <li><b>Hybrid (D+S)</b> — dense + sparse(BGE 어휘 가중치). 영문·숫자·품번 매칭에 강함.</li>
         <li><b>형태소 체크</b> — 추가로 Kiwi 한국어 형태소 매칭(TF-IDF)을 켬. "여름·가방·목걸이" 같은 <b>한국어 단어 단위</b> 매칭. BGE sparse 가 음절로 쪼개 놓치는 부분을 보완.</li>
+        <li><b>ColBERT 체크</b> — 1차 결과(dense 또는 hybrid)를 <b>ColBERT MaxSim</b> 으로 재정렬(rerank). 토큰별 정밀 매칭으로 상위 후보 순서를 다듬음. dense·hybrid 어느 모드와도 조합 가능 (dense+ColBERT, hybrid+ColBERT, hybrid+형태소+ColBERT 등).</li>
       </ul>
 
       <h4 style="margin:0 0 6px;font-size:13px;color:#111;">융합(fusion) — 두 점수를 합치는 방식</h4>
@@ -811,6 +819,7 @@
   const alphaPill  = document.getElementById('alpha-pill');
   const morphPill  = document.getElementById('morph-pill');
   const morphChk   = document.getElementById('morph-chk');
+  const colbertChk = document.getElementById('colbert-chk');
 
   let isSending = false;
   let advId = null, advName = null;
@@ -828,6 +837,7 @@
     if (modeSel.value === 'hybrid') {
       mode = 'hybrid·' + fusionSel.value + (morphChk.checked ? '+형태소' : '');
     }
+    if (colbertChk && colbertChk.checked) mode += '+ColBERT';
     document.getElementById('chat-head-sub').textContent = mode + ' · ' + embed + ' · ' + llm;
   }
   llmSel.addEventListener('change', updateHeadSub);
@@ -846,6 +856,7 @@
   fusionSel.addEventListener('change', syncHybridOpts);
   alphaInp.addEventListener('input', syncHybridOpts);
   morphChk.addEventListener('change', updateHeadSub);
+  colbertChk.addEventListener('change', updateHeadSub);
   syncHybridOpts();
 
   // ── 광고주 초기화 ────────────────────────────────────────────
@@ -963,6 +974,7 @@
     let sparseAbsMax = 0;
     let morphAbsMax = 0;
     const useMorph = !!(meta && meta.use_morpheme);
+    const useColbert = !!(meta && meta.use_colbert);
     if (isHybridLive) {
       scoreMax = Math.max(0, ...items.map(x => x.score || 0));
       sparseAbsMax = Math.max(0, ...items.map(x => Math.abs(x.sparse_ip || 0)));
@@ -1008,8 +1020,19 @@
       } else if (isHybrid) {
         simExtra = `<span style="font-size:9px;color:#7C3AED;font-weight:600;line-height:1;letter-spacing:.04em;">HYBRID</span>`;
       }
-      // 하이브리드 데이터 attr (사유 팝업에서 사용)
-      const hybridAttrs = isHybrid ? `
+      // ColBERT 적용 배지 (dense·hybrid 무관하게 표시)
+      if (useColbert) {
+        const cbScore = (p.colbert_score != null) ? ` ${Number(p.colbert_score).toFixed(2)}` : '';
+        simExtra += `<span style="font-size:9px;color:#0D9488;font-weight:600;line-height:1;letter-spacing:.04em;">CB↑${cbScore}</span>`;
+      }
+      const showCol = isHybrid || useColbert;  // 카드 세로 레이아웃 적용 조건
+      // 데이터 attr (사유 팝업에서 사용) — colbert 는 mode 무관하게 항상 첨부
+      const colbertAttrs = `
+                data-use-colbert="${useColbert ? '1' : ''}"
+                data-colbert-score="${p.colbert_score != null ? Number(p.colbert_score).toFixed(5) : ''}"
+                data-desc-raw="${escHtml(p.description || '')}"
+                data-query="${escHtml((meta && meta.query) || '')}"`;
+      const hybridAttrs = (isHybrid ? `
                 data-mode="hybrid"
                 data-fusion="${escHtml(meta.fusion || '')}"
                 data-alpha="${meta.alpha != null ? meta.alpha : ''}"
@@ -1021,9 +1044,7 @@
                 data-morph-pct="${morphPctNum}"
                 data-score="${p.score != null ? p.score.toFixed(6) : ''}"
                 data-rank-dense="${p.rank_dense != null ? p.rank_dense : ''}"
-                data-rank-sparse="${p.rank_sparse != null ? p.rank_sparse : ''}"
-                data-desc-raw="${escHtml(p.description || '')}"
-                data-query="${escHtml(meta.query || '')}"` : ` data-mode="dense"`;
+                data-rank-sparse="${p.rank_sparse != null ? p.rank_sparse : ''}"` : ` data-mode="dense"`) + colbertAttrs;
       return `<a class="reco-card" href="${href}" target="_blank" rel="noopener">
         <div class="reco-thumb">${thumbHtml}</div>
         <div class="reco-body">
@@ -1033,7 +1054,7 @@
           <div class="reco-footer">
             <span class="reco-price">${priceStr || '—'}</span>
             <div style="display:flex;align-items:center;gap:4px;">
-              <span class="reco-sim" style="${isHybrid ? 'display:flex;flex-direction:column;align-items:flex-end;line-height:1.1;gap:1px;' : ''}">
+              <span class="reco-sim" style="${showCol ? 'display:flex;flex-direction:column;align-items:flex-end;line-height:1.1;gap:1px;' : ''}">
                 <span>${sim}</span>
                 ${simExtra}
               </span>
@@ -1087,6 +1108,7 @@
         fusion: fusionSel.value,
         alpha: Number(alphaInp.value),
         use_morpheme: morphChk.checked,
+        use_colbert: colbertChk.checked,
       };
       const res  = await fetch(EMBEDDER + '/search-rv-llm', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1116,6 +1138,7 @@
         bubbleHtml = buildRecoCards(items, cnt, pId,
                                      { mode: data.mode, fusion: data.fusion, alpha: data.alpha,
                                        use_morpheme: data.use_morpheme, weights: data.weights,
+                                       use_colbert: data.use_colbert,
                                        query: data.raw_query || txt })
                     + pipelineBtn(pId);
         metaExtra  = `<span>${data.total_duration_ms != null ? data.total_duration_ms + 'ms' : ''}</span>`;
@@ -1251,6 +1274,7 @@
       // → 이력 클릭 시에도 메타가 살아있어 사유 팝업의 분해/단어 상세가 동작.
       let histMeta = null;
       const be = String(log.backend || '');
+      const useCb = /\+colbert/.test(be);  // ColBERT 재정렬 적용 여부
       let mm = be.match(/\+(dsm?):(\w+)\(([^)]*)\)/);   // 신규 ds / dsm
       if (mm) {
         const sig = mm[1], fusion = mm[2], wstr = mm[3];
@@ -1261,20 +1285,23 @@
           mode: 'hybrid', fusion,
           alpha: wd != null ? parseFloat(wd) : 0.5,
           use_morpheme: sig === 'dsm',
+          use_colbert: useCb,
           weights: { dense: wd ? +wd : null, sparse: ws ? +ws : null, morpheme: wmm ? +wmm : null },
           query: log.query || '',
         };
       } else {
         const m = be.match(/sparse:(\w+)\(a=([\d.]+)\)/);  // 구 포맷
         if (m) histMeta = { mode: 'hybrid', fusion: m[1], alpha: parseFloat(m[2]),
-                            use_morpheme: false, query: log.query || '' };
+                            use_morpheme: false, use_colbert: useCb, query: log.query || '' };
+        else if (useCb) histMeta = { mode: 'dense', use_colbert: true, query: log.query || '' };
       }
 
       recoStore.set(pId, { items, query_coord3d: data.query_coord3d || null,
-                            mode: histMeta ? 'hybrid' : 'dense',
+                            mode: histMeta ? histMeta.mode : 'dense',
                             fusion: histMeta ? histMeta.fusion : null,
                             alpha:  histMeta ? histMeta.alpha  : null,
-                            use_morpheme: histMeta ? histMeta.use_morpheme : false });
+                            use_morpheme: histMeta ? !!histMeta.use_morpheme : false,
+                            use_colbert: histMeta ? !!histMeta.use_colbert : false });
 
       let bubbleHtml;
       if (items.length > 0) {
@@ -1678,6 +1705,16 @@
       : (el.dataset.dist ? `코사인거리 ${el.dataset.dist}` : '');
     document.getElementById('rp-desc').textContent  = el.dataset.desc || '—';
 
+    // ColBERT 행 — dense·hybrid 무관하게 colbert 적용 시 표시
+    const cbRow = document.getElementById('rp-colbert-row');
+    if (el.dataset.useColbert === '1') {
+      cbRow.style.display = '';
+      const cb = el.dataset.colbertScore ? Number(el.dataset.colbertScore) : null;
+      document.getElementById('rp-colbert-score').textContent = cb != null ? cb.toFixed(4) : '—';
+    } else {
+      cbRow.style.display = 'none';
+    }
+
     // 하이브리드 분해 블록 표시/숨김
     const hb = document.getElementById('rp-hybrid-block');
     if (isHybrid) {
@@ -1964,6 +2001,13 @@
           <span class="reason-val">
             <span id="rp-sim"></span>
             <span class="dist" id="rp-dist"></span>
+          </span>
+        </div>
+        <div class="reason-row" id="rp-colbert-row" style="display:none;">
+          <span class="reason-lbl" style="color:#0D9488;">ColBERT</span>
+          <span class="reason-val">
+            <span id="rp-colbert-score"></span>
+            <span class="dist">MaxSim 재정렬 점수 (높을수록 관련)</span>
           </span>
         </div>
       </div>
