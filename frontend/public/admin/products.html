@@ -464,6 +464,19 @@
   </div>
 </div>
 
+<!-- ── 이미지 분류(AI) 팝업 — 상세 모달 메인 이미지 클릭 시 ── -->
+<div class="modal-backdrop" id="imgtypes-modal" style="z-index:1200;">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-head">
+      <span id="imgtypes-title">이미지 분류 (AI)</span>
+      <button class="close-btn" id="imgtypes-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px;height:14px;stroke-width:2;"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="imgtypes-body"></div>
+  </div>
+</div>
+
 <!-- ── Common image popup ── -->
 <div class="modal-backdrop" id="img-popup">
   <div class="modal" style="max-width:540px;">
@@ -684,7 +697,7 @@
           : '';
         imgHtml = `<div class="modal-field"><div class="lbl">크롤링 이미지 (${localCount}장)</div>
           <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-top:6px;">
-            <div class="modal-img-wrap${mainBlocked?' is-blocked':''}" style="width:130px;height:130px;flex-shrink:0;">
+            <div class="modal-img-wrap${mainBlocked?' is-blocked':''} img-types-trigger" style="width:130px;height:130px;flex-shrink:0;cursor:zoom-in;" onclick="openImgTypesPopup()" title="이미지 분류 보기">
               <img class="img-main img-main-proxy" src="${imgBase}0" style="width:130px;height:130px;object-fit:cover;border-radius:5px;display:block;" onerror="this.style.display='none'">
               ${mainImgBlock}
             </div>
@@ -694,7 +707,7 @@
         const mainBlocked = isBlocked(d.image_url);
         const mainEntry   = mainBlocked ? getBlockEntry(d.image_url) : null;
         imgHtml = `<div class="modal-field"><div class="lbl">대표 이미지</div>
-          <div class="modal-img-wrap${mainBlocked?' is-blocked':''}" style="width:130px;height:130px;margin-top:6px;">
+          <div class="modal-img-wrap${mainBlocked?' is-blocked':''} img-types-trigger" style="width:130px;height:130px;margin-top:6px;cursor:zoom-in;" onclick="openImgTypesPopup()" title="이미지 분류 보기">
             <img src="${esc(d.image_url)}" style="width:130px;height:130px;object-fit:cover;border-radius:5px;display:block;" onerror="this.style.display='none'">
             ${mainBlocked?`<div class="modal-img-blocked-dim"></div><div class="modal-img-blocked-badge">차단됨</div><button class="modal-img-unblock-btn" onclick="modalUnblockImg(${mainEntry.id},this)">🔓 해제</button>`:''}
           </div></div>`;
@@ -758,19 +771,22 @@
         setHtml += `<div class="modal-field"><div class="lbl">호환/관련 상품</div><pre class="modal-desc" style="white-space:pre-wrap;font-family:monospace;font-size:11.5px;margin-top:6px;">${esc(JSON.stringify(d.compatible_products, null, 2))}</pre></div>`;
       }
 
-      // ── 이미지 분류 (AI) ──
-      let imgTypesHtml = '';
+      // ── 이미지 분류 (AI) — 본문에 넣지 않고 메인 이미지 클릭 팝업으로 표시 ──
       const imgTypes = Array.isArray(d.image_types) ? d.image_types : [];
       if (imgTypes.length) {
         const rows = imgTypes.map(t => {
           const used = t.used_for_attributes && t.is_main_product;
-          return `<div style="display:flex;align-items:baseline;gap:8px;font-size:12px;">
+          return `<div style="display:flex;align-items:baseline;gap:8px;font-size:12px;padding:6px 0;border-bottom:1px solid var(--line);">
             <span style="font-family:monospace;color:var(--info);min-width:90px;">${esc(t.image_type||'?')}</span>
             <span style="color:${used?'var(--ok)':'var(--warn)'};font-size:11px;min-width:32px;">${used?'✓ 사용':'skip'}</span>
             <span style="color:var(--text-3);">${esc(t.content_description||'')}</span>
           </div>`;
         }).join('');
-        imgTypesHtml = `<div class="modal-field"><div class="lbl">이미지 분류 (${imgTypes.length}장)</div><div style="margin-top:6px;display:flex;flex-direction:column;gap:5px;">${rows}</div></div>`;
+        window._imgTypesPopupHtml = `<div style="display:flex;flex-direction:column;">${rows}</div>`;
+        window._imgTypesTitle = `이미지 분류 (AI) · ${imgTypes.length}장`;
+      } else {
+        window._imgTypesPopupHtml = `<div style="padding:24px;text-align:center;color:var(--text-4);font-size:13px;">이미지 분류 정보가 없습니다.</div>`;
+        window._imgTypesTitle = '이미지 분류 (AI)';
       }
 
       // ── 비용 / 토큰 메타 ──
@@ -798,7 +814,6 @@
         ${catAttrHtml}
         ${setHtml}
         ${descs.map(([k,v])=>`<div class="modal-field"><div class="lbl">${k}</div><div class="modal-desc">${esc(v)}</div></div>`).join('')}
-        ${imgTypesHtml}
         ${d.product_url?`<div class="modal-field"><div class="lbl">상품 URL</div><div class="val"><a href="${esc(d.product_url)}" target="_blank" rel="noopener">${esc(d.product_url)}</a></div></div>`:''}
         ${metaHtml}
       `;
@@ -810,6 +825,15 @@
 
   $('modal-close').addEventListener('click', () => $('detail-modal').classList.remove('open'));
   $('detail-modal').addEventListener('click', e => { if (e.target===e.currentTarget) e.currentTarget.classList.remove('open'); });
+
+  // ── 이미지 분류(AI) 팝업 ──
+  window.openImgTypesPopup = function () {
+    $('imgtypes-title').textContent = window._imgTypesTitle || '이미지 분류 (AI)';
+    $('imgtypes-body').innerHTML = window._imgTypesPopupHtml || '';
+    $('imgtypes-modal').classList.add('open');
+  };
+  $('imgtypes-close').addEventListener('click', () => $('imgtypes-modal').classList.remove('open'));
+  $('imgtypes-modal').addEventListener('click', e => { if (e.target===e.currentTarget) e.currentTarget.classList.remove('open'); });
 
   // ══════════════════════════════════════════════════════════
   // PANELS: 크롤링 / Enrich (Spring Boot)

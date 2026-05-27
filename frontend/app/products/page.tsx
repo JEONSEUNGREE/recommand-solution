@@ -418,48 +418,12 @@ function DetailPanel({ d }: { d: DetailRow }) {
   const perspectiveLabel: Record<string, string> = {
     situation: "상황", material: "소재", style: "스타일", persona: "페르소나",
   };
-  const [showDesc, setShowDesc] = useState(false);
-  const hasDesc = !!(d.descriptions && d.descriptions.length > 0);
   return (
     <div className="space-y-4">
       {d.image_url && (
-        <div className="relative group">
-          <img src={d.image_url} alt={d.product_name}
-            onClick={() => hasDesc && setShowDesc(true)}
-            className={`w-full rounded-lg object-cover max-h-64 bg-neutral-800 ${hasDesc ? "cursor-zoom-in" : ""}`}
-            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-          {hasDesc && (
-            <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-md pointer-events-none opacity-90">
-              🔍 이미지 분석 보기
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 이미지 분석 문구 팝업 — 상단 이미지 클릭 시 */}
-      {showDesc && hasDesc && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
-          onClick={() => setShowDesc(false)}>
-          <div className="bg-neutral-900 border border-neutral-700 rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-2xl"
-            onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800 sticky top-0 bg-neutral-900">
-              <h3 className="font-semibold text-sm">이미지 분석 — {d.product_name}</h3>
-              <button onClick={() => setShowDesc(false)}
-                className="text-neutral-400 hover:text-white text-lg leading-none">×</button>
-            </div>
-            <div className="p-4 space-y-3">
-              {d.image_url && (
-                <img src={d.image_url} alt="" className="w-full rounded-lg object-cover max-h-56 bg-neutral-800" />
-              )}
-              {d.descriptions.map((desc) => (
-                <div key={desc.perspective} className="bg-neutral-800 rounded px-3 py-2">
-                  <div className="text-xs text-neutral-500 mb-0.5">{perspectiveLabel[desc.perspective] ?? desc.perspective}</div>
-                  <p className="text-xs text-neutral-200 leading-relaxed">{desc.description}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <img src={d.image_url} alt={d.product_name}
+          className="w-full rounded-lg object-cover max-h-64 bg-neutral-800"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
       )}
       <div>
         <h3 className="font-semibold text-base">{d.product_name}</h3>
@@ -487,6 +451,20 @@ function DetailPanel({ d }: { d: DetailRow }) {
             className="text-xs text-indigo-400 hover:underline mt-1 inline-block">상품 페이지 →</a>
         )}
       </div>
+
+      {d.descriptions && d.descriptions.length > 0 && (
+        <div>
+          <div className="text-xs text-neutral-500 mb-2 font-medium">임베딩 설명문</div>
+          <div className="space-y-2">
+            {d.descriptions.map((desc) => (
+              <div key={desc.perspective} className="bg-neutral-800 rounded px-3 py-2">
+                <div className="text-xs text-neutral-500 mb-0.5">{perspectiveLabel[desc.perspective] ?? desc.perspective}</div>
+                <p className="text-xs text-neutral-200">{desc.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {d.tags && d.tags.length > 0 && (
         <div>
