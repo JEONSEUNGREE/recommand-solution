@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIRA · 검색 품질 평가</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .two-col { display:grid; grid-template-columns:340px 1fr; gap:10px; margin-bottom:10px; }
+  .full-card { margin-bottom:10px; }
+  .field-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .field-row label { font-size:12.5px; color:var(--text-3); width:96px; flex-shrink:0; }
+  .field-row input[type=number], .field-row select {
+    border:1px solid var(--line); border-radius:5px; padding:6px 8px; font-size:13px; background:#fff; flex:1;
+  }
+  .toggle { display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:12.5px; color:var(--text-2); }
+  .toggle input { width:16px; height:16px; }
+
+  .section-state { display:flex; align-items:center; justify-content:center; gap:10px; padding:30px 16px; color:var(--text-4); font-size:13px; }
+  .section-state.err { color:var(--err); }
+  .mini-spinner { width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--primary); border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* KPI big metric */
+  .metric-row { display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-top:1px solid var(--line); }
+  .metric { padding:18px 20px; border-right:1px solid var(--line); }
+  .metric:last-child { border-right:none; }
+  .metric .l { font-size:11.5px; color:var(--text-3); margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+  .metric .l .star { color:var(--amber); font-weight:800; }
+  .metric .v { font-size:30px; font-weight:800; letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1; }
+  .metric .v small { font-size:13px; color:var(--text-4); font-weight:600; margin-left:3px; }
+  .metric.main .v { color:var(--ok); }
+  .metric .bar { height:5px; background:var(--surface-2); border-radius:3px; margin-top:10px; overflow:hidden; }
+  .metric .bar > i { display:block; height:100%; border-radius:3px; background:var(--ok); transition:width .6s var(--ease); }
+
+  .set-row { cursor:pointer; }
+  .set-row.active { background:var(--accent-soft); }
+  .set-row.active td:first-child { box-shadow:inset 3px 0 0 var(--primary); }
+  .pill { display:inline-block; font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:5px; }
+  .pill.bge { background:var(--info-soft); color:var(--info); }
+  .pill.openai { background:var(--purple-soft); color:var(--purple); }
+  .pill.on { background:var(--ok-soft); color:var(--ok); }
+  .pill.off { background:var(--surface-3); color:var(--text-3); }
+  .rank-badge { font-variant-numeric:tabular-nums; font-weight:700; }
+  .rank-miss { color:var(--err); }
+  .rank-good { color:var(--ok); }
+  .rank-mid  { color:var(--amber); }
+  table td.num, table th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .hint { font-size:11.5px; color:var(--text-4); line-height:1.6; }
+</style>
+</head>
+<body data-route="eval">
+<div class="shell">
+  <div id="side-mount"></div>
+  <main class="main">
+    <div id="top-mount"></div>
+
+    <div class="page" style="max-width:1280px;margin:0 auto;">
+
+      <div class="page-head">
+        <div>
+          <h1>검색 품질 평가</h1>
+          <div class="sub">Gecko(arXiv:2403.20327) · 오늘의집 방식 — LLM이 상품에서 검색어를 만들고, 그 상품을 정답으로 두어 <b>NDCG@10</b>으로 검색기를 채점합니다.</div>
+        </div>
+      </div>
+
+      <!-- 평가셋: 빌드 + 목록 -->
+      <div class="two-col">
+
+        <!-- build -->
+        <div class="card">
+          <div class="card-head">
+            <span style="display:inline-flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:2px;background:var(--purple);"></span>
+              평가셋 만들기
+            </span>
+          </div>
+          <div style="padding:14px 16px;">
+            <div class="field-row">
+              <label>상품 수</label>
+              <input type="number" id="in-prod" value="50" min="1" max="300">
+            </div>
+            <div class="field-row">
+              <label>상품당 쿼리</label>
+              <input type="number" id="in-perq" value="3" min="1" max="10">
+            </div>
+            <div class="hint" style="margin:2px 0 12px;">
+              gpt-4o-mini로 <b id="lbl-total">150</b>개 쿼리 생성 (상품 × 쿼리). 광고주는 현재 선택값 기준.
+            </div>
+            <button class="btn btn-primary" id="btn-build" style="width:100%;justify-content:center;">
+              평가셋 생성
+            </button>
+            <div id="build-state" style="margin-top:10px;"></div>
+          </div>
+        </div>
+
+        <!-- set list -->
+        <div class="card">
+          <div class="card-head">
+            <span style="display:inline-flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:2px;background:var(--info);"></span>
+              평가셋 목록
+            </span>
+            <span class="right hint">행을 클릭해 선택</span>
+          </div>
+          <div id="sets-body" style="max-height:240px;overflow-y:auto;">
+            <div class="section-state"><div class="mini-spinner"></div>불러오는 중…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 실행 + 결과 -->
+      <div class="card full-card">
+        <div class="card-head">
+          <span style="display:inline-flex;align-items:center;gap:8px;">
+            <span style="width:8px;height:8px;border-radius:2px;background:var(--ok);"></span>
+            평가 실행 <span id="sel-set-label" class="hint" style="margin-left:6px;">— 평가셋을 선택하세요</span>
+          </span>
+        </div>
+        <div style="padding:12px 16px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;border-bottom:1px solid var(--line);">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label style="font-size:12.5px;color:var(--text-3);">임베딩</label>
+            <select id="run-backend" style="border:1px solid var(--line);border-radius:5px;padding:6px 8px;font-size:13px;background:#fff;">
+              <option value="bge">bge-m3 (1024d)</option>
+              <option value="openai">openai (1536d)</option>
+            </select>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="run-llm">
+            LLM 쿼리 정제 (gpt-4o-mini)
+            <span class="hint" title="검색 전 LLM이 쿼리를 의미 쿼리로 변환. 쿼리당 LLM 1회 호출(비용↑)">ⓘ</span>
+          </label>
+          <button class="btn btn-primary" id="btn-run" disabled style="margin-left:auto;">평가 실행</button>
+        </div>
+
+        <div id="result-body">
+          <div class="section-state">평가셋을 선택하고 <b style="margin:0 4px;">평가 실행</b>을 누르세요.</div>
+        </div>
+      </div>
+
+      <!-- 실행 이력 비교 -->
+      <div class="card full-card">
+        <div class="card-head">
+          <span style="display:inline-flex;align-items:center;gap:8px;">
+            <span style="width:8px;height:8px;border-radius:2px;background:var(--amber);"></span>
+            실행 이력 비교
+          </span>
+          <span class="right hint">같은 평가셋 · 설정별 점수</span>
+        </div>
+        <div id="runs-body">
+          <div class="section-state">선택된 평가셋의 실행 이력이 여기 표시됩니다.</div>
+        </div>
+      </div>
+
+      <!-- 드릴다운 -->
+      <div class="card full-card">
+        <div class="card-head">
+          <span style="display:inline-flex;align-items:center;gap:8px;">
+            <span style="width:8px;height:8px;border-radius:2px;background:var(--primary);"></span>
+            쿼리별 상세 <span id="drill-label" class="hint" style="margin-left:6px;">— 이력에서 실행을 클릭</span>
+          </span>
+          <span class="right hint">NDCG 낮은(검색 실패) 순</span>
+        </div>
+        <div id="drill-body">
+          <div class="section-state">실행 이력 행을 클릭하면 쿼리별 gold 순위를 볼 수 있습니다.</div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script src="partials.js"></script>
+<script src="enhance.js"></script>
+<script>
+(function () {
+  const API = 'http://192.168.101.27:8001';
+  let advId = null;
+  try { const a = JSON.parse(localStorage.getItem('aira_adv') || 'null'); advId = a?.id ?? null; } catch (_) {}
+
+  const $ = id => document.getElementById(id);
+  const fmt = n => Number(n).toLocaleString('ko-KR');
+  const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const pct = x => (x == null ? '—' : (x * 100).toFixed(1) + '%');
+
+  let selectedSet = null;   // {id, ...}
+  let selectedRunId = null;
+
+  // ── 총 쿼리 수 미리보기 ──
+  function updateTotal() {
+    const p = parseInt($('in-prod').value) || 0;
+    const q = parseInt($('in-perq').value) || 0;
+    $('lbl-total').textContent = fmt(p * q);
+  }
+  $('in-prod').addEventListener('input', updateTotal);
+  $('in-perq').addEventListener('input', updateTotal);
+
+  // ── 평가셋 빌드 ──
+  $('btn-build').addEventListener('click', async () => {
+    const n_products = Math.max(1, Math.min(300, parseInt($('in-prod').value) || 50));
+    const n_per_product = Math.max(1, Math.min(10, parseInt($('in-perq').value) || 3));
+    $('btn-build').disabled = true;
+    $('build-state').innerHTML = `<div class="section-state" style="padding:10px 0;"><div class="mini-spinner"></div>${fmt(n_products*n_per_product)}개 쿼리 생성 중… (수십 초 소요)</div>`;
+    try {
+      const r = await fetch(API + '/eval/build-set', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ advertiser_id: advId, n_products, n_per_product }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status));
+      const cost = d.usage?.cost_usd || 0;
+      $('build-state').innerHTML =
+        `<div style="font-size:12.5px;color:var(--ok);">✓ 평가셋 #${d.eval_set_id} 생성 — 쿼리 ${fmt(d.n_queries)}개`
+        + (d.failures ? ` <span style="color:var(--warn);">(실패 ${d.failures})</span>` : '')
+        + `<div class="hint" style="margin-top:3px;">비용 ₩${Math.round(cost*1503).toLocaleString('ko-KR')} ($${cost.toFixed(5)})</div></div>`;
+      await loadSets();
+      const row = document.querySelector(`.set-row[data-id="${d.eval_set_id}"]`);
+      if (row) row.click();
+    } catch (e) {
+      $('build-state').innerHTML = `<div class="section-state err" style="padding:8px 0;">생성 실패: ${esc(e.message)}</div>`;
+    } finally {
+      $('btn-build').disabled = false;
+    }
+  });
+
+  // ── 평가셋 목록 ──
+  async function loadSets() {
+    try {
+      const d = await fetch(API + '/eval/sets').then(r => r.json());
+      const sets = d.sets || [];
+      if (!sets.length) { $('sets-body').innerHTML = '<div class="section-state">평가셋이 없습니다. 왼쪽에서 생성하세요.</div>'; return; }
+      $('sets-body').innerHTML = `
+        <table style="width:100%;">
+          <thead><tr>
+            <th>#</th><th class="num">쿼리</th><th class="num">최고 NDCG</th><th class="num">실행</th><th class="num">비용</th><th>생성</th>
+          </tr></thead>
+          <tbody>${sets.map(s => `
+            <tr class="set-row" data-id="${s.id}">
+              <td><b>#${s.id}</b></td>
+              <td class="num">${fmt(s.n_queries)}</td>
+              <td class="num">${s.best_ndcg != null ? s.best_ndcg.toFixed(4) : '—'}</td>
+              <td class="num">${fmt(s.run_count)}</td>
+              <td class="num" style="font-size:11px;color:var(--text-4);">$${(s.llm_cost_usd||0).toFixed(4)}</td>
+              <td style="font-size:11px;color:var(--text-4);">${(s.created_at||'').slice(0,16).replace('T',' ')}</td>
+            </tr>`).join('')}</tbody>
+        </table>`;
+      document.querySelectorAll('.set-row').forEach(row => {
+        row.addEventListener('click', () => selectSet(sets.find(x => String(x.id) === row.dataset.id), row));
+      });
+      if (selectedSet) {
+        const keep = document.querySelector(`.set-row[data-id="${selectedSet.id}"]`);
+        if (keep) keep.classList.add('active');
+      }
+    } catch (e) {
+      $('sets-body').innerHTML = `<div class="section-state err">로드 실패: ${esc(e.message)}</div>`;
+    }
+  }
+
+  function selectSet(s, row) {
+    if (!s) return;
+    selectedSet = s;
+    document.querySelectorAll('.set-row').forEach(r => r.classList.remove('active'));
+    if (row) row.classList.add('active');
+    $('sel-set-label').innerHTML = `평가셋 <b>#${s.id}</b> · 쿼리 ${fmt(s.n_queries)}개`;
+    $('btn-run').disabled = false;
+    $('result-body').innerHTML = `<div class="section-state">설정을 고르고 <b style="margin:0 4px;">평가 실행</b>을 누르세요.</div>`;
+    loadRuns(s.id);
+    $('drill-label').innerHTML = '— 이력에서 실행을 클릭';
+    $('drill-body').innerHTML = `<div class="section-state">실행 이력 행을 클릭하면 쿼리별 gold 순위를 볼 수 있습니다.</div>`;
+  }
+
+  // ── 평가 실행 ──
+  $('btn-run').addEventListener('click', async () => {
+    if (!selectedSet) return;
+    const backend = $('run-backend').value;
+    const llm_query_parse = $('run-llm').checked;
+    $('btn-run').disabled = true;
+    $('result-body').innerHTML = `<div class="section-state"><div class="mini-spinner"></div>검색 ${fmt(selectedSet.n_queries)}개 평가 중… <span class="hint">(1건당 수 초 · ${fmt(selectedSet.n_queries)}건 ≈ 수 분 소요${llm_query_parse ? ', LLM 정제 포함' : ''})</span></div>`;
+    try {
+      const r = await fetch(API + '/eval/run', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eval_set_id: selectedSet.id, backend, k: 10, llm_query_parse }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status));
+      renderResult(d);
+      await loadRuns(selectedSet.id);
+      await loadSets();
+    } catch (e) {
+      $('result-body').innerHTML = `<div class="section-state err">실행 실패: ${esc(e.message)}</div>`;
+    } finally {
+      $('btn-run').disabled = false;
+    }
+  });
+
+  function renderResult(d) {
+    $('result-body').innerHTML = `
+      <div class="metric-row">
+        <div class="metric main">
+          <div class="l"><span class="star">★</span> NDCG@10 <span class="hint">(메인)</span></div>
+          <div class="v">${(d.ndcg_at_10*1).toFixed(4)}</div>
+          <div class="bar"><i style="width:${(d.ndcg_at_10*100).toFixed(1)}%"></i></div>
+        </div>
+        <div class="metric">
+          <div class="l">Recall@10</div>
+          <div class="v">${pct(d.recall_at_10)}</div>
+          <div class="bar"><i style="width:${(d.recall_at_10*100).toFixed(1)}%;background:var(--info);"></i></div>
+        </div>
+        <div class="metric">
+          <div class="l">MRR</div>
+          <div class="v">${(d.mrr*1).toFixed(4)}</div>
+          <div class="bar"><i style="width:${(d.mrr*100).toFixed(1)}%;background:var(--purple);"></i></div>
+        </div>
+      </div>
+      <div style="padding:10px 16px;font-size:11.5px;color:var(--text-4);border-top:1px solid var(--line);">
+        run #${d.eval_run_id} · ${d.n_queries}개 쿼리 · <span class="pill ${d.backend}">${d.backend}</span>
+        · LLM 정제 <span class="pill ${d.llm_query_parse?'on':'off'}">${d.llm_query_parse?'ON':'OFF'}</span>
+        · ${d.duration_ms}ms
+      </div>`;
+  }
+
+  // ── 실행 이력 ──
+  async function loadRuns(setId) {
+    try {
+      const d = await fetch(API + `/eval/sets/${setId}/runs`).then(r => r.json());
+      const runs = d.runs || [];
+      if (!runs.length) { $('runs-body').innerHTML = '<div class="section-state">아직 실행 이력이 없습니다.</div>'; return; }
+      const best = Math.max(...runs.map(r => r.ndcg_at_10 || 0));
+      $('runs-body').innerHTML = `
+        <table style="width:100%;">
+          <thead><tr>
+            <th>run</th><th>임베딩</th><th>LLM정제</th><th class="num">NDCG@10</th><th class="num">Recall@10</th><th class="num">MRR</th><th class="num">쿼리</th><th>실행시각</th>
+          </tr></thead>
+          <tbody>${runs.map(r => `
+            <tr class="set-row" data-run="${r.id}">
+              <td><b>#${r.id}</b></td>
+              <td><span class="pill ${r.backend}">${r.backend}</span></td>
+              <td><span class="pill ${r.llm_query_parse?'on':'off'}">${r.llm_query_parse?'ON':'OFF'}</span></td>
+              <td class="num"><b style="color:${(r.ndcg_at_10||0)>=best&&best>0?'var(--ok)':'var(--text)'};">${r.ndcg_at_10!=null?r.ndcg_at_10.toFixed(4):'—'}</b>${(r.ndcg_at_10||0)>=best&&best>0?' 🏆':''}</td>
+              <td class="num">${pct(r.recall_at_10)}</td>
+              <td class="num">${r.mrr!=null?r.mrr.toFixed(4):'—'}</td>
+              <td class="num">${fmt(r.n_queries)}</td>
+              <td style="font-size:11px;color:var(--text-4);">${(r.created_at||'').slice(0,16).replace('T',' ')}</td>
+            </tr>`).join('')}</tbody>
+        </table>`;
+      document.querySelectorAll('[data-run]').forEach(row => {
+        row.addEventListener('click', () => {
+          document.querySelectorAll('[data-run]').forEach(x => x.classList.remove('active'));
+          row.classList.add('active');
+          loadDrill(row.dataset.run);
+        });
+      });
+    } catch (e) {
+      $('runs-body').innerHTML = `<div class="section-state err">로드 실패: ${esc(e.message)}</div>`;
+    }
+  }
+
+  // ── 드릴다운 ──
+  async function loadDrill(runId) {
+    selectedRunId = runId;
+    $('drill-label').innerHTML = `— run <b>#${runId}</b>`;
+    $('drill-body').innerHTML = `<div class="section-state"><div class="mini-spinner"></div>불러오는 중…</div>`;
+    try {
+      const d = await fetch(API + `/eval/runs/${runId}/items`).then(r => r.json());
+      const items = d.items || [];
+      if (!items.length) { $('drill-body').innerHTML = '<div class="section-state">데이터 없음</div>'; return; }
+      $('drill-body').innerHTML = `
+        <table style="width:100%;">
+          <thead><tr>
+            <th>생성된 쿼리</th><th>정답 상품</th><th class="num">gold 순위</th><th class="num">NDCG@10</th>
+          </tr></thead>
+          <tbody>${items.map(it => {
+            const rank = it.gold_rank;
+            const cls = rank == null ? 'rank-miss' : rank <= 3 ? 'rank-good' : rank <= 10 ? 'rank-mid' : 'rank-miss';
+            const rankTxt = rank == null ? '10위 밖' : rank + '위';
+            return `<tr>
+              <td style="max-width:360px;">${esc(it.query)}</td>
+              <td style="font-size:12px;color:var(--text-3);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(it.product_name || ('#'+it.gold_rv_product_id))}</td>
+              <td class="num"><span class="rank-badge ${cls}">${rankTxt}</span></td>
+              <td class="num">${(it.ndcg_at_10*1).toFixed(4)}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>`;
+    } catch (e) {
+      $('drill-body').innerHTML = `<div class="section-state err">로드 실패: ${esc(e.message)}</div>`;
+    }
+  }
+
+  // init
+  updateTotal();
+  loadSets();
+})();
+</script>
+</body>
+</html>

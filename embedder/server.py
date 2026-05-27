@@ -29,6 +29,7 @@ from .search_rv import router as search_rv_router
 from .products_list import router as products_list_router, logs_router
 from .rv_products_api import router as rv_products_router
 from .narrate import router as narrate_router  # chat2.html 전용 — 추천 내러티브(신규/독립)
+from .eval import router as eval_router  # 검색 품질 평가 (Gecko/오늘의집 방식, NDCG@10)
 
 MODEL_NAME = bge_model.MODEL_NAME
 DIM = bge_model.DIM
@@ -68,6 +69,7 @@ app.include_router(products_list_router)
 app.include_router(logs_router)
 app.include_router(rv_products_router)
 app.include_router(narrate_router)
+app.include_router(eval_router)
 
 
 class EmbedRequest(BaseModel):

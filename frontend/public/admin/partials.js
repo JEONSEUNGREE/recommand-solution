@@ -14,6 +14,7 @@
     'chat':              { href: 'chat.html',               crumb: ['홈', '추천 & 분석', '추천 채팅'] },
     'chat2':             { href: 'chat2.html',              crumb: ['홈', '추천 & 분석', '추천 채팅 (LLM 답변)'] },
     'cost':              { href: 'cost.html',               crumb: ['홈', '추천 & 분석', '토큰·비용'] },
+    'eval':              { href: 'eval.html',               crumb: ['홈', '추천 & 분석', '검색 품질 평가'] },
     'sync-advertisers':  { href: 'sync/index.html',         crumb: ['홈', '운영', '광고주 목록'] },
     'sync-products':     { href: 'sync/products.html',      crumb: ['홈', '운영', '광고주 목록', '상품 정제'] },
   };
@@ -30,6 +31,7 @@
     chat:        '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
     chat2:       '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
     cost:        '<svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9-6-18-3 9H2"/></svg>',
+    eval:        '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.5"/></svg>',
     ws:          '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>',
     perm:        '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/></svg>',
     refresh:     '<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>',
@@ -71,6 +73,7 @@
           ${buildItem('chat',  '추천 채팅',  'v1.0', activeRoute === 'chat', base)}
           ${buildItem('chat2', '추천 채팅',  'v1.1', activeRoute === 'chat2', base)}
           ${buildItem('cost', '토큰·비용',  null, activeRoute === 'cost', base)}
+          ${buildItem('eval', '검색 품질 평가', 'NDCG', activeRoute === 'eval', base)}
         </div>
 
         <div class="grp">
