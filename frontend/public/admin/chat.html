@@ -1130,10 +1130,22 @@
       recoStore.set(pId, { items, query_coord3d: data.query_coord3d || null,
                             mode: data.mode, fusion: data.fusion, alpha: data.alpha });
 
+      // 맞춤법 보정 안내 — corrected_query 가 원문과 다르면 표시
+      const corrected = (data.corrected_query || '').trim();
+      let correctHtml = '';
+      if (corrected && corrected !== txt) {
+        correctHtml = `<div style="font-size:12px;color:#6B7280;margin-bottom:8px;padding:6px 10px;background:#F9FAFB;border:1px solid #F3F4F6;border-radius:8px;">
+          <span style="color:#9CA3AF;">맞춤법 보정</span>
+          <span style="text-decoration:line-through;color:#9CA3AF;">${escHtml(txt)}</span>
+          <span style="color:#9CA3AF;">→</span>
+          <b style="color:#374151;">${escHtml(corrected)}</b>
+        </div>`;
+      }
+
       let bubbleHtml, metaExtra = '';
       if (cnt > 0) {
         loadEl.classList.add('wide');
-        bubbleHtml = buildRecoCards(items, cnt, pId,
+        bubbleHtml = correctHtml + buildRecoCards(items, cnt, pId,
                                      { mode: data.mode, fusion: data.fusion, alpha: data.alpha,
                                        use_morpheme: data.use_morpheme, weights: data.weights,
                                        use_colbert: data.use_colbert,
@@ -1141,7 +1153,7 @@
                     + pipelineBtn(pId);
         metaExtra  = `<span>${data.total_duration_ms != null ? data.total_duration_ms + 'ms' : ''}</span>`;
       } else {
-        bubbleHtml = `<span style="color:#6B7280;">검색 결과가 없어요. 다른 표현으로 다시 시도해보세요.</span>${pipelineBtn(pId)}`;
+        bubbleHtml = correctHtml + `<span style="color:#6B7280;">검색 결과가 없어요. 다른 표현으로 다시 시도해보세요.</span>${pipelineBtn(pId)}`;
       }
 
       const llmBadge = '<span class="badge" style="background:#F5F3FF;color:#6D28D9;border:1px solid #DDD6FE;font-size:10px;padding:1px 5px;">LLM</span>';

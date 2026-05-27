@@ -724,22 +724,83 @@
         tagsHtml = `<div class="modal-field"><div class="lbl">태그</div><div style="margin-top:6px;">${blocks}</div></div>`;
       }
 
-      const descs = [['situation·상황',d.desc_situation],['style·스타일',d.desc_style],['persona·페르소나',d.desc_persona]].filter(([,v])=>v);
+      const descs = [['situation·상황',d.desc_situation],['material·소재',d.desc_material],['style·스타일',d.desc_style],['persona·페르소나',d.desc_persona]].filter(([,v])=>v);
       const price = d.orig_sale_price ?? d.orig_price ?? d.price;
+
+      // ── 공통 속성 칩 (search-rv 패리티) ──
+      const attrPairs = [];
+      if (d.brand_tier)     attrPairs.push(['tier', d.brand_tier]);
+      if (d.price_tier)     attrPairs.push(['price', d.price_tier]);
+      if (d.target_gender)  attrPairs.push(['gender', d.target_gender]);
+      if (d.target_age_min && d.target_age_max) attrPairs.push(['age', d.target_age_min + '~' + d.target_age_max + '대']);
+      if (d.origin_country) attrPairs.push(['origin', d.origin_country]);
+      if (d.manufacturer)   attrPairs.push(['mfr', d.manufacturer]);
+      let attrHtml = '';
+      if (attrPairs.length) {
+        const chips = attrPairs.map(([k,v]) =>
+          `<span style="display:inline-flex;gap:4px;padding:3px 8px;border-radius:999px;font-size:12px;background:var(--surface-2);border:1px solid var(--line);"><b style="color:var(--text-4);font-weight:600;">${esc(k)}</b><span>${esc(String(v))}</span></span>`
+        ).join('');
+        attrHtml = `<div class="modal-field"><div class="lbl">공통 속성</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${chips}</div></div>`;
+      }
+
+      // ── 카테고리 속성 (JSONB) ──
+      let catAttrHtml = '';
+      if (d.category_attributes && typeof d.category_attributes === 'object' && Object.keys(d.category_attributes).length) {
+        catAttrHtml = `<div class="modal-field"><div class="lbl">카테고리 속성</div><pre class="modal-desc" style="white-space:pre-wrap;font-family:monospace;font-size:11.5px;margin-top:6px;">${esc(JSON.stringify(d.category_attributes, null, 2))}</pre></div>`;
+      }
+
+      // ── SET 구성 / 호환·관련 상품 ──
+      let setHtml = '';
+      if (Array.isArray(d.set_components) && d.set_components.length) {
+        setHtml += `<div class="modal-field"><div class="lbl">SET 구성</div><pre class="modal-desc" style="white-space:pre-wrap;font-family:monospace;font-size:11.5px;margin-top:6px;">${esc(JSON.stringify(d.set_components, null, 2))}</pre></div>`;
+      }
+      if (Array.isArray(d.compatible_products) && d.compatible_products.length) {
+        setHtml += `<div class="modal-field"><div class="lbl">호환/관련 상품</div><pre class="modal-desc" style="white-space:pre-wrap;font-family:monospace;font-size:11.5px;margin-top:6px;">${esc(JSON.stringify(d.compatible_products, null, 2))}</pre></div>`;
+      }
+
+      // ── 이미지 분류 (AI) ──
+      let imgTypesHtml = '';
+      const imgTypes = Array.isArray(d.image_types) ? d.image_types : [];
+      if (imgTypes.length) {
+        const rows = imgTypes.map(t => {
+          const used = t.used_for_attributes && t.is_main_product;
+          return `<div style="display:flex;align-items:baseline;gap:8px;font-size:12px;">
+            <span style="font-family:monospace;color:var(--info);min-width:90px;">${esc(t.image_type||'?')}</span>
+            <span style="color:${used?'var(--ok)':'var(--warn)'};font-size:11px;min-width:32px;">${used?'✓ 사용':'skip'}</span>
+            <span style="color:var(--text-3);">${esc(t.content_description||'')}</span>
+          </div>`;
+        }).join('');
+        imgTypesHtml = `<div class="modal-field"><div class="lbl">이미지 분류 (${imgTypes.length}장)</div><div style="margin-top:6px;display:flex;flex-direction:column;gap:5px;">${rows}</div></div>`;
+      }
+
+      // ── 비용 / 토큰 메타 ──
+      const metaBits = [];
+      if (d.model_used)       metaBits.push('model: ' + d.model_used);
+      metaBits.push('in: ' + (d.input_tokens||0) + ' tok');
+      metaBits.push('out: ' + (d.output_tokens||0) + ' tok');
+      if (d.cost_usd != null)    metaBits.push('cost: $' + Number(d.cost_usd).toFixed(4));
+      if (d.duration_ms != null) metaBits.push('time: ' + (Number(d.duration_ms)/1000).toFixed(1) + 's');
+      if (d.enriched_at)         metaBits.push('enriched: ' + String(d.enriched_at).slice(0,16));
+      const metaHtml = `<div class="modal-field" style="border-top:1px solid var(--line);padding-top:10px;margin-top:4px;"><div style="display:flex;flex-wrap:wrap;gap:10px;font-family:monospace;font-size:11px;color:var(--text-4);">${metaBits.map(b=>`<span>${esc(b)}</span>`).join('')}</div></div>`;
 
       $('modal-body').innerHTML = `
         ${imgHtml}
         <div class="modal-grid" style="margin-bottom:12px;">
           <div class="modal-field"><div class="lbl">상품명</div><div class="val">${esc(d.product_name||'—')}</div></div>
           <div class="modal-field"><div class="lbl">가격</div><div class="val tnum">${price!=null?'₩'+Number(price).toLocaleString('ko-KR'):'—'}</div></div>
-          <div class="modal-field"><div class="lbl">카테고리</div><div class="val">${esc(d.category||'—')}</div></div>
+          <div class="modal-field"><div class="lbl">카테고리</div><div class="val">${esc(d.category||'—')}${d.category_confidence!=null?` <span style="font-size:11px;color:var(--text-4);">(conf ${Number(d.category_confidence).toFixed(2)})</span>`:''}</div></div>
           <div class="modal-field"><div class="lbl">브랜드</div><div class="val">${esc(d.brand||'—')}</div></div>
           <div class="modal-field"><div class="lbl">임베딩 상태</div><div class="val">${d.enrich_status==='embedded'?'<span class="embed-badge-ok">✓ embedded</span>':'<span class="embed-badge-no">'+esc(d.enrich_status||'—')+'</span>'}</div></div>
           <div class="modal-field"><div class="lbl">상품코드</div><div class="val" style="font-family:monospace;font-size:12px;">${esc(d.product_code||'—')}</div></div>
         </div>
+        ${attrHtml}
         ${tagsHtml}
+        ${catAttrHtml}
+        ${setHtml}
         ${descs.map(([k,v])=>`<div class="modal-field"><div class="lbl">${k}</div><div class="modal-desc">${esc(v)}</div></div>`).join('')}
+        ${imgTypesHtml}
         ${d.product_url?`<div class="modal-field"><div class="lbl">상품 URL</div><div class="val"><a href="${esc(d.product_url)}" target="_blank" rel="noopener">${esc(d.product_url)}</a></div></div>`:''}
+        ${metaHtml}
       `;
     } catch (e) {
       $('modal-body').innerHTML = `<div style="padding:24px;color:var(--err);">오류: ${esc(e.message)}</div>`;

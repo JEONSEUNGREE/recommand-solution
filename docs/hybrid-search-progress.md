@@ -204,3 +204,18 @@ BGE-M3 의 XLM-R 토크나이저가 한국어를 **음절 단위**로 쪼개("�
 ### vocab 갱신 주의
 - 신규 상품 추가 시 vocab 미등재 단어(신조어/브랜드명)는 매칭 안 됨.
   → 주기적으로 `build_morpheme_vocab.py` 재실행 + `/morpheme-reload-vocab` 호출 필요.
+
+---
+
+## 관점(perspective) 단위 융합 — 2026-05-27
+
+상품 1개 = 4관점 행. 이전엔 `MIN(dense_dist)`·`MIN(sparse_ip)`·`MIN(morph_ip)` 를
+**신호마다 독립**으로 뽑고, 화면 대표 관점/설명문은 `ORDER BY dense_dist`(=dense 승자)
+로 골랐다. → sparse 점수는 persona 행에서 났는데 화면엔 situation 설명문이 보이는
+**불일치** 발생 (사유 팝업 "매칭 단어 상세"가 엉뚱한 텍스트로 분석됨).
+
+**해결(방식 B)**: `_run_hybrid` SQL 의 GROUP BY 제거 → (상품×관점) 모든 행을 그대로
+페치. `_fuse` 가 **행별로** dense+sparse+morph 를 융합한 뒤, 상품별로 **융합점수가
+가장 높은 관점 행 하나**를 대표로 선택. 대표 관점·설명문·세 점수가 전부 같은 행에서
+나와 완전 일치 → 단어 상세도 정확해짐. 대표 관점이 dense 독점이 아니라 블렌드 기준이라
+랭킹이 더 정합적(검증: persona/situation 등 다양하게 선택됨).

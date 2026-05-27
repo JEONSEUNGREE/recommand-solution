@@ -445,6 +445,7 @@ _LLM_PARSE_PROMPT = """너는 한국 쇼핑몰 검색어 분석가다. 사용자
 
 ## 스키마
 {
+  "corrected_query": "사용자 원문의 오타·띄어쓰기·맞춤법만 자연스럽게 교정한 문장. 의미·단어·의도는 절대 바꾸지 말고, 명백한 오기만 고친다. 교정할 게 없으면 원문 그대로.",
   "semantic_query": "임베딩 검색용 표현 — filters로 분리되는 성별/연령/브랜드/가격만 빼고, 상황·소재·디자인·착용맥락·사회적신호(예: 연예인 착용·인기·셀럽·방송 착용)는 절대 버리지 말고 원문 의도 그대로 유지",
   "filters": {
     "target_gender": "여성|남성|공용" 또는 null,
@@ -461,6 +462,11 @@ _LLM_PARSE_PROMPT = """너는 한국 쇼핑몰 검색어 분석가다. 사용자
 }
 
 ## 추론 가이드 — 적극 활용
+- 맞춤법 교정 (corrected_query): 오타·띄어쓰기·자모 오류만 고친다.
+  · "겨울에 따듯하게 입을 니투" → "겨울에 따뜻하게 입을 니트"
+  · "데이트할때 입기조은 원피스" → "데이트할 때 입기 좋은 원피스"
+  · 단, 브랜드명/고유명사/연예인 이름은 함부로 고치지 마라 (불확실하면 원문 유지).
+  · 의미를 바꾸거나 단어를 추가/삭제하지 마라. 순수 표기 교정만.
 - 성별 (target_gender): 상품을 사용·착용할 **구매자** 성별을 의미한다. 연예인/모델이 착용했다는 문맥에서의 성별은 target_gender가 아니다.
   · "여자/여성/엄마/딸을 위한 상품" → 여성
   · "남자/남성/아빠/아들을 위한 상품" → 남성
@@ -525,7 +531,10 @@ _LLM_PARSE_PROMPT = """너는 한국 쇼핑몰 검색어 분석가다. 사용자
 → {"semantic_query":"여자연예인 착용 목걸이","filters":{"target_gender":null,"target_age_min":null,"target_age_max":null,"category_contains":"목걸이","perspective_preference":null,"keyword_filters":["여성 연예인"]},"notes":"연예인 성별은 구매자 성별 아님 → target_gender=null, 여성 연예인 키워드 필터"}
 
 쿼리: "귀걸이"
-→ {"semantic_query":"귀걸이","filters":{"target_gender":null,"target_age_min":null,"target_age_max":null,"category_contains":"귀걸이","perspective_preference":null,"keyword_filters":[]},"notes":"단순 키워드"}
+→ {"corrected_query":"귀걸이","semantic_query":"귀걸이","filters":{"target_gender":null,"target_age_min":null,"target_age_max":null,"category_contains":"귀걸이","perspective_preference":null,"keyword_filters":[]},"notes":"단순 키워드"}
+
+쿼리: "겨울에 따듯하게 입을 니투"
+→ {"corrected_query":"겨울에 따뜻하게 입을 니트","semantic_query":"겨울 따뜻한 니트","filters":{"target_gender":null,"target_age_min":null,"target_age_max":null,"category_contains":"니트","perspective_preference":"situation","keyword_filters":[]},"notes":"오타 교정: 따듯→따뜻, 니투→니트"}
 
 쿼리: "비싸보이지만 저렴한 귀걸이"
 → {"semantic_query":"고급스러운 느낌의 저렴한 귀걸이","filters":{"target_gender":null,"target_age_min":null,"target_age_max":null,"category_contains":"귀걸이","perspective_preference":"style","keyword_filters":[]},"notes":"가격 표현은 semantic_query에 포함"}
@@ -546,7 +555,8 @@ def _llm_parse_query(query: str, provider: str = "groq") -> dict:
     provider: 'groq' (Llama-3.3-70b) / 'openai' (gpt-4o-mini)
     반환값에 '_usage' 키로 토큰 사용량 포함: {input_tokens, output_tokens, cost_usd}
     """
-    fallback = {"semantic_query": query, "filters": {}, "notes": f"{provider} 폴백", "_usage": {}}
+    fallback = {"corrected_query": query, "semantic_query": query, "filters": {},
+                "notes": f"{provider} 폴백", "_usage": {}}
     try:
         if provider == "openai":
             if not os.environ.get("OPENAI_API_KEY"):
@@ -597,6 +607,7 @@ def _llm_parse_query(query: str, provider: str = "groq") -> dict:
             # groq llama-3.3-70b: $0.59/MTok input, $0.79/MTok output (무료 티어 사용 중)
             cost = in_tok * 0.00000059 + out_tok * 0.00000079
         data = json.loads(content)
+        data.setdefault("corrected_query", query)
         data.setdefault("semantic_query", query)
         data.setdefault("filters", {})
         data["provider"] = provider
@@ -929,28 +940,31 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
               "category", "brand", "brand_tier", "target_gender",
               "target_age_min", "target_age_max", "tags", "desc_persona", "emb"]
 
-    def _fuse(cands: list[dict]) -> list[dict]:
-        """dense + sparse(+morpheme) 결합. 거리/내적은 모두 '작을수록 좋음'.
+    def _fuse(rows: list[dict]) -> list[dict]:
+        """관점 단위 융합 (방식 B). 입력 rows = (상품×관점) 모든 행.
 
-        fusion="rrf"  : 각 신호 순위로 w/(60+rank) 가중합 (스케일 무관, robust).
-        fusion="alpha": 후보셋 내 min-max 정규화 후 가중합.
-        가중치 = (w_dense, w_sparse, w_morph) — _resolve_weights() 에서 정규화됨.
+        각 행마다 dense+sparse(+morpheme) 점수를 융합 → 행별 score.
+        그 다음 상품별로 **융합점수가 가장 높은 관점 행 하나**만 대표로 남긴다.
+        → 대표 관점·설명문·세 신호 점수가 전부 같은 행에서 나와 완전 일치.
+        (dense 가 관점을 독점 선택하던 이전 방식의 불일치를 제거.)
+
+        거리/내적은 모두 '작을수록 좋음'. 가중치=(w_dense,w_sparse,w_morph).
         """
-        if not cands:
+        if not rows:
             return []
         wd, ws, wm = w_dense, w_sparse, w_morph
 
         if req.fusion == "rrf":
             K = 60
-            for i, c in enumerate(sorted(cands, key=lambda x: x["dense_dist"]), 1):
+            for i, c in enumerate(sorted(rows, key=lambda x: x["dense_dist"]), 1):
                 c["rank_dense"] = i
             if use_s:
-                for i, c in enumerate(sorted(cands, key=lambda x: x["sparse_ip"]), 1):
+                for i, c in enumerate(sorted(rows, key=lambda x: x["sparse_ip"]), 1):
                     c["rank_sparse"] = i
             if use_m:
-                for i, c in enumerate(sorted(cands, key=lambda x: x["morph_ip"]), 1):
+                for i, c in enumerate(sorted(rows, key=lambda x: x["morph_ip"]), 1):
                     c["rank_morph"] = i
-            for c in cands:
+            for c in rows:
                 s = wd / (K + c["rank_dense"])
                 if use_s:
                     s += ws / (K + c["rank_sparse"])
@@ -959,15 +973,14 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
                 c["score"] = s
         else:  # alpha — min-max 정규화 (각 신호 1=best)
             def _norm_key(key):
-                vals = [c[key] for c in cands]
-                lo, hi = min(vals), max(vals)
-                return lo, hi
+                vals = [c[key] for c in rows]
+                return min(vals), max(vals)
             dlo, dhi = _norm_key("dense_dist")
             if use_s:
                 slo, shi = _norm_key("sparse_ip")
             if use_m:
                 mlo, mhi = _norm_key("morph_ip")
-            for c in cands:
+            for c in rows:
                 dn = (dhi - c["dense_dist"]) / (dhi - dlo) if dhi > dlo else 1.0
                 c["dense_norm"] = dn
                 s = wd * dn
@@ -980,8 +993,16 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
                     c["morph_norm"] = mn
                     s += wm * mn
                 c["score"] = s
-        cands.sort(key=lambda x: x["score"], reverse=True)
-        return cands[:cand_k]
+
+        # 상품별 최고 융합점수 관점만 대표로 남김
+        best: dict = {}
+        for c in rows:
+            pid = c["rv_product_id"]
+            cur = best.get(pid)
+            if cur is None or c["score"] > cur["score"]:
+                best[pid] = c
+        out = sorted(best.values(), key=lambda x: x["score"], reverse=True)
+        return out[:cand_k]
 
     def _run_hybrid(conn, where_list: list, where_params: list) -> list:
         # 필터에 맞는 상품 전체의 dense(+sparse+morpheme) 거리를 모아 Python 에서 융합.
@@ -996,6 +1017,8 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
         if use_m:
             vec_params.append(qmorph)
 
+        # 방식 B: 관점 단위 융합 — GROUP BY 로 미리 합치지 않고 (상품×관점) 모든 행을
+        # 그대로 가져와 Python(_fuse)에서 행별 융합 후 상품별 최고 관점을 고른다.
         sql = f"""
             WITH all_dist AS (
                 SELECT pd.rv_product_id, pd.advertiser_id, pd.perspective, pd.description,
@@ -1007,28 +1030,17 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
                   {rv_price_join}
                   {pe_join}
                  WHERE {' AND '.join(where_list)}
-            ),
-            ranked AS (
-                SELECT rv_product_id, advertiser_id,
-                       MIN(dense_dist) AS dense_dist,
-                       MIN(sparse_ip)  AS sparse_ip,
-                       MIN(morph_ip)   AS morph_ip,
-                       (array_agg(perspective ORDER BY dense_dist))[1] AS perspective,
-                       (array_agg(description ORDER BY dense_dist))[1] AS description,
-                       (array_agg(emb ORDER BY dense_dist))[1] AS emb
-                  FROM all_dist
-                 GROUP BY rv_product_id, advertiser_id
             )
-            SELECT r.rv_product_id, r.advertiser_id, r.perspective, r.description,
-                   r.dense_dist, r.sparse_ip, r.morph_ip,
+            SELECT a.rv_product_id, a.advertiser_id, a.perspective, a.description,
+                   a.dense_dist, a.sparse_ip, a.morph_ip,
                    rv.product_code, rv.product_name, rv.product_url, rv.image_url,
                    rv.price, rv.sale_price,
                    pe.category, pe.brand, pe.brand_tier, pe.target_gender,
                    pe.target_age_min, pe.target_age_max, pe.tags, pe.desc_persona,
-                   r.emb
-              FROM ranked r
-              JOIN rv_products rv ON rv.id = r.rv_product_id
-              LEFT JOIN product_enriched pe ON pe.rv_product_id = r.rv_product_id
+                   a.emb
+              FROM all_dist a
+              JOIN rv_products rv ON rv.id = a.rv_product_id
+              LEFT JOIN product_enriched pe ON pe.rv_product_id = a.rv_product_id
         """
         with conn.cursor() as cur:
             cur.execute(sql, vec_params + where_params)
@@ -1148,6 +1160,7 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
             "advertiser_id": req.advertiser_id,
             "k": req.k,
             "raw_query": req.query,
+            "corrected_query": parsed.get("corrected_query") or req.query,
             "parsed": parsed,
             "keyword_filters_applied": keywords,
             "keyword_filter_relaxed": keyword_relaxed,
