@@ -689,6 +689,13 @@
                   <span class="ctrl-lbl" style="color:#9CA3AF;">재정렬</span>
                 </label>
               </div>
+              <div class="ctrl-pill" id="debug-pill">
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:inherit;">
+                  <input type="checkbox" id="debug-chk" style="accent-color:#D97706;">
+                  <span class="ctrl-lbl">DEBUG</span>
+                  <span class="ctrl-lbl" style="color:#9CA3AF;">신호별 점수</span>
+                </label>
+              </div>
               <span class="ctrl-spacer"></span>
               <span class="ctrl-adv" id="session-info">광고주 로드 중…</span>
             </div>
@@ -818,6 +825,7 @@
   const morphPill  = document.getElementById('morph-pill');
   const morphChk   = document.getElementById('morph-chk');
   const colbertChk = document.getElementById('colbert-chk');
+  const debugChk   = document.getElementById('debug-chk');
 
   let isSending = false;
   let advId = null, advName = null;
@@ -855,6 +863,7 @@
   alphaInp.addEventListener('input', syncHybridOpts);
   morphChk.addEventListener('change', updateHeadSub);
   colbertChk.addEventListener('change', updateHeadSub);
+  debugChk.addEventListener('change', updateHeadSub);
   syncHybridOpts();
 
   // ── 광고주 초기화 ────────────────────────────────────────────
@@ -973,6 +982,7 @@
     let morphAbsMax = 0;
     const useMorph = !!(meta && meta.use_morpheme);
     const useColbert = !!(meta && meta.use_colbert);
+    const debug = !!(meta && meta.debug);   // DEBUG off → 최종 점수 하나만 표시
     if (isHybridLive) {
       scoreMax = Math.max(0, ...items.map(x => x.score || 0));
       sparseAbsMax = Math.max(0, ...items.map(x => Math.abs(x.sparse_ip || 0)));
@@ -1001,33 +1011,35 @@
       let simExtra = '';
       let sparsePctNum = 0;
       let morphPctNum = 0;
+      // 항상 계산(사유 팝업 data attr 용) — 단, 카드 표시는 DEBUG 일 때만
       if (isHybridLive) {
-        const dPct = (p.dense_dist != null) ? ((1 - p.dense_dist) * 100).toFixed(0) + '%' : '—';
         if (sparseAbsMax > 0 && p.sparse_ip != null) {
           sparsePctNum = Math.round(Math.abs(p.sparse_ip) / sparseAbsMax * 100);
         }
-        const sPct = (p.sparse_ip != null) ? sparsePctNum + '%' : '—';
-        let mStr = '';
-        if (useMorph) {
-          if (morphAbsMax > 0 && p.morph_ip != null) {
-            morphPctNum = Math.round(Math.abs(p.morph_ip) / morphAbsMax * 100);
-          }
-          mStr = ` · M ${(p.morph_ip != null) ? morphPctNum + '%' : '—'}`;
+        if (useMorph && morphAbsMax > 0 && p.morph_ip != null) {
+          morphPctNum = Math.round(Math.abs(p.morph_ip) / morphAbsMax * 100);
         }
-        simExtra = `<span style="font-size:9.5px;color:#9CA3AF;font-weight:500;line-height:1;letter-spacing:.02em;">D ${dPct} · S ${sPct}${mStr}</span>`;
-      } else if (isHybrid) {
-        simExtra = `<span style="font-size:9px;color:#7C3AED;font-weight:600;line-height:1;letter-spacing:.04em;">HYBRID</span>`;
       }
-      // ColBERT 적용 배지 (dense·hybrid 무관하게 표시)
-      if (useColbert) {
-        const cbScore = (p.colbert_score != null) ? ` ${Number(p.colbert_score).toFixed(2)}` : '';
-        simExtra += `<span style="font-size:9px;color:#0D9488;font-weight:600;line-height:1;letter-spacing:.04em;">CB↑${cbScore}</span>`;
+      if (debug) {
+        if (isHybridLive) {
+          const dPct = (p.dense_dist != null) ? ((1 - p.dense_dist) * 100).toFixed(0) + '%' : '—';
+          const sPct = (p.sparse_ip != null) ? sparsePctNum + '%' : '—';
+          const mStr = useMorph ? ` · M ${(p.morph_ip != null) ? morphPctNum + '%' : '—'}` : '';
+          simExtra = `<span style="font-size:9.5px;color:#9CA3AF;font-weight:500;line-height:1;letter-spacing:.02em;">D ${dPct} · S ${sPct}${mStr}</span>`;
+        } else if (isHybrid) {
+          simExtra = `<span style="font-size:9px;color:#7C3AED;font-weight:600;line-height:1;letter-spacing:.04em;">HYBRID</span>`;
+        }
+        if (useColbert) {
+          const cbScore = (p.colbert_score != null) ? ` ${Number(p.colbert_score).toFixed(2)}` : '';
+          simExtra += `<span style="font-size:9px;color:#0D9488;font-weight:600;line-height:1;letter-spacing:.04em;">CB↑${cbScore}</span>`;
+        }
       }
-      const showCol = isHybrid || useColbert;  // 카드 세로 레이아웃 적용 조건
+      const showCol = debug && (isHybrid || useColbert);  // 카드 세로 레이아웃은 DEBUG 시만
       // 데이터 attr (사유 팝업에서 사용) — colbert 는 mode 무관하게 항상 첨부
       const colbertAttrs = `
                 data-use-colbert="${useColbert ? '1' : ''}"
                 data-colbert-score="${p.colbert_score != null ? Number(p.colbert_score).toFixed(5) : ''}"
+                data-debug="${debug ? '1' : ''}"
                 data-desc-raw="${escHtml(p.description || '')}"
                 data-query="${escHtml((meta && meta.query) || '')}"`;
       const hybridAttrs = (isHybrid ? `
@@ -1148,7 +1160,7 @@
         bubbleHtml = correctHtml + buildRecoCards(items, cnt, pId,
                                      { mode: data.mode, fusion: data.fusion, alpha: data.alpha,
                                        use_morpheme: data.use_morpheme, weights: data.weights,
-                                       use_colbert: data.use_colbert,
+                                       use_colbert: data.use_colbert, debug: debugChk.checked,
                                        query: data.raw_query || txt })
                     + pipelineBtn(pId);
         metaExtra  = `<span>${data.total_duration_ms != null ? data.total_duration_ms + 'ms' : ''}</span>`;
@@ -1316,7 +1328,7 @@
       let bubbleHtml;
       if (items.length > 0) {
         loadEl.classList.add('wide');
-        bubbleHtml = buildRecoCards(items, cnt, pId, histMeta) + pipelineBtn(pId);
+        bubbleHtml = buildRecoCards(items, cnt, pId, { ...(histMeta || {}), debug: debugChk.checked }) + pipelineBtn(pId);
       } else if (cnt > 0) {
         bubbleHtml = `<span style="color:#9CA3AF;font-size:12.5px;">저장된 결과 없음 — 다시 검색하려면 아래에 입력하세요.</span>${pipelineBtn(pId)}`;
       } else {
@@ -1704,6 +1716,7 @@
     e.preventDefault();
     e.stopPropagation();
     const persp = el.dataset.persp;
+    const debug = el.dataset.debug === '1';   // DEBUG off → 최종 점수 하나만
     const isHybrid = el.dataset.mode === 'hybrid';
     document.getElementById('rp-name').textContent  = el.dataset.name || '—';
     document.getElementById('rp-persp').textContent = perspLabel[persp] || persp || '—';
@@ -1715,10 +1728,10 @@
       : (el.dataset.dist ? `코사인거리 ${el.dataset.dist}` : '');
     document.getElementById('rp-desc').textContent  = el.dataset.desc || '—';
 
-    // ColBERT 행 + 정렬뷰 — dense·hybrid 무관하게 colbert 적용 시 표시
+    // ColBERT 행 + 정렬뷰 — DEBUG 이고 colbert 적용 시에만 표시
     const cbRow = document.getElementById('rp-colbert-row');
     const cbWrap = document.getElementById('rp-cb-detail-wrap');
-    if (el.dataset.useColbert === '1') {
+    if (debug && el.dataset.useColbert === '1') {
       cbRow.style.display = '';
       cbWrap.style.display = '';
       const cb = el.dataset.colbertScore ? Number(el.dataset.colbertScore) : null;
@@ -1728,9 +1741,9 @@
       cbWrap.style.display = 'none';
     }
 
-    // 하이브리드 분해 블록 표시/숨김
+    // 하이브리드 분해 블록 — DEBUG 일 때만 (off 면 최종 점수 하나만)
     const hb = document.getElementById('rp-hybrid-block');
-    if (isHybrid) {
+    if (debug && isHybrid) {
       hb.style.display = '';
       const fusion = el.dataset.fusion || '?';
       const alpha  = el.dataset.alpha !== '' ? Number(el.dataset.alpha).toFixed(2) : '?';
@@ -1790,12 +1803,19 @@
         `sparse 점수는 위 분해에 별도 표시됩니다.`;
     } else {
       hb.style.display = 'none';
-      // dense 모드 — 원래 설명문 복원
-      document.getElementById('rp-explain').innerHTML =
-        `BGE-M3 임베딩 모델로 쿼리와 상품 설명을 각각 벡터화한 뒤<br>` +
-        `<b style="color:#374151;">유사도 = 1 − 코사인거리</b>로 계산합니다.<br>` +
-        `같은 상품이라도 4개 관점(상황·소재·디자인·페르소나) 중<br>` +
-        `쿼리 벡터에 가장 가까운 설명 하나가 대표로 사용됩니다.`;
+      if (isHybrid) {
+        // 하이브리드인데 DEBUG off — 최종 점수만, 신호별 분해는 숨김
+        document.getElementById('rp-explain').innerHTML =
+          `여러 신호(의미·어휘·형태소)를 결합한 <b style="color:#374151;">최종 점수</b> 기준으로 정렬된 결과입니다.<br>` +
+          `신호별 점수·매칭 단어를 보려면 상단 <b style="color:#D97706;">DEBUG</b> 를 켜고 다시 검색하세요.`;
+      } else {
+        // dense 모드 — 원래 설명문
+        document.getElementById('rp-explain').innerHTML =
+          `BGE-M3 임베딩 모델로 쿼리와 상품 설명을 각각 벡터화한 뒤<br>` +
+          `<b style="color:#374151;">유사도 = 1 − 코사인거리</b>로 계산합니다.<br>` +
+          `같은 상품이라도 4개 관점(상황·소재·디자인·페르소나) 중<br>` +
+          `쿼리 벡터에 가장 가까운 설명 하나가 대표로 사용됩니다.`;
+      }
     }
     // sparse/형태소 단어 상세 — 매번 초기화(이전 상품 데이터/캐시 안 보이게)
     const _q = el.dataset.query || '';
