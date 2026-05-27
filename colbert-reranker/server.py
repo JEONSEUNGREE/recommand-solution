@@ -74,6 +74,21 @@ class RerankRequest(BaseModel):
     candidates: list[RerankItem]
 
 
+class ColbertExplainRequest(BaseModel):
+    query: str
+    doc: str
+    top_k: int = 40
+
+
+@app.post("/colbert-explain")
+def colbert_explain(req: ColbertExplainRequest):
+    """쿼리 각 토큰이 상품의 어떤 토큰과 가장 가까운지(MaxSim 정렬) 반환.
+
+    응답: {"alignments": [{q_token, best_d_token, sim}], "score": float}
+    """
+    return colbert_model.align(req.query, req.doc, top_k=req.top_k)
+
+
 @app.post("/rerank")
 def rerank(req: RerankRequest):
     """쿼리 ColBERT 벡터 + 후보 목록 → MaxSim 점수로 재정렬.

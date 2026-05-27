@@ -647,6 +647,21 @@ def morpheme_explain_proxy(req: SparseExplainReq):
         raise HTTPException(503, f"morpheme-explain 응답 실패: {e}")
 
 
+@router.post("/colbert-explain")
+def colbert_explain_proxy(req: SparseExplainReq):
+    """:8003 /colbert-explain 프록시 — 쿼리 토큰별 '가장 가까운 상품 토큰' 정렬뷰."""
+    try:
+        r = requests.post(
+            f"{COLBERT_BASE}/colbert-explain",
+            json={"query": req.query, "doc": req.doc, "top_k": req.top_k},
+            timeout=40,
+        )
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        raise HTTPException(503, f"colbert-explain 응답 실패: {e}")
+
+
 class SearchRvLlmReq(BaseModel):
     query: str
     advertiser_id: Optional[int] = None

@@ -616,8 +616,7 @@
               <div class="av">✦</div>
               <div class="body">
                 <div class="bubble">
-                  안녕하세요! 찾으시는 상품을 자연어로 말씀해주세요.<br>
-                  <span style="font-size:12.5px;color:#9CA3AF;">"등산할 때 입을 바람막이"처럼 상황이나 용도로 알려주시면 바로 찾아드릴게요.</span>
+                  안녕하세요! 찾으시는 상품을 자연어로 말씀해주세요.
                 </div>
                 <div class="msg-meta"><b style="color:var(--text-3);">AIRA</b></div>
               </div>
@@ -629,7 +628,6 @@
               <div class="suggest-chip">등산용 바람막이</div>
               <div class="suggest-chip">여름 수영복</div>
               <div class="suggest-chip">5만원대 캐주얼</div>
-              <div class="suggest-chip">연예인 착용 귀걸이</div>
             </div>
             <div class="input-row">
               <textarea id="inp" rows="1" placeholder="찾으시는 상품을 자연어로 입력하세요…  Enter 전송 · Shift+Enter 줄바꿈"></textarea>
@@ -911,7 +909,7 @@
     const d = new Date();
     div.textContent = d.getFullYear() + '. ' + String(d.getMonth()+1).padStart(2,'0') + '. ' + String(d.getDate()).padStart(2,'0') + '. · 오늘';
     msgs.appendChild(div);
-    appendAIMsg('안녕하세요! 찾으시는 상품을 자연어로 말씀해주세요.<br><span style="font-size:12.5px;color:#9CA3AF;">"등산할 때 입을 바람막이"처럼 상황이나 용도로 알려주시면 바로 찾아드릴게요.</span>');
+    appendAIMsg('안녕하세요! 찾으시는 상품을 자연어로 말씀해주세요.');
     document.querySelectorAll('.recent-item').forEach(el => el.classList.remove('active'));
   }
   document.getElementById('new-chat-btn').addEventListener('click', startNewChat);
@@ -1705,14 +1703,17 @@
       : (el.dataset.dist ? `코사인거리 ${el.dataset.dist}` : '');
     document.getElementById('rp-desc').textContent  = el.dataset.desc || '—';
 
-    // ColBERT 행 — dense·hybrid 무관하게 colbert 적용 시 표시
+    // ColBERT 행 + 정렬뷰 — dense·hybrid 무관하게 colbert 적용 시 표시
     const cbRow = document.getElementById('rp-colbert-row');
+    const cbWrap = document.getElementById('rp-cb-detail-wrap');
     if (el.dataset.useColbert === '1') {
       cbRow.style.display = '';
+      cbWrap.style.display = '';
       const cb = el.dataset.colbertScore ? Number(el.dataset.colbertScore) : null;
       document.getElementById('rp-colbert-score').textContent = cb != null ? cb.toFixed(4) : '—';
     } else {
       cbRow.style.display = 'none';
+      cbWrap.style.display = 'none';
     }
 
     // 하이브리드 분해 블록 표시/숨김
@@ -1785,10 +1786,11 @@
         `쿼리 벡터에 가장 가까운 설명 하나가 대표로 사용됩니다.`;
     }
     // sparse/형태소 단어 상세 — 매번 초기화(이전 상품 데이터/캐시 안 보이게)
-    const _q = isHybrid ? (el.dataset.query || '') : '';
-    const _doc = isHybrid ? (el.dataset.descRaw || el.dataset.desc || '') : '';
-    resetWordToggle(_q, _doc);
-    resetMorphToggle(_q, _doc);
+    const _q = el.dataset.query || '';
+    const _doc = el.dataset.descRaw || el.dataset.desc || '';
+    resetWordToggle(isHybrid ? _q : '', isHybrid ? _doc : '');
+    resetMorphToggle(isHybrid ? _q : '', isHybrid ? _doc : '');
+    resetColbertToggle(_q, _doc);  // colbert 정렬뷰는 dense+colbert 에서도 동작
 
     document.getElementById('reason-overlay').classList.add('open');
 
@@ -1820,12 +1822,40 @@
     document.getElementById('rp-word-loading').textContent = '로딩 중…';
   }
 
+  // 쿼리/상품 전체 토큰을 칩으로 — 매칭=파랑, 미매칭=회색. (word=형태소/text=음절)
+  function renderTokenChips(data, color) {
+    const qt = data.query_tokens || [];
+    const dt = data.doc_tokens || [];
+    const key = (t) => (t.word != null ? t.word : t.text);
+    const matched = new Set((data.matches || []).map(m => m.word != null ? m.word : (m.text || m.token)));
+    const maxW = Math.max(0.0001, ...qt.map(t => t.weight), ...dt.map(t => t.weight));
+    const chip = (t) => {
+      const w = t.weight || 0;
+      const on = matched.has(key(t));
+      const alpha = (0.25 + 0.75 * (w / maxW)).toFixed(2);   // 가중치 클수록 진하게
+      const bg = on ? `rgba(124,58,237,${alpha})` : '#EEF0F3';
+      const fg = on ? '#fff' : '#9CA3AF';
+      return `<span title="가중치 ${w.toFixed(3)}${on ? ' · 매칭' : ' · 상품에 없음'}"
+        style="display:inline-block;padding:2px 7px;border-radius:10px;font-size:10.5px;
+               background:${bg};color:${fg};margin:2px;font-weight:${on?600:400};">${escHtml(key(t))}</span>`;
+    };
+    return `
+      <div style="margin-top:8px;">
+        <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">쿼리 토큰 (가중치순)</div>
+        <div>${qt.map(chip).join('') || '<span style="color:#9CA3AF;font-size:10.5px;">없음</span>'}</div>
+        <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin:8px 0 3px;">상품 토큰 (가중치순)</div>
+        <div>${dt.map(chip).join('') || '<span style="color:#9CA3AF;font-size:10.5px;">없음</span>'}</div>
+        <div style="font-size:9.5px;color:#B0B4BC;margin-top:6px;">파랑 = 양쪽에 등장(매칭, 진할수록 가중치↑) · 회색 = 한쪽에만 등장</div>
+      </div>`;
+  }
+
   function renderSparseExplain(data) {
     const matches = data.matches || [];
     const ip = data.inner_product || 0;
     const n  = data.n_matches || 0;
     if (!matches.length) {
-      return `<div style="font-size:11.5px;color:#9CA3AF;">매칭된 단어가 없습니다 (쿼리와 상품 설명에 공통 토큰이 없음).</div>`;
+      return `<div style="font-size:11.5px;color:#9CA3AF;margin-bottom:6px;">정확히 일치한 토큰은 없습니다 — 아래는 양쪽 토큰 전체입니다.</div>`
+        + renderTokenChips(data, '#7C3AED');
     }
     const maxC = Math.max(...matches.map(m => m.contribution));
     const rows = matches.map((m, i) => {
@@ -1852,6 +1882,7 @@
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
+      ${renderTokenChips(data, '#7C3AED')}
     `;
   }
 
@@ -1916,7 +1947,8 @@
     const ip = data.inner_product || 0;
     const n  = data.n_matches || 0;
     if (!matches.length) {
-      return `<div style="font-size:11.5px;color:#9CA3AF;">공통 형태소(단어)가 없습니다.</div>`;
+      return `<div style="font-size:11.5px;color:#9CA3AF;margin-bottom:6px;">정확히 일치한 단어는 없습니다 — 아래는 양쪽 형태소 전체입니다.</div>`
+        + renderTokenChips(data, '#7C3AED');
     }
     const maxC = Math.max(...matches.map(m => m.contribution));
     const rows = matches.map((m, i) => {
@@ -1942,7 +1974,8 @@
           <th style="padding:4px 6px;"></th>
         </tr></thead>
         <tbody>${rows}</tbody>
-      </table>`;
+      </table>
+      ${renderTokenChips(data, '#7C3AED')}`;
   }
 
   async function loadMorphExplain() {
@@ -1968,6 +2001,79 @@
       });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       content.innerHTML = renderMorphExplain(await r.json());
+      loading.style.display = 'none'; content.style.display = '';
+      btn.dataset.loaded = '1';
+    } catch (e) {
+      loading.textContent = '로드 실패: ' + (e.message || e);
+    }
+  }
+
+  // ── ColBERT 토큰 정렬뷰 (어디에 가까운지) ─────────────────────
+  function resetColbertToggle(query, doc) {
+    const btn = document.getElementById('rp-cb-toggle');
+    if (!btn) return;
+    btn.dataset.query = query || '';
+    btn.dataset.doc = doc || '';
+    btn.dataset.loaded = '';
+    document.getElementById('rp-cb-toggle-icon').textContent = '▸';
+    document.getElementById('rp-cb-panel').style.display = 'none';
+    document.getElementById('rp-cb-content').style.display = 'none';
+    document.getElementById('rp-cb-content').innerHTML = '';
+    document.getElementById('rp-cb-loading').style.display = '';
+    document.getElementById('rp-cb-loading').textContent = '로딩 중…';
+  }
+
+  function renderColbertExplain(data) {
+    const al = data.alignments || [];
+    if (!al.length) return `<div style="font-size:11.5px;color:#9CA3AF;">정렬 데이터 없음</div>`;
+    const rows = al.map((a, i) => {
+      const pct = Math.round(Math.max(0, a.sim) * 100);
+      const strong = a.sim >= 0.6;
+      return `<tr style="border-top:${i===0?'none':'1px solid #F3F4F6'};">
+        <td style="padding:4px 6px;font-weight:600;color:#111;">${escHtml(a.q_token)}</td>
+        <td style="padding:4px 6px;color:#9CA3AF;">→</td>
+        <td style="padding:4px 6px;font-weight:600;color:${strong?'#0D9488':'#6B7280'};">${escHtml(a.best_d_token)}</td>
+        <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:#111;">${a.sim.toFixed(3)}</td>
+        <td style="padding:4px 6px;width:56px;"><div style="height:6px;background:#E5E7EB;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:#0D9488;"></div></div></td>
+      </tr>`;
+    }).join('');
+    return `
+      <div style="font-size:10.5px;color:#9CA3AF;margin-bottom:6px;">
+        쿼리 토큰별 가장 가까운 상품 토큰 · MaxSim 합 ${(data.score||0).toFixed(3)}
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead><tr style="color:#9CA3AF;font-size:10px;text-transform:uppercase;letter-spacing:.05em;">
+          <th style="text-align:left;padding:4px 6px;font-weight:500;">쿼리 토큰</th>
+          <th style="padding:4px 6px;"></th>
+          <th style="text-align:left;padding:4px 6px;font-weight:500;">가장 가까운 상품 토큰</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:500;">유사도</th>
+          <th style="padding:4px 6px;"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="font-size:9.5px;color:#B0B4BC;margin-top:6px;">초록=강한 매칭(≥0.6) · 정확히 같은 단어가 없어도 의미가 가까운 토큰을 찾아 정렬</div>`;
+  }
+
+  async function loadColbertExplain() {
+    const btn = document.getElementById('rp-cb-toggle');
+    const panel = document.getElementById('rp-cb-panel');
+    const content = document.getElementById('rp-cb-content');
+    const loading = document.getElementById('rp-cb-loading');
+    const icon = document.getElementById('rp-cb-toggle-icon');
+    const isOpen = panel.style.display !== 'none';
+    if (isOpen) { panel.style.display = 'none'; icon.textContent = '▸'; return; }
+    panel.style.display = ''; icon.textContent = '▾';
+    if (btn.dataset.loaded === '1') return;
+    const query = btn.dataset.query || '', doc = btn.dataset.doc || '';
+    if (!query || !doc) { loading.textContent = '쿼리/설명문 데이터 없음'; return; }
+    try {
+      loading.style.display = ''; content.style.display = 'none';
+      const r = await fetch(EMBEDDER + '/colbert-explain', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, doc, top_k: 40 }),
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      content.innerHTML = renderColbertExplain(await r.json());
       loading.style.display = 'none'; content.style.display = '';
       btn.dataset.loaded = '1';
     } catch (e) {
@@ -2070,6 +2176,19 @@
             <div id="rp-morph-loading" style="font-size:11px;color:#9CA3AF;">로딩 중…</div>
             <div id="rp-morph-content" style="display:none;"></div>
           </div>
+        </div>
+      </div>
+      <!-- ColBERT 정렬뷰 (어디에 가까운지) — use_colbert 일 때만, hybrid 블록 밖 -->
+      <div id="rp-cb-detail-wrap" style="margin-top:8px;display:none;">
+        <button type="button" id="rp-cb-toggle"
+                onclick="loadColbertExplain()"
+                style="background:transparent;border:1px solid #99E0D6;border-radius:6px;padding:5px 10px;font-size:11px;color:#0D9488;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+          <span id="rp-cb-toggle-icon">▸</span>
+          <span>토큰 정렬뷰 (ColBERT · 어디에 가까운지)</span>
+        </button>
+        <div id="rp-cb-panel" style="display:none;margin-top:8px;border:1px solid #F3F4F6;border-radius:6px;padding:10px;background:#F2FBF9;">
+          <div id="rp-cb-loading" style="font-size:11px;color:#9CA3AF;">로딩 중…</div>
+          <div id="rp-cb-content" style="display:none;"></div>
         </div>
       </div>
       <div class="reason-sep"></div>
