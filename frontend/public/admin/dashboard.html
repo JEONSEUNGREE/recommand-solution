@@ -190,7 +190,7 @@
           <div class="stat"><div class="l info"><span class="d"></span>전체 상품</div><div class="v" id="s-total"><span class="skel" style="width:48px;height:28px;">&nbsp;</span></div><div class="delta" id="s-total-d">—</div></div>
           <div class="stat"><div class="l ok"><span class="d"></span>스크랩 완료</div><div class="v" id="s-scraped"><span class="skel" style="width:48px;height:28px;">&nbsp;</span></div><div class="delta" id="s-scraped-d">—</div></div>
           <div class="stat"><div class="l purple"><span class="d"></span>총 검색 수</div><div class="v" id="s-search"><span class="skel" style="width:48px;height:28px;">&nbsp;</span></div><div class="delta" id="s-search-d">—</div></div>
-          <div class="stat"><div class="l warn"><span class="d"></span>누적 비용</div><div class="v" id="s-cost"><span class="skel" style="width:48px;height:28px;">&nbsp;</span></div><div class="delta" id="s-cost-d">—</div></div>
+          <div class="stat"><div class="l warn"><span class="d"></span>검색AI비용</div><div class="v" id="s-cost"><span class="skel" style="width:48px;height:28px;">&nbsp;</span></div><div class="delta" id="s-cost-d">—</div></div>
         </div>
 
         <!-- TWO-COL: pipeline + zero-queries -->
@@ -443,11 +443,10 @@
           setStatDelta('s-search-d',
             '결과 0건 <b class="dn">' + fmt(zeroRes) + '</b>회');
 
-          // KPI: cumulative cost
-          var usdStr = '$' + costUsd.toFixed(4);
-          var krwStr = Math.round(costUsd * 1380).toLocaleString('ko-KR') + '원';
-          setStatValue('s-cost', usdStr);
-          setStatDelta('s-cost-d', '≈ ' + krwStr + ' (₩1,380/USD)');
+          // KPI: cumulative cost — 원화 메인, 달러 보조
+          var krwStr = Math.round(costUsd * 1503).toLocaleString('ko-KR') + '원';
+          setStatValue('s-cost', krwStr);
+          setStatDelta('s-cost-d', '≈ $' + costUsd.toFixed(4) + ' (₩1,503/USD)');
 
           // Zero-query list
           renderZeroQueries(topZero);
@@ -471,7 +470,7 @@
     }
 
     function renderTokenCard(d) {
-      var KRW_RATE = 1380;
+      var KRW_RATE = 1503; // USD→KRW (2026-05-27 기준)
       var totalTok  = d.inputTok + d.outputTok;
       var krwTotal  = Math.round(d.costUsd * KRW_RATE).toLocaleString('ko-KR');
       var krwAvg    = (d.avgCostUsd * KRW_RATE).toFixed(1);
@@ -489,9 +488,9 @@
       html += cell('입력 토큰 (합계)',  fmt(d.inputTok) + ' tok',  'LLM 입력');
       html += cell('출력 토큰 (합계)',  fmt(d.outputTok) + ' tok', 'LLM 생성');
       html += cell('총 토큰 사용량',   fmt(totalTok) + ' tok',    '입력 + 출력');
-      html += cell('누적 비용',
-        '$' + d.costUsd.toFixed(4),
-        '≈ ₩' + krwTotal + ' | 건당 ₩' + krwAvg);
+      html += cell('검색AI비용',
+        '₩' + krwTotal,
+        '$' + d.costUsd.toFixed(4) + ' | 건당 ₩' + krwAvg);
 
       html += '</div>';
 
@@ -500,7 +499,7 @@
         html += '<div style="padding:10px 20px;font-size:12px;color:var(--text-3);border-top:1px solid var(--line);">' +
           'LLM 사용 검색 <b style="color:var(--text);">' + fmt(d.llmUsed) + '</b>회 · ' +
           '검색당 평균 토큰 <b style="color:var(--text);">' + fmt(perSearch) + '</b>tok · ' +
-          '환율 기준 ₩1,380/USD' +
+          '환율 기준 ₩1,503/USD' +
           '</div>';
       }
 

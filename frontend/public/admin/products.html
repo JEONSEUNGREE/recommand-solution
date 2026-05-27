@@ -151,6 +151,9 @@
 .modal-img-blocked-badge { position:absolute;top:3px;right:3px;background:var(--err);color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;letter-spacing:.03em;pointer-events:none; }
 .modal-img-unblock-btn { position:absolute;bottom:4px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;padding:2px 7px;background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:4px;cursor:pointer;transition:background .15s; }
 .modal-img-unblock-btn:hover { background:var(--err); }
+.modal-img-idx { position:absolute;top:3px;left:3px;background:rgba(0,0,0,.6);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;pointer-events:none; }
+.img-types-trigger { transition:box-shadow .12s,transform .12s; }
+.img-types-trigger:hover { box-shadow:0 0 0 2px var(--info);transform:scale(1.03); }
 </style>
 </head>
 <body data-route="products">
@@ -495,7 +498,7 @@
 <script src="enhance.js"></script>
 <script>
 (function () {
-  const BOOT     = 'http://localhost:8090';
+  const BOOT     = 'http://192.168.101.27:8090';
   const EMBEDDER = 'http://192.168.101.27:8001';
 
   // advertiser from localStorage
@@ -628,19 +631,6 @@
   $('reset-btn').addEventListener('click', () => { $('q-input').value=''; $('cat-select').value=''; $('embedded-toggle').checked=false; prodQ=''; prodCat=''; prodEmbedOnly=false; prodPage=0; loadProducts(); });
 
   // ── Detail modal (enriched) ───────────────────────────────
-  // 차단 이미지 래퍼 빌더 — 원본 URL 알고 있을 때
-  function buildImgWrap(proxyUrl, srcUrl, size, clickJs) {
-    const blocked = srcUrl && isBlocked(srcUrl);
-    const entry   = blocked ? getBlockEntry(srcUrl) : null;
-    const imgStyle = `width:${size}px;height:${size}px;object-fit:cover;border-radius:4px;display:block;`;
-    const wrapStyle= `width:${size}px;height:${size}px;`;
-    const click    = clickJs || '';
-    return `<div class="modal-img-wrap${blocked?' is-blocked':''}" style="${wrapStyle}">
-      <img src="${proxyUrl}" style="${imgStyle}" onerror="this.style.display='none'"${click?` onclick="${click}"`:''}>
-      ${blocked?`<div class="modal-img-blocked-dim"></div><div class="modal-img-blocked-badge">차단됨</div><button class="modal-img-unblock-btn" onclick="modalUnblockImg(${entry.id},this)">🔓 해제</button>`:''}
-    </div>`;
-  }
-
   window.modalUnblockImg = async function(blockId, btn) {
     if (!confirm('이 이미지의 차단을 해제합니다.\n(해당 URL 패턴을 사용하는 모든 상품에 적용됩니다)')) return;
     const r = await fetch(`${EMBEDDER}/enrich-llm/image-blocks/${ADV}/${blockId}`, {method:'DELETE'});
@@ -671,43 +661,46 @@
       const localCount  = Array.isArray(d.images) ? d.images.length : (d.image_local_count || 0);
       const srcUrls     = Array.isArray(d.image_src_urls) ? d.image_src_urls : [];
       const imgBase     = EMBEDDER + '/products-enriched/' + rvId + '/image/';
+
+      // ── 이미지 인덱스 ↔ sha1(파일명) ↔ 분류 매핑 ──
+      // image_types 는 sha1 키, 이미지는 인덱스 서빙 → d.images 파일명(stem)으로 연결
+      const imgFiles = Array.isArray(d.images) ? d.images : [];
+      const sha1ByIndex = imgFiles.map(p => {
+        const base = String(p).split(/[\\/]/).pop() || '';
+        return base.replace(/\.[^.]+$/, '');
+      });
+      const typeBySha1 = {};
+      (Array.isArray(d.image_types) ? d.image_types : []).forEach(t => {
+        if (t && t.sha1) typeBySha1[t.sha1] = t;
+      });
+      window._imgTypeBySha1  = typeBySha1;
+      window._imgSha1ByIndex = sha1ByIndex;
+      window._imgBase        = imgBase;
+
       let imgHtml = '';
       if (localCount > 0) {
-        const maxThumb = Math.min(localCount, 8);
-        // 메인 이미지 (index 0)
-        const mainSrc = srcUrls[0] || '';
-        const mainWrap = buildImgWrap(imgBase + '0', mainSrc, 130, '');
-        // 썸네일
-        const thumbs = Array.from({length: maxThumb}, (_,i) => {
+        // 모든 이미지를 썸네일 그리드로 — 클릭하면 그 이미지의 분류 설명만 팝업
+        const thumbs = Array.from({length: localCount}, (_,i) => {
           const proxyUrl = imgBase + i;
           const srcUrl   = srcUrls[i] || '';
-          const clickJs  = `this.closest('.modal-body').querySelector('.img-main-proxy').src=this.src`;
           const blocked  = srcUrl && isBlocked(srcUrl);
           const entry    = blocked ? getBlockEntry(srcUrl) : null;
-          const imgStyle = `width:76px;height:76px;object-fit:cover;border-radius:4px;display:block;`;
-          return `<div class="modal-img-wrap${blocked?' is-blocked':''}" style="width:76px;height:76px;">
-            <img class="detail-thumb" src="${proxyUrl}" style="${imgStyle}" onerror="this.style.display='none'" onclick="document.querySelector('.img-main-proxy').src=this.src">
-            ${blocked?`<div class="modal-img-blocked-dim"></div><div class="modal-img-blocked-badge">차단됨</div><button class="modal-img-unblock-btn" onclick="modalUnblockImg(${entry.id},this)">🔓 해제</button>`:''}
+          const sha1     = sha1ByIndex[i];
+          const hasType  = sha1 && typeBySha1[sha1];
+          const imgStyle = `width:86px;height:86px;object-fit:cover;border-radius:4px;display:block;`;
+          return `<div class="modal-img-wrap${blocked?' is-blocked':''} img-types-trigger" style="width:86px;height:86px;cursor:zoom-in;" onclick="openImgTypesPopup(${i})" title="${hasType?'이미지 분석 보기':'분류 정보 없음'}">
+            <img class="detail-thumb" src="${proxyUrl}" style="${imgStyle}" onerror="this.style.display='none'">
+            <div class="modal-img-idx">${i+1}</div>
+            ${blocked?`<div class="modal-img-blocked-dim"></div><div class="modal-img-blocked-badge">차단됨</div><button class="modal-img-unblock-btn" onclick="event.stopPropagation();modalUnblockImg(${entry.id},this)">🔓 해제</button>`:''}
           </div>`;
         }).join('');
-        const mainBlocked = mainSrc && isBlocked(mainSrc);
-        const mainEntry   = mainBlocked ? getBlockEntry(mainSrc) : null;
-        const mainImgBlock = mainBlocked
-          ? `<div class="modal-img-blocked-dim"></div><div class="modal-img-blocked-badge">차단됨</div><button class="modal-img-unblock-btn" onclick="modalUnblockImg(${mainEntry.id},this)">🔓 해제</button>`
-          : '';
-        imgHtml = `<div class="modal-field"><div class="lbl">크롤링 이미지 (${localCount}장)</div>
-          <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-top:6px;">
-            <div class="modal-img-wrap${mainBlocked?' is-blocked':''} img-types-trigger" style="width:130px;height:130px;flex-shrink:0;cursor:zoom-in;" onclick="openImgTypesPopup()" title="이미지 분류 보기">
-              <img class="img-main img-main-proxy" src="${imgBase}0" style="width:130px;height:130px;object-fit:cover;border-radius:5px;display:block;" onerror="this.style.display='none'">
-              ${mainImgBlock}
-            </div>
-            <div style="display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start;">${thumbs}</div>
-          </div></div>`;
+        imgHtml = `<div class="modal-field"><div class="lbl">크롤링 이미지 (${localCount}장) · 이미지를 누르면 분석 결과가 나옵니다</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;margin-top:6px;">${thumbs}</div></div>`;
       } else if (d.image_url) {
         const mainBlocked = isBlocked(d.image_url);
         const mainEntry   = mainBlocked ? getBlockEntry(d.image_url) : null;
         imgHtml = `<div class="modal-field"><div class="lbl">대표 이미지</div>
-          <div class="modal-img-wrap${mainBlocked?' is-blocked':''} img-types-trigger" style="width:130px;height:130px;margin-top:6px;cursor:zoom-in;" onclick="openImgTypesPopup()" title="이미지 분류 보기">
+          <div class="modal-img-wrap${mainBlocked?' is-blocked':''}" style="width:130px;height:130px;margin-top:6px;">
             <img src="${esc(d.image_url)}" style="width:130px;height:130px;object-fit:cover;border-radius:5px;display:block;" onerror="this.style.display='none'">
             ${mainBlocked?`<div class="modal-img-blocked-dim"></div><div class="modal-img-blocked-badge">차단됨</div><button class="modal-img-unblock-btn" onclick="modalUnblockImg(${mainEntry.id},this)">🔓 해제</button>`:''}
           </div></div>`;
@@ -771,30 +764,12 @@
         setHtml += `<div class="modal-field"><div class="lbl">호환/관련 상품</div><pre class="modal-desc" style="white-space:pre-wrap;font-family:monospace;font-size:11.5px;margin-top:6px;">${esc(JSON.stringify(d.compatible_products, null, 2))}</pre></div>`;
       }
 
-      // ── 이미지 분류 (AI) — 본문에 넣지 않고 메인 이미지 클릭 팝업으로 표시 ──
-      const imgTypes = Array.isArray(d.image_types) ? d.image_types : [];
-      if (imgTypes.length) {
-        const rows = imgTypes.map(t => {
-          const used = t.used_for_attributes && t.is_main_product;
-          return `<div style="display:flex;align-items:baseline;gap:8px;font-size:12px;padding:6px 0;border-bottom:1px solid var(--line);">
-            <span style="font-family:monospace;color:var(--info);min-width:90px;">${esc(t.image_type||'?')}</span>
-            <span style="color:${used?'var(--ok)':'var(--warn)'};font-size:11px;min-width:32px;">${used?'✓ 사용':'skip'}</span>
-            <span style="color:var(--text-3);">${esc(t.content_description||'')}</span>
-          </div>`;
-        }).join('');
-        window._imgTypesPopupHtml = `<div style="display:flex;flex-direction:column;">${rows}</div>`;
-        window._imgTypesTitle = `이미지 분류 (AI) · ${imgTypes.length}장`;
-      } else {
-        window._imgTypesPopupHtml = `<div style="padding:24px;text-align:center;color:var(--text-4);font-size:13px;">이미지 분류 정보가 없습니다.</div>`;
-        window._imgTypesTitle = '이미지 분류 (AI)';
-      }
-
       // ── 비용 / 토큰 메타 ──
       const metaBits = [];
       if (d.model_used)       metaBits.push('model: ' + d.model_used);
       metaBits.push('in: ' + (d.input_tokens||0) + ' tok');
       metaBits.push('out: ' + (d.output_tokens||0) + ' tok');
-      if (d.cost_usd != null)    metaBits.push('cost: $' + Number(d.cost_usd).toFixed(4));
+      if (d.cost_usd != null)    metaBits.push('cost: ₩' + Math.round(Number(d.cost_usd)*1503).toLocaleString('ko-KR') + ' ($' + Number(d.cost_usd).toFixed(4) + ')'); // ₩1,503/USD 2026-05-27
       if (d.duration_ms != null) metaBits.push('time: ' + (Number(d.duration_ms)/1000).toFixed(1) + 's');
       if (d.enriched_at)         metaBits.push('enriched: ' + String(d.enriched_at).slice(0,16));
       const metaHtml = `<div class="modal-field" style="border-top:1px solid var(--line);padding-top:10px;margin-top:4px;"><div style="display:flex;flex-wrap:wrap;gap:10px;font-family:monospace;font-size:11px;color:var(--text-4);">${metaBits.map(b=>`<span>${esc(b)}</span>`).join('')}</div></div>`;
@@ -826,10 +801,42 @@
   $('modal-close').addEventListener('click', () => $('detail-modal').classList.remove('open'));
   $('detail-modal').addEventListener('click', e => { if (e.target===e.currentTarget) e.currentTarget.classList.remove('open'); });
 
-  // ── 이미지 분류(AI) 팝업 ──
-  window.openImgTypesPopup = function () {
-    $('imgtypes-title').textContent = window._imgTypesTitle || '이미지 분류 (AI)';
-    $('imgtypes-body').innerHTML = window._imgTypesPopupHtml || '';
+  // ── 이미지별 분류(AI) 팝업 — 해당 이미지 한 장의 분석만 표시 ──
+  const IMG_TYPE_LABEL = {
+    main:'대표', lifestyle:'연출/착용', detail:'디테일', infographic:'인포그래픽',
+    size_chart:'사이즈표', color_options:'색상옵션', spec_table:'스펙표',
+    care_guide:'관리법', certification:'인증', packaging:'패키지',
+    related_product:'관련상품', noise:'노이즈', other:'기타',
+  };
+  window.openImgTypesPopup = function (idx) {
+    const sha1   = (window._imgSha1ByIndex || [])[idx];
+    const t      = sha1 ? (window._imgTypeBySha1 || {})[sha1] : null;
+    const imgUrl = (window._imgBase || '') + idx;
+    let body = `<div style="text-align:center;margin-bottom:12px;">
+      <img src="${imgUrl}" style="max-width:100%;max-height:320px;object-fit:contain;border-radius:6px;background:var(--surface-2);" onerror="this.style.display='none'">
+    </div>`;
+    if (t) {
+      const used = t.used_for_attributes && t.is_main_product;
+      const typeLbl = IMG_TYPE_LABEL[t.image_type] || t.image_type || '?';
+      body += `<div class="modal-field"><div class="lbl">분류</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+          <span style="font-family:monospace;color:var(--info);">${esc(t.image_type||'?')}</span>
+          <span style="font-size:12px;color:var(--text-3);">(${esc(typeLbl)})</span>
+          <span style="font-size:11px;padding:2px 7px;border-radius:999px;background:${used?'var(--ok-soft,#0d3320)':'var(--warn-soft,#3a2e0d)'};color:${used?'var(--ok)':'var(--warn)'};">${used?'✓ 정보 추출에 사용':'분석 제외'}</span>
+        </div></div>`;
+      if (t.content_description) {
+        body += `<div class="modal-field" style="margin-top:10px;"><div class="lbl">내용 설명</div>
+          <div class="modal-desc" style="margin-top:4px;">${esc(t.content_description)}</div></div>`;
+      }
+      if (!used && t.rejection_reason) {
+        body += `<div class="modal-field" style="margin-top:10px;"><div class="lbl">제외 사유</div>
+          <div class="modal-desc" style="margin-top:4px;color:var(--warn);">${esc(t.rejection_reason)}</div></div>`;
+      }
+    } else {
+      body += `<div style="padding:16px;text-align:center;color:var(--text-4);font-size:13px;">이 이미지에 대한 분류 정보가 없습니다.</div>`;
+    }
+    $('imgtypes-title').textContent = `이미지 #${idx+1} 분석`;
+    $('imgtypes-body').innerHTML = body;
     $('imgtypes-modal').classList.add('open');
   };
   $('imgtypes-close').addEventListener('click', () => $('imgtypes-modal').classList.remove('open'));
@@ -995,7 +1002,7 @@
           <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
             ${chips([j.category&&`${j.category} (${(j.category_confidence||0).toFixed(2)})`,j.brand,j.brand_tier,j.target_gender,j.origin_country])}
             ${j.model_used?`<span class="attr-chip" style="font-family:monospace;">${esc(j.model_used)}</span>`:''}
-            ${j.cost_usd?`<span class="attr-chip">$${j.cost_usd.toFixed(4)}</span>`:''}
+            ${j.cost_usd?`<span class="attr-chip" title="$${j.cost_usd.toFixed(4)}">₩${Math.round(j.cost_usd*1503).toLocaleString('ko-KR')}</span>`:''}
           </div>
           ${j.tags&&j.tags.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${j.tags.map(t=>`<span class="attr-chip" style="font-size:11px;">${esc(typeof t==='object'?t.tag:t)}</span>`).join('')}</div>`:''}
         </div>

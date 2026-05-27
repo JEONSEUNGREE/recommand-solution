@@ -338,7 +338,7 @@
   <script src="../enhance.js"></script>
   <script>
   (() => {
-    const API      = 'http://localhost:8090';
+    const API      = 'http://192.168.101.27:8090';
     const EMBEDDER = 'http://192.168.101.27:8001';
     const params   = new URLSearchParams(location.search);
     const ADV      = parseInt(params.get('adv') || '1', 10);
@@ -357,7 +357,7 @@
 
     // ── init ───────────────────────────────────────────────────
     document.getElementById('page-title').textContent = `광고주 #${ADV} · 상품 정제`;
-    document.getElementById('page-sub').textContent   = `Spring Boot localhost:8090 · Embedder 192.168.101.27:8001`;
+    document.getElementById('page-sub').textContent   = `Spring Boot 192.168.101.27:8090 · Embedder 192.168.101.27:8001`;
 
     // ── helpers ────────────────────────────────────────────────
     const $ = (id) => document.getElementById(id);
@@ -578,7 +578,7 @@
           <div class="attr-chips">
             ${chips([d.category && `${d.category} (${(d.category_confidence||0).toFixed(2)})`, d.brand, d.brand_tier, d.target_gender, d.origin_country, d.manufacturer])}
             ${d.model_used ? `<span class="attr-chip mono">${d.model_used}</span>` : ''}
-            ${d.cost_usd ? `<span class="attr-chip">$${d.cost_usd.toFixed(4)}</span>` : ''}
+            ${d.cost_usd ? `<span class="attr-chip" title="$${d.cost_usd.toFixed(4)}">₩${Math.round(d.cost_usd*1503).toLocaleString('ko-KR')}</span>` : ''}
           </div>
         </div>
         ${d.tags && d.tags.length ? `

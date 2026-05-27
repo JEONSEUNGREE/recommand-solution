@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8090";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://192.168.101.27:8090";
 
 type Advertiser = {
   id: number;

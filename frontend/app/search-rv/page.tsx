@@ -61,7 +61,7 @@ type Detail = {
   descriptions_meta: { perspective: string; desc_len: number; has_bge: boolean; has_openai: boolean }[];
 };
 
-const BACKEND_API = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8090";
+const BACKEND_API = process.env.NEXT_PUBLIC_API_BASE ?? "http://192.168.101.27:8090";
 
 export default function SearchRvPage() {
   const [advertisers, setAdvertisers] = useState<Advertiser[]>([]);

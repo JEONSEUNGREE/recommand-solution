@@ -52,8 +52,8 @@ app:
     admin:
       username: ${ADMIN_USERNAME:}
       password: ${ADMIN_PASSWORD:}
-    # CSV. 빈 값이면 dev 폴백 (loopback/사설 대역).
-    cors-origins: ${APP_CORS_ORIGINS:http://localhost:*,http://127.0.0.1:*,http://192.168.*.*:*,http://10.*.*.*:*,http://172.16.*.*:*}
+    # CSV. 빈 값이면 dev 폴백. 기본 '*' = 전체 오리진 허용(dev 편의). 운영은 APP_CORS_ORIGINS 로 화이트리스트 지정.
+    cors-origins: ${APP_CORS_ORIGINS:*}
 
 logging:
   level:

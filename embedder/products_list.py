@@ -17,6 +17,7 @@ from typing import Optional
 import psycopg
 from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from psycopg.rows import dict_row
 
 DB_DSN = os.environ.get("DB_DSN", "postgresql://app:app@localhost:5433/recommend")
@@ -382,6 +383,7 @@ def list_search_logs(
     llm_only: bool = Query(False, description="LLM 사용 로그만 조회"),
     q: Optional[str] = Query(None, description="query 검색"),
     advertiser_id: Optional[int] = Query(None, description="광고주 필터"),
+    version: Optional[str] = Query(None, description="클라이언트 버전 필터 (1.0=chat.html, 1.1=chat2.html)"),
     page: int = Query(0, ge=0),
     size: int = Query(50, ge=1, le=200),
 ):
@@ -391,6 +393,9 @@ def list_search_logs(
         conditions.append("result_count = 0")
     if llm_only:
         conditions.append("llm_used = TRUE")
+    if version:
+        conditions.append("version = %s")
+        params.append(version)
     if q:
         conditions.append("query ILIKE %s")
         params.append(f"%{q}%")
@@ -410,7 +415,7 @@ def list_search_logs(
                        keyword_filter_relaxed, created_at,
                        llm_duration_ms, embed_duration_ms, total_duration_ms,
                        llm_input_tokens, llm_output_tokens, llm_cost_usd,
-                       llm_parsed_json
+                       llm_parsed_json, version
                   FROM search_logs
                   {where}
                  ORDER BY created_at DESC
@@ -456,6 +461,12 @@ def search_log_stats():
 @logs_router.get("/{log_id}/results")
 def get_log_results(log_id: int):
     with _conn() as conn, conn.cursor() as cur:
+        # 저장된 LLM 나레이션(v1.1 chat2 전용) — 있으면 이력에서 그대로 재현.
+        cur.execute("SELECT version, narration FROM search_logs WHERE id = %s", (log_id,))
+        meta_row = cur.fetchone()
+        log_version   = meta_row["version"]   if meta_row else None
+        log_narration = meta_row["narration"] if meta_row else None
+
         cur.execute("""
             SELECT rank, rv_product_id, product_name, product_code,
                    image_url, product_url, price, sale_price,
@@ -501,4 +512,24 @@ def get_log_results(log_id: int):
                     import sys
                     print(f"[log results pca ERROR] {ex}", file=sys.stderr)
 
-    return {"log_id": log_id, "items": items, "query_coord3d": query_coord3d}
+    return {"log_id": log_id, "items": items, "query_coord3d": query_coord3d,
+            "version": log_version, "narration": log_narration}
+
+
+class NarrationReq(BaseModel):
+    narration: dict
+
+
+@logs_router.post("/{log_id}/narration")
+def save_log_narration(log_id: int, req: NarrationReq):
+    """chat2(v1.1)가 /narrate 로 받은 LLM 답변을 해당 검색 로그에 저장 → 이력 재현용."""
+    with _conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE search_logs SET narration = %s::jsonb WHERE id = %s",
+            (json.dumps(req.narration, ensure_ascii=False), log_id),
+        )
+        updated = cur.rowcount
+        conn.commit()
+    if not updated:
+        raise HTTPException(404, "log not found")
+    return {"ok": True, "log_id": log_id}

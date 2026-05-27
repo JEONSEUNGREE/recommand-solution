@@ -12,6 +12,7 @@
     'products':          { href: 'products.html',           crumb: ['홈', '상품 데이터', '상품 목록'] },
     'product':           { href: 'product.html',            crumb: ['홈', '상품 데이터', '상품 목록', '상품 상세'] },
     'chat':              { href: 'chat.html',               crumb: ['홈', '추천 & 분석', '추천 채팅'] },
+    'chat2':             { href: 'chat2.html',              crumb: ['홈', '추천 & 분석', '추천 채팅 (LLM 답변)'] },
     'cost':              { href: 'cost.html',               crumb: ['홈', '추천 & 분석', '토큰·비용'] },
     'sync-advertisers':  { href: 'sync/index.html',         crumb: ['홈', '운영', '광고주 목록'] },
     'sync-products':     { href: 'sync/products.html',      crumb: ['홈', '운영', '광고주 목록', '상품 정제'] },
@@ -27,6 +28,7 @@
     extractions: '<svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>',
     products:    '<svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V10"/></svg>',
     chat:        '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    chat2:       '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
     cost:        '<svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9-6-18-3 9H2"/></svg>',
     ws:          '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>',
     perm:        '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/></svg>',
@@ -66,7 +68,8 @@
 
         <div class="grp">
           <div class="grp-lbl">추천 & 분석</div>
-          ${buildItem('chat', '추천 채팅',  null, activeRoute === 'chat', base)}
+          ${buildItem('chat',  '추천 채팅',  'v1.0', activeRoute === 'chat', base)}
+          ${buildItem('chat2', '추천 채팅',  'v1.1', activeRoute === 'chat2', base)}
           ${buildItem('cost', '토큰·비용',  null, activeRoute === 'cost', base)}
         </div>
 

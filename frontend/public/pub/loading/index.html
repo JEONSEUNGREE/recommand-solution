@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIRA · 로딩 모션 갤러리</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<style>
+/* ───────────────────────── tokens ───────────────────────── */
+:root{
+  --bg:#FAFAFA; --surface:#FFFFFF; --surface-2:#F5F5F5; --surface-3:#EEEEEE;
+  --line:#EAEAEA; --line-2:#D4D4D4;
+  --text:#0A0A0A; --text-2:#262626; --text-3:#737373; --text-4:#A3A3A3;
+  --primary:#0A0A0A;
+  --accent:#C6F24E; --accent-h:#B8E63D; --accent-soft:#F4FAD9; --accent-ink:#1F2A05;
+  --ok:#237A47; --warn:#8A6A1A; --err:#9F2B2B; --info:#2C4C70; --purple:#4E4078; --teal:#1F6464; --amber:#9B6A1E;
+  --ease:cubic-bezier(.22,1,.36,1);
+  --ease-io:cubic-bezier(.4,0,.2,1);
+}
+@property --gp { syntax:'<percentage>'; inherits:false; initial-value:0%; }
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:'Pretendard',-apple-system,system-ui,sans-serif;
+  background:
+    radial-gradient(900px 500px at 85% -10%, var(--accent-soft), transparent 60%),
+    var(--bg);
+  color:var(--text); -webkit-font-smoothing:antialiased;
+}
+
+/* ───────────────────────── head ───────────────────────── */
+.wrap{max-width:1180px;margin:0 auto;padding:40px 28px 80px}
+.masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:8px}
+.masthead h1{font-size:30px;font-weight:800;letter-spacing:-0.03em;margin:0;line-height:1.1}
+.masthead h1 .chip{
+  display:inline-block;background:var(--accent);color:var(--accent-ink);
+  font-size:12px;font-weight:800;padding:3px 9px;border-radius:6px;vertical-align:middle;
+  margin-left:8px;letter-spacing:0;transform:translateY(-3px)}
+.masthead p{margin:8px 0 0;color:var(--text-3);font-size:14px;line-height:1.6;max-width:640px}
+.hint{
+  margin-top:18px;background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:14px 16px;font-size:12.5px;color:var(--text-2);line-height:1.7;
+  box-shadow:0 1px 2px rgba(10,10,10,.03)}
+.hint b{color:var(--text)}
+.hint .pin{color:var(--accent-ink);background:var(--accent-soft);border:1px solid var(--accent-bd,#E2EEB4);
+  padding:1px 7px;border-radius:5px;font-weight:700;font-size:11.5px}
+
+/* ───────────────────────── tabs ───────────────────────── */
+.tabs{display:flex;gap:4px;margin:26px 0 22px;flex-wrap:wrap}
+.tab{
+  appearance:none;border:1px solid var(--line);background:var(--surface);
+  padding:9px 16px;border-radius:9px;font:inherit;font-size:13.5px;font-weight:600;
+  color:var(--text-3);cursor:pointer;transition:all .18s var(--ease);
+  display:inline-flex;align-items:center;gap:7px}
+.tab .emo{font-size:15px;filter:grayscale(.1)}
+.tab:hover{color:var(--text);border-color:var(--line-2)}
+.tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.tab.active .emo{filter:none}
+
+/* ───────────────────────── grid ───────────────────────── */
+.panel{display:none;animation:panelIn .4s var(--ease)}
+.panel.active{display:block}
+@keyframes panelIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:14px}
+
+.demo{
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  overflow:hidden;cursor:pointer;position:relative;
+  transition:transform .2s var(--ease),box-shadow .2s var(--ease),border-color .2s var(--ease)}
+.demo:hover{transform:translateY(-3px);box-shadow:0 14px 30px -16px rgba(10,10,10,.3);border-color:var(--line-2)}
+.demo .stage{
+  height:150px;display:flex;align-items:center;justify-content:center;
+  background:
+    linear-gradient(var(--surface),var(--surface)) padding-box,
+    radial-gradient(120px 80px at 50% 30%, #fff, var(--surface-2));
+  position:relative;overflow:hidden}
+.demo .cap{padding:12px 14px;border-top:1px solid var(--line)}
+.demo .cap h3{margin:0;font-size:13.5px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:6px}
+.demo .cap .no{font-size:10.5px;font-weight:800;color:var(--text-4);font-variant-numeric:tabular-nums}
+.demo .cap p{margin:5px 0 0;font-size:11.5px;color:var(--text-3);line-height:1.5}
+.demo .expand{
+  position:absolute;top:9px;right:9px;width:24px;height:24px;border-radius:7px;
+  background:rgba(255,255,255,.8);border:1px solid var(--line);
+  display:grid;place-items:center;color:var(--text-3);opacity:0;transition:opacity .18s var(--ease);
+  backdrop-filter:blur(4px)}
+.demo:hover .expand{opacity:1}
+.demo .expand svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2}
+
+/* rotating status line shared */
+.rot{font-size:12px;color:var(--text-3);font-weight:600;transition:opacity .2s var(--ease);min-height:16px}
+.muted-sub{font-size:11px;color:var(--text-4);margin-top:6px}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 1 · 게이지 (gauges)
+   ═══════════════════════════════════════════════════════════ */
+/* G1 segmented */
+.g-seg{display:flex;gap:6px}
+.g-seg i{width:30px;height:11px;border-radius:3px;background:var(--surface-3);position:relative;overflow:hidden}
+.g-seg i::after{content:"";position:absolute;inset:0;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--accent-h));
+  transform:scaleX(0);transform-origin:left;animation:gseg 2.4s var(--ease) infinite}
+.g-seg i:nth-child(2)::after{animation-delay:.18s}
+.g-seg i:nth-child(3)::after{animation-delay:.36s}
+.g-seg i:nth-child(4)::after{animation-delay:.54s}
+.g-seg i:nth-child(5)::after{animation-delay:.72s}
+@keyframes gseg{0%,8%{transform:scaleX(0)}38%,82%{transform:scaleX(1)}100%{transform:scaleX(0)}}
+
+/* G2 conic ring */
+.g-ring{--gp:0%;width:84px;height:84px;border-radius:50%;display:grid;place-items:center;position:relative;
+  background:conic-gradient(var(--accent) var(--gp), var(--surface-3) 0);animation:gring 2.3s var(--ease-io) infinite}
+.g-ring::before{content:"";position:absolute;inset:9px;border-radius:50%;background:var(--surface)}
+.g-ring span{position:relative;font-size:11px;font-weight:800;color:var(--text-2)}
+@keyframes gring{0%{--gp:0%}65%{--gp:100%}100%{--gp:100%}}
+
+/* G3 equalizer */
+.g-eq{display:flex;align-items:flex-end;gap:6px;height:64px}
+.g-eq i{width:11px;border-radius:4px 4px 2px 2px;background:linear-gradient(var(--accent),var(--accent-h));animation:geq 1.1s var(--ease-io) infinite}
+.g-eq i:nth-child(1){animation-delay:0s}.g-eq i:nth-child(2){animation-delay:.12s}
+.g-eq i:nth-child(3){animation-delay:.24s}.g-eq i:nth-child(4){animation-delay:.36s}.g-eq i:nth-child(5){animation-delay:.48s}
+@keyframes geq{0%,100%{height:14px}50%{height:60px}}
+
+/* G4 liquid fill */
+.g-liq{width:78px;height:78px;border-radius:50%;border:2px solid var(--line-2);position:relative;overflow:hidden;background:var(--surface)}
+.g-liq .water{position:absolute;left:-25%;bottom:0;width:150%;height:50%;background:var(--accent);animation:gliqRise 3s var(--ease-io) infinite}
+.g-liq .water::before,.g-liq .water::after{content:"";position:absolute;top:-14px;left:0;width:50%;height:28px;border-radius:42%;
+  background:var(--accent);animation:gliqWave 2.2s linear infinite}
+.g-liq .water::after{left:50%;background:var(--accent-h);opacity:.85;animation-duration:1.6s}
+.g-liq b{position:absolute;inset:0;display:grid;place-items:center;font-size:11px;font-weight:800;color:var(--accent-ink);mix-blend-mode:multiply}
+@keyframes gliqRise{0%{height:8%}70%{height:88%}100%{height:88%}}
+@keyframes gliqWave{from{transform:translateX(0) rotate(0)}to{transform:translateX(-50%) rotate(360deg)}}
+
+/* G5 stepper milestones */
+.g-step{display:flex;align-items:center;width:170px}
+.g-step .node{width:14px;height:14px;border-radius:50%;background:var(--surface-3);border:2px solid var(--line-2);flex-shrink:0;position:relative;z-index:1;
+  animation:gstepNode 3s var(--ease) infinite}
+.g-step .seg{flex:1;height:3px;background:var(--surface-3);position:relative;overflow:hidden}
+.g-step .seg::after{content:"";position:absolute;inset:0;background:var(--accent);transform:scaleX(0);transform-origin:left;animation:gstepSeg 3s var(--ease) infinite}
+.g-step .node:nth-child(1){animation-delay:0s}
+.g-step .seg:nth-child(2)::after{animation-delay:.2s}
+.g-step .node:nth-child(3){animation-delay:.6s}
+.g-step .seg:nth-child(4)::after{animation-delay:.8s}
+.g-step .node:nth-child(5){animation-delay:1.2s}
+@keyframes gstepNode{0%,5%{background:var(--surface-3);border-color:var(--line-2)}
+  20%,100%{background:var(--accent);border-color:var(--accent-h);box-shadow:0 0 0 4px var(--accent-soft)}}
+@keyframes gstepSeg{0%,5%{transform:scaleX(0)}25%,100%{transform:scaleX(1)}}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 2 · 요리사 (chef)
+   ═══════════════════════════════════════════════════════════ */
+.kit{display:flex;flex-direction:column;align-items:center;gap:10px}
+
+/* C1 boiling pot */
+.pot{position:relative;width:90px;height:60px}
+.pot .body{position:absolute;bottom:0;left:7px;width:76px;height:44px;border-radius:6px 6px 14px 14px;
+  background:linear-gradient(#3a3a3a,#1c1c1c);border:2px solid #000}
+.pot .body::before{content:"";position:absolute;top:6px;left:8px;right:8px;height:8px;border-radius:50%;background:var(--accent);opacity:.9}
+.pot .handle{position:absolute;bottom:14px;width:14px;height:8px;border:2px solid #1c1c1c;border-radius:6px}
+.pot .handle.l{left:-6px}.pot .handle.r{right:-6px}
+.pot .bub{position:absolute;top:9px;width:7px;height:7px;border-radius:50%;background:rgba(198,242,78,.9);animation:bub 1.4s var(--ease-io) infinite}
+.pot .bub:nth-child(4){left:28px;animation-delay:0s}.pot .bub:nth-child(5){left:44px;animation-delay:.45s}.pot .bub:nth-child(6){left:58px;animation-delay:.9s}
+@keyframes bub{0%{transform:translateY(0) scale(.4);opacity:0}30%{opacity:1}100%{transform:translateY(-14px) scale(1);opacity:0}}
+.steam{display:flex;gap:9px;height:22px;margin-bottom:-4px}
+.steam i{width:4px;height:18px;border-radius:3px;background:linear-gradient(var(--text-4),transparent);opacity:.5;animation:steam 1.8s ease-in-out infinite}
+.steam i:nth-child(2){animation-delay:.3s}.steam i:nth-child(3){animation-delay:.6s}
+@keyframes steam{0%{transform:translateY(4px) scaleY(.7);opacity:0}40%{opacity:.55}100%{transform:translateY(-8px) scaleY(1.1);opacity:0}}
+
+/* C2 pan sizzle */
+.pan{position:relative;width:120px;height:46px}
+.pan .dish{position:absolute;bottom:0;left:0;width:78px;height:18px;border-radius:0 0 40px 40px/0 0 26px 26px;background:linear-gradient(#2a2a2a,#111)}
+.pan .stick{position:absolute;bottom:6px;left:74px;width:46px;height:6px;border-radius:3px;background:#1c1c1c}
+.pan .food{position:absolute;left:32px;bottom:14px;width:13px;height:13px;border-radius:50%;background:var(--accent);animation:toss 1.3s var(--ease-io) infinite}
+.pan .flame{position:absolute;bottom:-8px;left:14px;display:flex;gap:5px}
+.pan .flame i{width:8px;height:14px;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;background:linear-gradient(var(--amber),var(--accent));animation:flame .5s ease-in-out infinite alternate}
+.pan .flame i:nth-child(2){animation-delay:.15s}.pan .flame i:nth-child(3){animation-delay:.3s}
+@keyframes toss{0%,100%{transform:translate(0,0) rotate(0)}50%{transform:translate(20px,-26px) rotate(180deg)}}
+@keyframes flame{from{transform:scaleY(.8);opacity:.7}to{transform:scaleY(1.25);opacity:1}}
+
+/* C3 plating */
+.plate{width:96px;height:96px;border-radius:50%;background:radial-gradient(circle at 50% 40%,#fff,var(--surface-2));
+  border:6px solid #fff;box-shadow:0 0 0 1px var(--line),inset 0 0 0 8px rgba(0,0,0,.02);position:relative;display:grid;place-items:center}
+.plate i{position:absolute;width:14px;height:14px;border-radius:4px;opacity:0;animation:plate 2.6s var(--ease) infinite}
+.plate i:nth-child(1){background:var(--accent);top:30px;left:34px;animation-delay:0s}
+.plate i:nth-child(2){background:var(--teal);top:46px;left:52px;border-radius:50%;animation-delay:.4s}
+.plate i:nth-child(3){background:var(--amber);top:52px;left:32px;animation-delay:.8s}
+.plate .spark{font-size:18px;opacity:0;animation:spark 2.6s var(--ease) infinite;animation-delay:1.3s}
+@keyframes plate{0%,8%{opacity:0;transform:translateY(-10px) scale(.4)}24%,84%{opacity:1;transform:none}100%{opacity:0}}
+@keyframes spark{0%,50%{opacity:0;transform:scale(.4)}62%{opacity:1;transform:scale(1.1)}80%,100%{opacity:0;transform:scale(1)}}
+
+/* C4 chopping */
+.chop{position:relative;width:110px;height:64px}
+.chop .board{position:absolute;bottom:0;left:0;width:110px;height:14px;border-radius:4px;background:linear-gradient(#caa472,#a9824f)}
+.chop .knife{position:absolute;bottom:14px;left:44px;width:46px;height:26px;transform-origin:right bottom;animation:chop .8s var(--ease-io) infinite}
+.chop .knife .blade{position:absolute;left:0;top:0;width:40px;height:14px;background:linear-gradient(#e9e9e9,#b8b8b8);border-radius:2px 8px 8px 2px}
+.chop .knife .grip{position:absolute;right:-2px;top:2px;width:14px;height:8px;border-radius:3px;background:#1c1c1c}
+.chop .veg{position:absolute;bottom:14px;left:18px;width:11px;height:11px;border-radius:50%;background:var(--accent);animation:vegPop .8s var(--ease) infinite}
+@keyframes chop{0%,100%{transform:rotate(-32deg)}45%{transform:rotate(-32deg)}60%{transform:rotate(2deg)}75%{transform:rotate(-32deg)}}
+@keyframes vegPop{0%,55%{transform:translateX(0) scaleX(1)}70%{transform:translateX(-6px) scaleX(.6)}100%{transform:translateX(0) scaleX(1)}}
+
+/* C5 oven timer */
+.oven{--gp:0%;width:84px;height:84px;border-radius:50%;display:grid;place-items:center;position:relative;
+  background:conic-gradient(var(--amber) var(--gp), var(--surface-3) 0);animation:gring 4s linear infinite}
+.oven::before{content:"";position:absolute;inset:8px;border-radius:50%;background:radial-gradient(circle at 50% 40%,#fff,var(--accent-soft))}
+.oven .ico{position:relative;font-size:22px;animation:ovenPulse 1.2s ease-in-out infinite}
+@keyframes ovenPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 3 · 탐정 (detective)
+   ═══════════════════════════════════════════════════════════ */
+/* D1 magnifier sweep over cards */
+.det-grid{position:relative;display:grid;grid-template-columns:repeat(3,26px);grid-auto-rows:26px;gap:7px}
+.det-grid .c{border-radius:5px;background:var(--surface-3)}
+.det-grid .glass{position:absolute;width:34px;height:34px;border:3px solid var(--text);border-radius:50%;
+  top:-4px;left:-6px;background:rgba(198,242,78,.18);animation:sweep 3.4s var(--ease-io) infinite}
+.det-grid .glass::after{content:"";position:absolute;right:-9px;bottom:-7px;width:13px;height:4px;border-radius:3px;background:var(--text);transform:rotate(45deg)}
+@keyframes sweep{0%{top:-4px;left:-6px}25%{top:-4px;left:38px}50%{top:38px;left:38px}75%{top:38px;left:-6px}100%{top:-4px;left:-6px}}
+
+/* D2 footprints */
+.foot{display:flex;align-items:center;gap:12px;height:40px}
+.foot i{font-size:18px;opacity:0;transform:translateY(4px);animation:fstep 2.6s var(--ease) infinite}
+.foot i:nth-child(odd){transform:translateY(-6px)}
+.foot i:nth-child(1){animation-delay:0s}.foot i:nth-child(2){animation-delay:.32s}.foot i:nth-child(3){animation-delay:.64s}
+.foot i:nth-child(4){animation-delay:.96s}.foot i:nth-child(5){animation-delay:1.28s}
+@keyframes fstep{0%,5%{opacity:0}18%{opacity:.95}70%{opacity:.95}100%{opacity:0}}
+
+/* D3 evidence board (svg string) */
+.board{position:relative}
+.board svg{width:150px;height:96px;overflow:visible}
+.board .pin{fill:var(--err)}
+.board .str{stroke:var(--err);stroke-width:2;fill:none;stroke-dasharray:140;stroke-dashoffset:140;animation:draw 2.8s var(--ease) infinite}
+.board .ph{fill:var(--surface-3);stroke:var(--line-2);stroke-width:1.5;rx:3}
+@keyframes draw{0%{stroke-dashoffset:140}55%,90%{stroke-dashoffset:0}100%{stroke-dashoffset:0}}
+
+/* D4 fingerprint scan */
+.fp{position:relative;width:74px;height:90px;overflow:hidden}
+.fp svg{width:74px;height:90px;fill:none;stroke:var(--line-2);stroke-width:2.4}
+.fp .reveal{position:absolute;inset:0;clip-path:inset(100% 0 0 0);animation:fpReveal 2.6s var(--ease-io) infinite}
+.fp .reveal svg{stroke:var(--info)}
+.fp .scan{position:absolute;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  box-shadow:0 0 10px 2px var(--accent);animation:fpScan 2.6s var(--ease-io) infinite}
+@keyframes fpReveal{0%{clip-path:inset(100% 0 0 0)}65%,100%{clip-path:inset(0 0 0 0)}}
+@keyframes fpScan{0%{top:90px}65%{top:0}100%{top:0;opacity:0}}
+
+/* D5 radar */
+.radar{position:relative;width:96px;height:96px;border-radius:50%;background:radial-gradient(circle,var(--surface) 0 30%,var(--surface-2) 31%);
+  border:1.5px solid var(--line-2);overflow:hidden}
+.radar::before{content:"";position:absolute;inset:0;background:conic-gradient(rgba(35,122,71,.35),transparent 25%);animation:radarSpin 1.8s linear infinite}
+.radar .ring{position:absolute;border:1px solid var(--line);border-radius:50%}
+.radar .ring.r1{inset:20px}.radar .ring.r2{inset:36px}
+.radar .blip{position:absolute;width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);opacity:0;animation:blip 1.8s linear infinite}
+.radar .blip.a{top:26px;left:60px;animation-delay:.4s}.radar .blip.b{top:58px;left:30px;animation-delay:1.1s}.radar .blip.c{top:62px;left:64px;animation-delay:1.5s}
+@keyframes radarSpin{to{transform:rotate(360deg)}}
+@keyframes blip{0%,30%{opacity:0;transform:scale(.4)}40%{opacity:1;transform:scale(1)}80%{opacity:.4}100%{opacity:0}}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 4 · 추가 아이디어 (more)
+   ═══════════════════════════════════════════════════════════ */
+/* M1 AI thinking core */
+.brain{position:relative;width:80px;height:80px;display:grid;place-items:center}
+.brain .core{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,var(--accent));
+  box-shadow:0 0 0 0 var(--accent-soft);animation:corePulse 1.6s var(--ease-io) infinite}
+.brain .orb{position:absolute;inset:0;animation:orbit 2.6s linear infinite}
+.brain .orb i{position:absolute;top:0;left:50%;width:9px;height:9px;border-radius:50%;background:var(--purple);transform:translateX(-50%)}
+.brain .orb:nth-child(2){animation-delay:-.87s}.brain .orb:nth-child(2) i{background:var(--teal)}
+.brain .orb:nth-child(3){animation-delay:-1.73s}.brain .orb:nth-child(3) i{background:var(--info)}
+@keyframes corePulse{0%,100%{box-shadow:0 0 0 0 var(--accent-soft)}50%{box-shadow:0 0 0 12px transparent;transform:scale(1.1)}}
+@keyframes orbit{to{transform:rotate(360deg)}}
+
+/* M2 treasure map */
+.map{position:relative;width:150px;height:96px;background:linear-gradient(135deg,#fbf6e7,#f3ead0);border:1px solid var(--line-2);border-radius:8px;overflow:hidden}
+.map svg{position:absolute;inset:0;width:100%;height:100%}
+.map .route{stroke:var(--err);stroke-width:2.5;stroke-dasharray:5 6;fill:none;stroke-dashoffset:200;animation:mapDraw 3s var(--ease) infinite}
+.map .x{position:absolute;right:18px;bottom:16px;font-size:18px;font-weight:800;color:var(--err);opacity:0;animation:xPop 3s var(--ease) infinite}
+.map .pin{position:absolute;left:14px;top:16px;font-size:16px}
+@keyframes mapDraw{0%{stroke-dashoffset:200}70%,100%{stroke-dashoffset:0}}
+@keyframes xPop{0%,60%{opacity:0;transform:scale(.4)}72%{opacity:1;transform:scale(1.2)}100%{opacity:1;transform:scale(1)}}
+
+/* M3 neural net */
+.net{display:flex;align-items:center;gap:22px}
+.net .col{display:flex;flex-direction:column;gap:12px}
+.net .n{width:14px;height:14px;border-radius:50%;background:var(--surface-3);border:2px solid var(--line-2);animation:nFire 1.8s var(--ease-io) infinite}
+.net .col:nth-child(1) .n{animation-delay:0s}
+.net .col:nth-child(2) .n{animation-delay:.3s}
+.net .col:nth-child(3) .n{animation-delay:.6s}
+.net .lines{position:absolute}
+@keyframes nFire{0%,100%{background:var(--surface-3);border-color:var(--line-2)}50%{background:var(--accent);border-color:var(--accent-h);box-shadow:0 0 8px var(--accent)}}
+
+/* M4 book flip */
+.book{position:relative;width:96px;height:70px;perspective:600px}
+.book .pg{position:absolute;top:0;left:48px;width:48px;height:70px;background:linear-gradient(90deg,#fff,#f0f0f0);
+  border:1px solid var(--line);border-left:none;transform-origin:left center;backface-visibility:hidden;
+  animation:flip 2.4s var(--ease-io) infinite}
+.book .base{position:absolute;top:0;left:0;width:96px;height:70px;border:1px solid var(--line);border-radius:3px;
+  background:repeating-linear-gradient(var(--surface),var(--surface) 9px,var(--surface-2) 9px,var(--surface-2) 10px)}
+.book .spine{position:absolute;top:0;left:47px;width:2px;height:70px;background:var(--line-2);z-index:3}
+.book .pg:nth-child(3){animation-delay:.8s}.book .pg:nth-child(4){animation-delay:1.6s}
+@keyframes flip{0%{transform:rotateY(0)}40%,100%{transform:rotateY(-160deg)}}
+
+/* M5 matchmaker (product ↔ heart ↔ user) — fits recommendation */
+.match{display:flex;align-items:center;gap:14px}
+.match .card-ic{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;font-size:18px;
+  background:var(--surface-2);border:1px solid var(--line);animation:matchBob 1.8s var(--ease-io) infinite}
+.match .you{animation-delay:.9s}
+.match .heart{font-size:20px;animation:heart 1.8s var(--ease-io) infinite}
+.match .link{width:18px;height:2px;border-radius:2px;background:repeating-linear-gradient(90deg,var(--accent),var(--accent) 4px,transparent 4px,transparent 8px);
+  background-size:200% 100%;animation:linkFlow .8s linear infinite}
+@keyframes matchBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes heart{0%,100%{transform:scale(1)}30%{transform:scale(1.3)}45%{transform:scale(1)}60%{transform:scale(1.2)}}
+@keyframes linkFlow{to{background-position:-200% 0}}
+
+/* ───────────────────────── preview overlay ───────────────────────── */
+.ov{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;
+  background:rgba(10,10,10,.66);backdrop-filter:blur(6px);animation:panelIn .25s var(--ease)}
+.ov.show{display:flex}
+.ov .frame{width:min(420px,90vw);background:var(--surface);border-radius:18px;overflow:hidden;
+  box-shadow:0 40px 80px -20px rgba(0,0,0,.6)}
+.ov .pv-stage{height:300px;display:grid;place-items:center;background:radial-gradient(220px 160px at 50% 38%,#fff,var(--surface-2));transform:scale(1.4)}
+.ov .pv-foot{padding:18px 22px;border-top:1px solid var(--line);text-align:center}
+.ov .pv-foot h3{margin:0 0 4px;font-size:16px;font-weight:800}
+.ov .pv-foot p{margin:0;font-size:12.5px;color:var(--text-3);line-height:1.6}
+.ov .close{position:absolute;top:22px;right:26px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:7px 13px}
+.ov .pv-note{margin-top:10px;font-size:11.5px;color:var(--text-4)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <div>
+      <h1>로딩 모션 갤러리<span class="chip">/pub/loading</span></h1>
+      <p>검색이 길어질 때 지루하지 않도록 — 게이지·요리사·탐정 등 컨셉별 로딩/스켈레톤 모션 모음입니다.
+         카드를 누르면 실제 화면처럼 크게 미리볼 수 있어요.</p>
+    </div>
+  </div>
+
+  <div class="hint">
+    💡 <b>chat2.html 검색 대기에 추천</b> &nbsp;
+    <span class="pin">탐정 · 돋보기 스윕</span> 검색 맥락과 직관적으로 맞고,
+    <span class="pin">추천 · 매치메이커</span> 는 “당신에게 맞는 상품을 찾는 중” 메시지와 결이 같습니다.
+    <span class="pin">추천 · AI 사고</span> 는 LLM 추론 단계에 잘 어울려요.
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="g"><span class="emo">📊</span>게이지</button>
+    <button class="tab" data-tab="c"><span class="emo">👨‍🍳</span>요리사</button>
+    <button class="tab" data-tab="d"><span class="emo">🔍</span>탐정</button>
+    <button class="tab" data-tab="m"><span class="emo">✨</span>추가 아이디어</button>
+  </div>
+
+  <!-- ══ PANEL: 게이지 ══ -->
+  <div class="panel active" data-panel="g">
+    <div class="grid">
+
+      <figure class="demo" data-name="세그먼트 게이지" data-desc="5칸이 순차로 차오르는 가장 직관적인 진행 표시. 단계가 명확할 때.">
+        <div class="stage"><div class="g-seg"><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="cap"><h3><span class="no">G1</span> 세그먼트 게이지</h3><p>5칸 순차 충전 · 단계가 명확할 때</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="링 게이지" data-desc="원형 conic 그래디언트가 채워지는 미니멀 링. 짧은 대기에 깔끔.">
+        <div class="stage"><div class="g-ring"><span>탐색</span></div></div>
+        <div class="cap"><h3><span class="no">G2</span> 링 게이지</h3><p>원형 채움 · 미니멀하고 단정</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="이퀄라이저" data-desc="음악 비주얼라이저처럼 통통 튀는 바. 활기차고 ‘작동 중’ 느낌.">
+        <div class="stage"><div class="g-eq"><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="cap"><h3><span class="no">G3</span> 이퀄라이저</h3><p>통통 튀는 바 · 활기찬 인디케이터</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="리퀴드 필" data-desc="물이 차오르듯 출렁이는 채움. 부드럽고 고급스러운 무드.">
+        <div class="stage"><div class="g-liq"><div class="water"></div><b>FILL</b></div></div>
+        <div class="cap"><h3><span class="no">G4</span> 리퀴드 필</h3><p>출렁이는 물결 채움 · 부드러운 무드</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="스텝 마일스톤" data-desc="단계별 노드가 하나씩 점등. 멀티 스텝 파이프라인 시각화에 최적.">
+        <div class="stage"><div class="g-step"><span class="node"></span><span class="seg"></span><span class="node"></span><span class="seg"></span><span class="node"></span></div></div>
+        <div class="cap"><h3><span class="no">G5</span> 스텝 마일스톤</h3><p>단계 노드 점등 · 파이프라인용</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+    </div>
+  </div>
+
+  <!-- ══ PANEL: 요리사 ══ -->
+  <div class="panel" data-panel="c">
+    <div class="grid">
+
+      <figure class="demo" data-name="보글보글 냄비" data-desc="국물 끓고 김 모락모락. ‘정성껏 준비 중’ 메시지와 환상의 짝.">
+        <div class="stage"><div class="kit">
+          <div class="steam"><i></i><i></i><i></i></div>
+          <div class="pot"><span class="handle l"></span><span class="handle r"></span><div class="body"></div><span class="bub"></span><span class="bub"></span><span class="bub"></span></div>
+          <div class="rot" data-rotate='["재료 손질 중…","육수 우리는 중…","간 보는 중…"]'>재료 손질 중…</div>
+        </div></div>
+        <div class="cap"><h3><span class="no">C1</span> 보글보글 냄비</h3><p>끓는 국물 + 김 · 정성스러운 무드</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="팬 토스" data-desc="불꽃 위에서 재료가 휙 뒤집히는 팬. 경쾌하고 시선을 끔.">
+        <div class="stage"><div class="kit">
+          <div class="pan"><span class="food"></span><div class="dish"></div><div class="stick"></div><div class="flame"><i></i><i></i><i></i></div></div>
+          <div class="rot" data-rotate='["센 불에 볶는 중…","불맛 입히는 중…","재료 뒤집는 중…"]'>센 불에 볶는 중…</div>
+        </div></div>
+        <div class="cap"><h3><span class="no">C2</span> 팬 토스</h3><p>불꽃 + 재료 점프 · 경쾌함</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="플레이팅" data-desc="빈 접시에 재료가 하나씩 올라가고 ✨반짝. 결과 ‘완성’ 직전 분위기.">
+        <div class="stage"><div class="kit">
+          <div class="plate"><i></i><i></i><i></i><span class="spark">✨</span></div>
+          <div class="rot" data-rotate='["접시에 담는 중…","마지막 데코…","곧 완성돼요!"]'>접시에 담는 중…</div>
+        </div></div>
+        <div class="cap"><h3><span class="no">C3</span> 플레이팅</h3><p>재료 한 점씩 + 반짝 · 완성 직전</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="칼질 도마" data-desc="도마 위 리듬감 있는 칼질. 빠르게 ‘처리 중’인 느낌을 줌.">
+        <div class="stage"><div class="kit">
+          <div class="chop"><span class="veg"></span><div class="knife"><span class="blade"></span><span class="grip"></span></div><div class="board"></div></div>
+          <div class="rot" data-rotate='["재료 다듬는 중…","송송 써는 중…","손질 마무리…"]'>재료 다듬는 중…</div>
+        </div></div>
+        <div class="cap"><h3><span class="no">C4</span> 칼질 도마</h3><p>리듬 칼질 · 빠른 처리감</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="오븐 타이머" data-desc="원형 타이머가 돌며 굽는 중. 시간이 걸리는 작업을 자연스럽게 설명.">
+        <div class="stage"><div class="kit">
+          <div class="oven"><span class="ico">🍞</span></div>
+          <div class="rot" data-rotate='["예열 중…","노릇하게 굽는 중…","거의 다 됐어요…"]'>예열 중…</div>
+        </div></div>
+        <div class="cap"><h3><span class="no">C5</span> 오븐 타이머</h3><p>굽기 진행 링 · 긴 대기에 적합</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+    </div>
+  </div>
+
+  <!-- ══ PANEL: 탐정 ══ -->
+  <div class="panel" data-panel="d">
+    <div class="grid">
+
+      <figure class="demo" data-name="돋보기 스윕" data-desc="돋보기가 카드 격자를 훑으며 단서를 찾음. 검색 맥락에 직관적.">
+        <div class="stage"><div class="det-grid"><span class="c"></span><span class="c"></span><span class="c"></span><span class="c"></span><span class="c"></span><span class="c"></span><span class="c"></span><span class="c"></span><span class="c"></span><span class="glass"></span></div></div>
+        <div class="cap"><h3><span class="no">D1</span> 돋보기 스윕</h3><p>격자 훑기 · 검색에 가장 직관적</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="발자국 추적" data-desc="발자국이 하나씩 이어지며 단서를 쫓는 연출. 스토리텔링형.">
+        <div class="stage"><div class="kit">
+          <div class="foot"><i>👣</i><i>👣</i><i>👣</i><i>👣</i><i>👣</i></div>
+          <div class="rot" data-rotate='["단서 추적 중…","경로 따라가는 중…","흔적 분석 중…"]'>단서 추적 중…</div>
+        </div></div>
+        <div class="cap"><h3><span class="no">D2</span> 발자국 추적</h3><p>이어지는 발자국 · 스토리텔링</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="증거 보드" data-desc="사진들을 붉은 실로 잇는 수사 보드. 연관 분석을 시각화.">
+        <div class="stage"><div class="board"><svg viewBox="0 0 150 96">
+          <rect class="ph" x="6" y="10" width="36" height="28" rx="3"/>
+          <rect class="ph" x="108" y="14" width="36" height="28" rx="3"/>
+          <rect class="ph" x="56" y="58" width="36" height="28" rx="3"/>
+          <path class="str" d="M24 24 L126 28 L74 72 Z"/>
+          <circle class="pin" cx="24" cy="24" r="4"/><circle class="pin" cx="126" cy="28" r="4"/><circle class="pin" cx="74" cy="72" r="4"/>
+        </svg></div></div>
+        <div class="cap"><h3><span class="no">D3</span> 증거 보드</h3><p>붉은 실 연결 · 연관 분석 시각화</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="지문 스캔" data-desc="스캔 라인이 지나가며 지문이 인식·점등. 보안/식별 느낌.">
+        <div class="stage"><div class="fp">
+          <svg viewBox="0 0 60 76"><path d="M30 6C14 6 8 20 8 34c0 14 4 22 4 30M30 6c16 0 22 14 22 28 0 12-3 20-3 28M30 16c-9 0-14 8-14 19s2 18 2 25M30 16c9 0 14 8 14 19s-2 18-2 25M30 26c-5 0-8 5-8 12s1 13 1 20M30 26c5 0 8 5 8 12s-1 13-1 20M30 38v30"/></svg>
+          <div class="reveal"><svg viewBox="0 0 60 76"><path d="M30 6C14 6 8 20 8 34c0 14 4 22 4 30M30 6c16 0 22 14 22 28 0 12-3 20-3 28M30 16c-9 0-14 8-14 19s2 18 2 25M30 16c9 0 14 8 14 19s-2 18-2 25M30 26c-5 0-8 5-8 12s1 13 1 20M30 26c5 0 8 5 8 12s-1 13-1 20M30 38v30"/></svg></div>
+          <div class="scan"></div>
+        </div></div>
+        <div class="cap"><h3><span class="no">D4</span> 지문 스캔</h3><p>스캔 라인 + 점등 · 식별/보안 톤</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="레이더 탐지" data-desc="레이더 빔이 회전하며 블립(목표)이 깜빡 포착. 탐색의 정석.">
+        <div class="stage"><div class="radar"><span class="ring r1"></span><span class="ring r2"></span><span class="blip a"></span><span class="blip b"></span><span class="blip c"></span></div></div>
+        <div class="cap"><h3><span class="no">D5</span> 레이더 탐지</h3><p>회전 빔 + 블립 · 탐색의 정석</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+    </div>
+  </div>
+
+  <!-- ══ PANEL: 추가 아이디어 ══ -->
+  <div class="panel" data-panel="m">
+    <div class="grid">
+
+      <figure class="demo" data-name="AI 사고" data-desc="코어가 맥동하고 입자가 공전. LLM 추론·이해 단계에 딱.">
+        <div class="stage"><div class="kit">
+          <div class="brain"><div class="orb"><i></i></div><div class="orb"><i></i></div><div class="orb"><i></i></div><div class="core"></div></div>
+          <div class="rot" data-rotate='["질문 이해하는 중…","의도 분석 중…","답을 추론하는 중…"]'>질문 이해하는 중…</div>
+        </div></div>
+        <div class="cap"><h3><span class="no">M1</span> AI 사고</h3><p>맥동 코어 + 공전 입자 · LLM 추론용</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="보물지도" data-desc="점선 루트가 그려지며 X 표시에 도착. ‘딱 맞는 걸 찾았다’ 연출.">
+        <div class="stage"><div class="map">
+          <svg viewBox="0 0 150 96"><path class="route" d="M22 24 C50 10 60 60 90 50 S130 60 132 76"/></svg>
+          <span class="pin">📍</span><span class="x">✕</span>
+        </div></div>
+        <div class="cap"><h3><span class="no">M2</span> 보물지도</h3><p>루트 드로잉 → X 도착 · 발견 연출</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="뉴럴 네트워크" data-desc="레이어 노드가 차례로 발화. 모델이 ‘생각하는’ 테크 무드.">
+        <div class="stage"><div class="net">
+          <div class="col"><span class="n"></span><span class="n"></span><span class="n"></span></div>
+          <div class="col"><span class="n"></span><span class="n"></span><span class="n"></span></div>
+          <div class="col"><span class="n"></span><span class="n"></span></div>
+        </div></div>
+        <div class="cap"><h3><span class="no">M3</span> 뉴럴 네트워크</h3><p>노드 발화 전파 · 테크/AI 무드</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="책장 넘김" data-desc="책 페이지가 사르륵 넘어감. 자료를 뒤지는 ‘조사 중’ 느낌.">
+        <div class="stage"><div class="book"><div class="base"></div><div class="pg"></div><div class="pg"></div><div class="pg"></div><div class="spine"></div></div></div>
+        <div class="cap"><h3><span class="no">M4</span> 책장 넘김</h3><p>페이지 플립 · 자료 조사 무드</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+      <figure class="demo" data-name="매치메이커" data-desc="상품과 사용자를 ♥로 잇는 매칭. 상품추천 서비스에 가장 어울림.">
+        <div class="stage"><div class="kit">
+          <div class="match">
+            <span class="card-ic">🛍️</span><span class="link"></span><span class="heart">❤️</span><span class="link"></span><span class="card-ic you">🙂</span>
+          </div>
+          <div class="rot" data-rotate='["취향 매칭 중…","딱 맞는 상품 찾는 중…","베스트 매치 계산 중…"]'>취향 매칭 중…</div>
+        </div></div>
+        <div class="cap"><h3><span class="no">M5</span> 매치메이커</h3><p>상품 ↔ 사용자 ♥ · 추천 서비스 맞춤</p></div>
+        <div class="expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      </figure>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- preview overlay -->
+<div class="ov" id="ov">
+  <div class="close" id="ov-close">닫기 ✕</div>
+  <div class="frame">
+    <div class="pv-stage" id="ov-stage"></div>
+    <div class="pv-foot">
+      <h3 id="ov-title"></h3>
+      <p id="ov-desc"></p>
+      <div class="pv-note">실제 적용 시 이 모션 + 한 줄 상태 메시지를 검색 대기 영역에 배치하세요.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ── tabs ──
+  const tabs = document.getElementById('tabs');
+  tabs.addEventListener('click', e => {
+    const btn = e.target.closest('.tab'); if (!btn) return;
+    const id = btn.dataset.tab;
+    tabs.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === btn));
+    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.dataset.panel === id));
+  });
+
+  // ── rotating status text ──
+  function startRotators(scope){
+    (scope || document).querySelectorAll('[data-rotate]').forEach(el => {
+      if (el._rot) return; // already running
+      let msgs; try { msgs = JSON.parse(el.dataset.rotate); } catch { return; }
+      let i = 0;
+      el._rot = setInterval(() => {
+        i = (i + 1) % msgs.length;
+        el.style.opacity = '0';
+        setTimeout(() => { el.textContent = msgs[i]; el.style.opacity = '1'; }, 200);
+      }, 1900);
+    });
+  }
+  startRotators();
+
+  // ── click → fullscreen preview ──
+  const ov = document.getElementById('ov');
+  const ovStage = document.getElementById('ov-stage');
+  const ovTitle = document.getElementById('ov-title');
+  const ovDesc  = document.getElementById('ov-desc');
+
+  document.querySelectorAll('.demo').forEach(card => {
+    card.addEventListener('click', () => {
+      const stage = card.querySelector('.stage');
+      ovStage.innerHTML = stage.innerHTML;           // clone the animated loader
+      ovTitle.textContent = card.dataset.name || '';
+      ovDesc.textContent  = card.dataset.desc || '';
+      startRotators(ovStage);                        // re-arm any rotating text in the clone
+      ov.classList.add('show');
+    });
+  });
+
+  function closeOv(){
+    ov.classList.remove('show');
+    // stop cloned rotators
+    ovStage.querySelectorAll('[data-rotate]').forEach(el => { if (el._rot){ clearInterval(el._rot); } });
+    ovStage.innerHTML = '';
+  }
+  document.getElementById('ov-close').addEventListener('click', closeOv);
+  ov.addEventListener('click', e => { if (e.target === ov) closeOv(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOv(); });
+})();
+</script>
+</body>
+</html>

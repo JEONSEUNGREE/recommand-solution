@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>AIRA · 추천 채팅</title>
+<title>AIRA · 추천 채팅 (LLM 답변)</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -484,6 +484,29 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* ── AI 사고 로더 (검색 대기) ───────────────────── */
+  .think { position: relative; width: 34px; height: 34px; flex-shrink: 0; }
+  .think .core {
+    position: absolute; top: 50%; left: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px;
+    border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #7C3AED);
+    animation: thinkCore 1.6s cubic-bezier(.4,0,.2,1) infinite;
+  }
+  .think .orb { position: absolute; inset: 0; animation: thinkOrbit 2.4s linear infinite; }
+  .think .orb i {
+    position: absolute; top: 0; left: 50%; width: 7px; height: 7px; margin-left: -3.5px;
+    border-radius: 50%; background: #7C3AED;
+  }
+  .think .orb:nth-child(2) { animation-delay: -0.8s; }
+  .think .orb:nth-child(2) i { background: #A78BFA; }
+  .think .orb:nth-child(3) { animation-delay: -1.6s; }
+  .think .orb:nth-child(3) i { background: #C4B5FD; }
+  @keyframes thinkCore {
+    0%,100% { box-shadow: 0 0 0 0 rgba(124,58,237,.28); transform: scale(1); }
+    50%     { box-shadow: 0 0 0 7px rgba(124,58,237,0); transform: scale(1.15); }
+  }
+  @keyframes thinkOrbit { to { transform: rotate(360deg); } }
+  .think-text { transition: opacity .2s ease; }
+
   /* ── 이전 pipeline-detail (이력용) ─────────────── */
   .pipeline-detail {
     margin-top: 10px; border: 1px solid var(--line);
@@ -535,7 +558,7 @@
   .reason-head-title { color: #fff; font-size: 12px; font-weight: 700; flex: 1; }
   .reason-close { color: rgba(255,255,255,.55); cursor: pointer; font-size: 18px; line-height: 1; }
   .reason-close:hover { color: #fff; }
-  .reason-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; width: 380px; flex-shrink: 0; box-sizing: border-box; }
+  .reason-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; width: 320px; flex-shrink: 0; box-sizing: border-box; }
   .reason-product { font-size: 12.5px; font-weight: 700; color: #111; line-height: 1.4; }
   .reason-rows { display: flex; flex-direction: column; gap: 4px; }
   .reason-row { display: flex; gap: 10px; font-size: 11.5px; align-items: baseline; }
@@ -622,7 +645,7 @@
   }
 </style>
 </head>
-<body data-route="chat">
+<body data-route="chat2" data-crumbs="홈 / 추천 & 분석 / 추천 채팅 (LLM 답변)">
 <div class="shell">
   <div id="side-mount"></div>
   <main class="main">
@@ -1075,18 +1098,31 @@
     return el;
   }
 
+  const THINK_MSGS = ['질문을 이해하는 중…', '의도를 분석하는 중…', '딱 맞는 상품을 찾는 중…', '추천을 정리하는 중…'];
+
   function appendAILoading() {
     const el = document.createElement('div');
     el.className = 'msg ai';
     el.innerHTML = `<div class="av">✦</div>
       <div class="body">
-        <div class="bubble" style="display:flex;align-items:center;gap:8px;color:#9CA3AF;">
-          <span class="spin-inline"></span><span>분석 중…</span>
+        <div class="bubble" style="display:flex;align-items:center;gap:10px;color:#9CA3AF;">
+          <span class="think"><span class="orb"><i></i></span><span class="orb"><i></i></span><span class="orb"><i></i></span><span class="core"></span></span>
+          <span class="think-text">${THINK_MSGS[0]}</span>
         </div>
-        <div class="msg-meta"><b style="color:var(--text-3);">AIRA</b><span>·</span><span>처리중</span></div>
+        <div class="msg-meta"><b style="color:var(--text-3);">AIRA</b><span>·</span><span>생각하는 중</span></div>
       </div>`;
     msgs.appendChild(el);
     msgs.scrollTop = msgs.scrollHeight;
+
+    // 대기 중 상태 문구 순차 전환 (검색 완료 시 finally 에서 정리)
+    const txtEl = el.querySelector('.think-text');
+    let i = 0;
+    el._rotTimer = setInterval(() => {
+      i = (i + 1) % THINK_MSGS.length;
+      txtEl.style.opacity = '0';
+      setTimeout(() => { txtEl.textContent = THINK_MSGS[i]; txtEl.style.opacity = '1'; }, 200);
+    }, 1900);
+
     return el;
   }
 
@@ -1253,6 +1289,181 @@
     </button>`;
   }
 
+  // ── 롯데ON 스타일 내러티브 렌더 (chat2 전용) ─────────────────────
+  //   인트로 문단(LLM) + 상품별 추천 이유(LLM). 카드엔 순위/% 숨기고,
+  //   상세는 '사유' 팝업 + 하단 '파이프라인 보기' 로 그대로 제공.
+  function _wonFmt(n) { return '₩' + Number(n).toLocaleString('ko-KR'); }
+  // 상품명의 HTML 엔티티(&#9733; 등)·장식 기호·이모지 잡음 제거.
+  function _cleanName(raw) {
+    if (raw == null) return '';
+    const ta = document.createElement('textarea'); ta.innerHTML = String(raw);
+    let s = ta.value;                                    // &#9733;→★, &amp;→& 등 디코드
+    s = s.replace(/&#?[a-zA-Z0-9]+;/g, ' ');             // 못 푼 엔티티 잔재 제거
+    s = s.replace(/[←-⇿⌀-➿⬀-⯿☀-⛿️‍]/g, ' '); // 화살표·기호·딩벳·별·변형자
+    s = s.replace(/[\u{1F000}-\u{1FAFF}]/gu, ' ');       // 이모지
+    s = s.replace(/[★☆♥♡◆◇■□▷◁▶◀※♠♣•‣◦]/g, ' ');
+    s = s.replace(/\s{2,}/g, ' ').trim();
+    return s;
+  }
+
+  function buildNarratedCards(items, narration, meta, resultCount) {
+    meta = meta || {};
+    const isHybrid = meta.mode === 'hybrid';
+    const isHybridLive = isHybrid && items.length > 0 && items[0].sparse_ip != null;
+    const useMorph = !!meta.use_morpheme;
+    const useColbert = !!meta.use_colbert;
+    const debug = !!meta.debug;
+    const pId = meta._pid;
+    // 사유 팝업 data-attr 용 max (buildRecoCards 와 동일 기준)
+    let scoreMax = 0, sparseAbsMax = 0, morphAbsMax = 0, sparseBestAbsMax = 0, morphBestAbsMax = 0;
+    if (isHybridLive) {
+      scoreMax = Math.max(0, ...items.map(x => x.score || 0));
+      sparseAbsMax = Math.max(0, ...items.map(x => Math.abs(x.sparse_ip || 0)));
+      morphAbsMax = Math.max(0, ...items.map(x => Math.abs(x.morph_ip || 0)));
+      sparseBestAbsMax = Math.max(0, ...items.map(x => Math.abs(x.sparse_best_ip || 0)));
+      morphBestAbsMax = Math.max(0, ...items.map(x => Math.abs(x.morph_best_ip || 0)));
+    }
+    let colbertMax = 0;
+    if (useColbert) { const cbs = items.map(x => x.colbert_score).filter(v => v != null); colbertMax = cbs.length ? Math.max(...cbs) : 0; }
+
+    const reasonById = {};
+    (narration && Array.isArray(narration.items) ? narration.items : []).forEach(r => {
+      if (r && r.rv_product_id != null) reasonById[r.rv_product_id] = r.reason || '';
+    });
+    const introRaw = (narration && narration.intro) ? String(narration.intro).trim() : '';
+    const introHtml = introRaw
+      ? `<div style="font-size:13.5px;line-height:1.9;color:#374151;white-space:pre-wrap;margin:2px 2px 16px;">${escHtml(introRaw)}</div>`
+      : '';
+
+    const rows = items.map((p, idx) => {
+      const orig = p.price, sale = p.sale_price;
+      let priceLine;
+      if (sale != null && orig != null && sale < orig && orig > 0) {
+        const disc = Math.round((1 - sale / orig) * 100);
+        priceLine = `<span style="color:#E8344E;font-weight:800;margin-right:6px;">${disc}%</span><b style="color:#111;font-weight:700;">${_wonFmt(sale)}</b>`;
+      } else {
+        const main = (sale != null ? sale : orig);
+        priceLine = main != null ? `<b style="color:#111;font-weight:700;">${_wonFmt(main)}</b>` : '<span style="color:#9CA3AF;">가격 정보 없음</span>';
+      }
+      const href = p.product_url ? escHtml(p.product_url) : '#';
+      const thumb = p.image_url
+        ? `<img src="${escHtml(p.image_url)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.parentNode.innerHTML='<span style=\\'font-size:22px\\'>🛍</span>'">`
+        : '<span style="font-size:22px;">🛍</span>';
+      const cleanNm = _cleanName(p.product_name) || '상품';
+      const nameLine = [p.brand ? _cleanName(p.brand) : '', cleanNm].filter(Boolean).join(' · ');
+      const reason = reasonById[p.rv_product_id] || '';
+
+      // ── 사유 팝업용 data-attr (buildRecoCards 와 동일) ──
+      let sim = '—';
+      const colbertSim = useColbert && colbertMax > 0 && p.colbert_score != null;
+      if (colbertSim) sim = Math.max(0, Math.min(100, (p.colbert_score / colbertMax) * 100)).toFixed(0) + '%';
+      else if (isHybridLive && p.score != null && scoreMax > 0) sim = ((p.score / scoreMax) * 100).toFixed(0) + '%';
+      else if (p.distance != null) sim = ((1 - p.distance) * 100).toFixed(0) + '%';
+      const distVal = p.distance != null ? p.distance.toFixed(4) : '';
+      let sparsePctNum = 0, morphPctNum = 0;
+      if (isHybridLive) {
+        if (sparseAbsMax > 0 && p.sparse_ip != null) sparsePctNum = Math.round(Math.abs(p.sparse_ip) / sparseAbsMax * 100);
+        if (useMorph && morphAbsMax > 0 && p.morph_ip != null) morphPctNum = Math.round(Math.abs(p.morph_ip) / morphAbsMax * 100);
+      }
+      const denseBestSim = (isHybridLive && p.dense_best_dist != null) ? ((1 - p.dense_best_dist) * 100).toFixed(0) + '%' : '';
+      const sparseBestStr = (isHybridLive && sparseBestAbsMax > 0 && p.sparse_best_ip != null) ? Math.round(Math.abs(p.sparse_best_ip) / sparseBestAbsMax * 100) + '%' : '';
+      const morphBestStr = (isHybridLive && useMorph && morphBestAbsMax > 0 && p.morph_best_ip != null) ? Math.round(Math.abs(p.morph_best_ip) / morphBestAbsMax * 100) + '%' : '';
+      const colbertAttrs = `
+                data-use-colbert="${useColbert ? '1' : ''}"
+                data-colbert-score="${p.colbert_score != null ? Number(p.colbert_score).toFixed(5) : ''}"
+                data-colbert-sim="${colbertSim ? '1' : ''}"
+                data-debug="${debug ? '1' : ''}"
+                data-desc-raw="${escHtml(p.description || '')}"
+                data-query="${escHtml(meta.query || '')}"`;
+      const hybridAttrs = (isHybrid ? `
+                data-mode="hybrid"
+                data-fusion="${escHtml(meta.fusion || '')}"
+                data-alpha="${meta.alpha != null ? meta.alpha : ''}"
+                data-dense-dist="${p.dense_dist != null ? p.dense_dist.toFixed(4) : ''}"
+                data-sparse-ip="${p.sparse_ip != null ? p.sparse_ip.toFixed(4) : ''}"
+                data-sparse-pct="${sparsePctNum}"
+                data-use-morph="${useMorph ? '1' : ''}"
+                data-morph-ip="${(useMorph && p.morph_ip != null) ? p.morph_ip.toFixed(4) : ''}"
+                data-morph-pct="${morphPctNum}"
+                data-score="${p.score != null ? p.score.toFixed(6) : ''}"
+                data-rank-dense="${p.rank_dense != null ? p.rank_dense : ''}"
+                data-rank-sparse="${p.rank_sparse != null ? p.rank_sparse : ''}"
+                data-dense-persp="${escHtml(p.dense_best_perspective || '')}"
+                data-dense-desc="${escHtml(p.dense_best_description || '')}"
+                data-dense-sim="${denseBestSim}"
+                data-sparse-persp="${escHtml(p.sparse_best_perspective || '')}"
+                data-sparse-desc="${escHtml(p.sparse_best_description || '')}"
+                data-sparse-str="${sparseBestStr}"
+                data-morph-persp="${escHtml(p.morph_best_perspective || '')}"
+                data-morph-desc="${escHtml(p.morph_best_description || '')}"
+                data-morph-str="${morphBestStr}"` : ` data-mode="dense"`) + colbertAttrs;
+      const reasonBtn = `<span class="reason-btn"
+                data-name="${escHtml(cleanNm)}"
+                data-persp="${escHtml(p.perspective || '')}"
+                data-sim="${sim}"
+                data-dist="${distVal}"
+                data-desc="${escHtml(p.description || '')}"
+                data-pid="${pId != null ? pId : ''}"
+                data-idx="${idx}"${hybridAttrs}
+                onclick="showReason(event,this)" role="button" tabindex="0">사유</span>`;
+
+      const reasonHtml = reason
+        ? `<div style="font-size:12.5px;line-height:1.85;color:#374151;margin:8px 2px 0;">${escHtml(reason)}</div>`
+        : '';
+      return `<div style="margin-bottom:18px;">
+        <a href="${href}" target="_blank" rel="noopener"
+           style="display:flex;gap:12px;text-decoration:none;background:#F9FAFB;border:1px solid #F1F2F4;border-radius:12px;padding:10px;align-items:center;transition:box-shadow .12s;"
+           onmouseover="this.style.boxShadow='0 2px 10px rgba(0,0,0,.06)'" onmouseout="this.style.boxShadow='none'">
+          <div style="width:72px;height:72px;flex-shrink:0;border-radius:8px;overflow:hidden;background:#EEF0F3;display:flex;align-items:center;justify-content:center;">${thumb}</div>
+          <div style="min-width:0;flex:1;">
+            <div style="font-size:12.5px;color:#374151;font-weight:600;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${escHtml(nameLine)}</div>
+            <div style="font-size:14px;margin-top:5px;">${priceLine}</div>
+            <div style="display:inline-block;margin-top:5px;font-size:10px;color:#6B7280;background:#EEF0F3;border-radius:4px;padding:1px 6px;">무료배송</div>
+          </div>
+        </a>
+        ${reasonHtml}
+        <div style="margin:7px 2px 0;">${reasonBtn}</div>
+      </div>`;
+    }).join('');
+
+    return `<div class="reco-header" style="margin-bottom:10px;">
+        <span>AI가 고른 추천 결과가 도착했어요!</span>
+        <span class="cnt">${resultCount}건</span>
+      </div>
+      ${introHtml}
+      <div>${rows}</div>`;
+  }
+
+  // 검색 결과를 /narrate 에 던져 인트로+상품별 추천 이유를 받는다(신규 API).
+  // 상품명의 엔티티/기호 잡음은 보내기 전 정리 → LLM 이 깔끔한 이름으로 설명.
+  // 실패해도 빈 narration 으로 graceful — 카드는 그대로 렌더.
+  async function fetchNarration(query, items, llmProvider) {
+    try {
+      const payload = {
+        query,
+        llm_provider: llmProvider || 'openai',
+        items: items.map(p => ({
+          rv_product_id: p.rv_product_id,
+          product_name: _cleanName(p.product_name),
+          brand: _cleanName(p.brand),
+          category: p.category,
+          price: p.price,
+          sale_price: p.sale_price,
+          description: p.description,
+        })),
+      };
+      const r = await fetch(EMBEDDER + '/narrate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.json();
+    } catch (e) {
+      console.warn('[chat2] narrate 실패 — 카드만 표시:', e);
+      return { intro: '', items: [] };
+    }
+  }
+
   // ── 전송 ─────────────────────────────────────────────────────
   async function send() {
     const txt = inp.value.trim();
@@ -1269,13 +1480,13 @@
         advertiser_id: advId,
         k: Math.max(1, Math.min(50, parseInt(kInp.value) || 10)),
         backend: embedSel.value,
-        llm_provider: llmSel.value,
+        llm_provider: 'openai',   // chat2: 검색 쿼리 파싱도 무조건 gpt-4o-mini
         mode: modeSel.value,
         fusion: fusionSel.value,
         alpha: Number(alphaInp.value),
         use_morpheme: morphChk.checked,
         use_colbert: colbertChk.checked,
-        version: '1.0',   // chat.html = 추천 채팅 v1.0
+        version: '1.1',   // chat2.html = 추천 채팅 v1.1
       };
       const res  = await fetch(EMBEDDER + '/search-rv-llm', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1288,7 +1499,6 @@
       const pId = ++msgIdCounter;
       pipelineStore.set(pId, {
         raw_query: txt, parsed: data.parsed,
-        backend: data.backend,   // 임베딩 백엔드(bge/openai) — 파이프라인 임베딩 모델 표시용
         keyword_filters_applied: data.keyword_filters_applied || [],
         keyword_filter_relaxed: data.keyword_filter_relaxed,
         pe_filter_relaxed: data.pe_filter_relaxed,
@@ -1315,13 +1525,24 @@
       let bubbleHtml, metaExtra = '';
       if (cnt > 0) {
         loadEl.classList.add('wide');
-        bubbleHtml = correctHtml + buildRecoCards(items, cnt, pId,
-                                     { mode: data.mode, fusion: data.fusion, alpha: data.alpha,
-                                       use_morpheme: data.use_morpheme, weights: data.weights,
-                                       use_colbert: data.use_colbert, debug: debugChk.checked,
-                                       query: data.raw_query || txt })
-                    + pipelineBtn(pId);
-        metaExtra  = `<span>${data.total_duration_ms != null ? data.total_duration_ms + 'ms' : ''}</span>`;
+        // chat2: 검색 결과를 LLM 에 한 번 더 던져 롯데ON식 내러티브로 렌더.
+        // narrate 는 무조건 gpt-4o-mini(OpenAI) 사용.
+        const narrMeta = { mode: data.mode, fusion: data.fusion, alpha: data.alpha,
+                           use_morpheme: data.use_morpheme, weights: data.weights,
+                           use_colbert: data.use_colbert, debug: debugChk.checked,
+                           query: data.raw_query || txt, _pid: pId };
+        const narration = await fetchNarration(data.raw_query || txt, items, 'openai');
+        // narrate 결과(LLM 답변)를 해당 검색 로그에 저장 → v1.1 이력에서 그대로 재현. (fire-and-forget)
+        if (narration && data.log_id != null) {
+          fetch(EMBEDDER + '/search-logs/' + data.log_id + '/narration', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ narration }),
+          }).catch(() => {});
+        }
+        bubbleHtml = correctHtml + buildNarratedCards(items, narration, narrMeta, cnt) + pipelineBtn(pId);
+        const narrCost = (narration && narration._usage && narration._usage.cost_usd != null)
+          ? ` · narrate ₩${(Number(narration._usage.cost_usd)*1503).toFixed(2)} ($${Number(narration._usage.cost_usd).toFixed(5)})` : ''; // ₩1,503/USD 2026-05-27
+        metaExtra  = `<span>${data.total_duration_ms != null ? data.total_duration_ms + 'ms' : ''}${narrCost}</span>`;
       } else {
         bubbleHtml = correctHtml + `<span style="color:#6B7280;">검색 결과가 없어요. 다른 표현으로 다시 시도해보세요.</span>${pipelineBtn(pId)}`;
       }
@@ -1343,6 +1564,7 @@
       bubbleEl.innerHTML =
         `<span style="color:var(--err);">오류: ${escHtml(e.message)}</span>`;
     } finally {
+      if (loadEl && loadEl._rotTimer) { clearInterval(loadEl._rotTimer); loadEl._rotTimer = null; }
       isSending = false; sendBtn.disabled = false; inp.focus();
     }
   }
@@ -1351,7 +1573,7 @@
   async function loadRecentLogs() {
     const list = document.getElementById('recent-list');
     try {
-      const qs   = new URLSearchParams({ size: 30, version: '1.0', ...(advId ? { advertiser_id: advId } : {}) });
+      const qs   = new URLSearchParams({ size: 30, version: '1.1', ...(advId ? { advertiser_id: advId } : {}) });
       const data = await fetch(EMBEDDER + '/search-logs?' + qs).then(r => r.json());
       // 인코딩이 깨져 query 가 전부 '?'(혹은 기호)로 저장된 이력은 복구 불가 → 목록에서 숨김.
       // 브라우저는 UTF-8 로 전송돼 정상 저장되므로, 깨진 행은 비-UTF-8 클라이언트가 남긴 것.
@@ -1449,7 +1671,6 @@
           ...log.llm_parsed_json,
           _usage: { input_tokens: log.llm_input_tokens, output_tokens: log.llm_output_tokens, cost_usd: log.llm_cost_usd },
         } : null,
-        backend: String(log.backend || '').split('+')[0] || 'bge',  // 라벨 "bge+ds:..." → "bge"
         keyword_filters_applied: log.keyword_filters || [],
         keyword_filter_relaxed: log.keyword_filter_relaxed,
         pe_filter_relaxed: false,
@@ -1496,7 +1717,14 @@
       let bubbleHtml;
       if (items.length > 0) {
         loadEl.classList.add('wide');
-        bubbleHtml = buildRecoCards(items, cnt, pId, { ...(histMeta || {}), debug: debugChk.checked }) + pipelineBtn(pId);
+        // v1.1 이력: 저장된 LLM 나레이션이 있으면 그대로 재현(인트로+상품별 이유).
+        // 없으면(나레이션 저장 실패 등) 기본 추천 카드로 폴백.
+        if (data.narration) {
+          const narrMeta = { ...(histMeta || {}), debug: debugChk.checked, query: log.query || '', _pid: pId };
+          bubbleHtml = buildNarratedCards(items, data.narration, narrMeta, cnt) + pipelineBtn(pId);
+        } else {
+          bubbleHtml = buildRecoCards(items, cnt, pId, { ...(histMeta || {}), debug: debugChk.checked }) + pipelineBtn(pId);
+        }
       } else if (cnt > 0) {
         bubbleHtml = `<span style="color:#9CA3AF;font-size:12.5px;">저장된 결과 없음 — 다시 검색하려면 아래에 입력하세요.</span>${pipelineBtn(pId)}`;
       } else {
@@ -1617,9 +1845,7 @@
     }
     const s2 = fStep('s-llm', '②', 'LLM 파싱 (자연어 → JSON)', s2r);
 
-    // 임베딩 모델 = 임베딩 백엔드(d.backend) 기준. LLM 제공자(parsed.provider)와 무관!
-    // (llm_provider=openai + backend=bge 조합에서 BGE인데 OpenAI로 잘못 표기되던 버그 수정)
-    const embedModel = (d.backend === 'openai') ? 'text-embedding-3-small (1536d)' : 'BAAI/bge-m3 (1024d)';
+    const embedModel = d.parsed?.provider === 'openai' ? 'text-embedding-3-small (1536d)' : 'BAAI/bge-m3 (1024d)';
     const s3r = [fRow('모델', embedModel)];
     if (parsed.semantic_query) s3r.push(fRow('입력', `<b>"${escHtml(parsed.semantic_query)}"</b>`));
     s3r.push(fRow('출력', '[0.12, −0.34, …] · float[]'));
@@ -1919,53 +2145,6 @@
          + dense + note + sparse + morph + wgt;
   }
 
-  // 사유 팝업 — 상품의 4개 관점(상황/소재/디자인/페르소나) 설명을 모두 표시.
-  // 매칭된 관점(매칭근거)은 굵은 검은 테두리로 강조. /products-enriched/{rvId} 의 descriptions 사용.
-  const PERSP_ORDER = ['situation', 'material', 'style', 'persona'];
-  let _perspState = null;   // 하이브리드 '나머지 관점' 팝업용 { rvId, matchedPersp }
-  window.openRemainingPersp = function () {
-    if (!_perspState) return;
-    renderPerspectives(document.getElementById('persp-body'), _perspState.rvId, _perspState.matchedPersp, '');
-    document.getElementById('persp-overlay').classList.add('open');
-  };
-  window.closePerspPopup = function () {
-    document.getElementById('persp-overlay').classList.remove('open');
-  };
-  async function renderPerspectives(host, rvId, matchedPersp, fallbackDesc) {
-    if (!host) return;
-    // .reason-desc-text 기본 스타일(검은 배경·고정높이·스크롤)을 풀어 관점들을 영역별로 펼친다.
-    host.style.maxHeight = 'none';
-    host.style.overflowY = 'visible';
-    host.style.background = 'transparent';
-    host.style.padding = '0';
-    host.style.fontFamily = 'inherit';
-    host.style.color = 'inherit';
-    const block = (key, desc, on) => `
-      <div style="border:${on ? '2.5px solid #111' : '1px solid #E5E7EB'};border-radius:8px;padding:8px 10px;background:${on ? '#FAFAFA' : '#fff'};box-sizing:border-box;overflow-wrap:anywhere;">
-        <div style="font-size:10px;font-weight:700;color:${on ? '#111' : '#9CA3AF'};margin-bottom:3px;letter-spacing:.02em;">
-          ${escHtml(perspLabel[key] || key || '관점')}${on ? ' · 매칭근거' : ''}
-        </div>
-        <div style="font-size:11.5px;line-height:1.55;color:#374151;">${escHtml(desc || '—')}</div>
-      </div>`;
-    const grid = (blocks) => `<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">${blocks.join('')}</div>`;
-    if (rvId == null) { host.innerHTML = block(matchedPersp, fallbackDesc, true); return; }
-    host.innerHTML = `<div style="font-size:11.5px;color:#9CA3AF;padding:4px 2px;">관점별 설명 불러오는 중…</div>`;
-    try {
-      const r = await fetch(`${EMBEDDER}/products-enriched/${rvId}`);
-      const d = r.ok ? await r.json() : {};
-      const byP = {};
-      (Array.isArray(d.descriptions) ? d.descriptions : []).forEach(x => {
-        if (x && x.perspective) byP[x.perspective] = x.description;
-      });
-      const order = PERSP_ORDER.filter(p => byP[p] != null);
-      Object.keys(byP).forEach(p => { if (!PERSP_ORDER.includes(p)) order.push(p); });
-      if (!order.length) { host.innerHTML = block(matchedPersp, fallbackDesc, true); return; }
-      host.innerHTML = grid(order.map(p => block(p, byP[p], p === matchedPersp)));
-    } catch (e) {
-      host.innerHTML = block(matchedPersp, fallbackDesc, true);
-    }
-  }
-
   function showReason(e, el) {
     e.preventDefault();
     e.stopPropagation();
@@ -1983,29 +2162,7 @@
       : (isHybrid
           ? '※ 절대 품질 아님 — 이번 검색 1위 대비 비율(1위=100%)'
           : (el.dataset.dist ? `코사인거리 ${el.dataset.dist}` : ''));
-    // 매칭 근거 영역.
-    //  dense : 4개 관점을 인라인 2열 그리드로 (매칭 관점 = 굵은 검은 테두리).
-    //  hybrid: 단어상세가 있어 인라인엔 매칭 설명만, 4관점은 '나머지 관점' 버튼→팝업.
-    {
-      const _pid = el.dataset.pid !== '' ? parseInt(el.dataset.pid, 10) : null;
-      const _idx = parseInt(el.dataset.idx, 10);
-      const _store = _pid != null ? recoStore.get(_pid) : null;
-      const _item = (_store && _store.items && !isNaN(_idx)) ? _store.items[_idx] : null;
-      const _rvId = _item ? _item.rv_product_id : null;
-      const descHost = document.getElementById('rp-desc');
-      const perspBtnWrap = document.getElementById('rp-persp-btn-wrap');
-      _perspState = { rvId: _rvId, matchedPersp: el.dataset.persp };
-      if (isHybrid) {
-        // 인라인은 매칭 설명만(원래 다크 스타일 복원)
-        descHost.style.maxHeight = ''; descHost.style.overflowY = ''; descHost.style.background = '';
-        descHost.style.padding = ''; descHost.style.fontFamily = ''; descHost.style.color = '';
-        descHost.textContent = el.dataset.desc || '—';
-        perspBtnWrap.style.display = '';
-      } else {
-        perspBtnWrap.style.display = 'none';
-        renderPerspectives(descHost, _rvId, el.dataset.persp, el.dataset.desc || '');
-      }
-    }
+    document.getElementById('rp-desc').textContent  = el.dataset.desc || '—';
 
     // ColBERT — 정렬뷰 토글(매칭 근거)은 use_colbert 면 DEBUG 무관 노출.
     // 재정렬 점수(숫자) 행만 DEBUG 일 때 표시.
@@ -2023,8 +2180,8 @@
 
     // 매칭 근거 라벨 — 모드별
     document.getElementById('rp-desc-lbl').textContent = isHybrid
-      ? '매칭 근거 — 의미(dense) 기준 가장 가까운 설명 (나머지 관점은 위 버튼)'
-      : '상품 관점별 설명 · 굵은 검은 테두리 = 매칭근거';
+      ? '매칭 근거 — 의미(dense) 기준 가장 가까운 설명 · 어휘/형태소 유사단어는 아래 단어 상세'
+      : '매칭 근거 — 이 설명이 쿼리와 가장 가까운 벡터였습니다';
 
     // 하이브리드 블록 — 단어 상세(유사단어 매칭근거) 토글은 hybrid 면 DEBUG 무관 항상 노출.
     // 숫자 분해(dense%/sparse%/형태소%/융합점수)만 DEBUG 일 때 표시.
@@ -2136,12 +2293,7 @@
     document.getElementById('reason-overlay').classList.remove('open');
     disposePcaGraph();
   }
-  document.addEventListener('keydown', e => {
-    if (e.key !== 'Escape') return;
-    const pv = document.getElementById('persp-overlay');
-    if (pv && pv.classList.contains('open')) { closePerspPopup(); return; }
-    closeReason();
-  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeReason(); });
 
   // ── Sparse 단어별 상세보기 ────────────────────────────────────
   function resetWordToggle(query, doc) {
@@ -2532,13 +2684,6 @@
           <div id="rp-cb-content" style="display:none;"></div>
         </div>
       </div>
-      <!-- 하이브리드: 4관점은 인라인 대신 버튼→팝업 (단어 상세 버튼들 아래) -->
-      <div id="rp-persp-btn-wrap" style="margin-top:8px;display:none;">
-        <button type="button" onclick="openRemainingPersp()"
-                style="background:transparent;border:1px solid #E5E7EB;border-radius:6px;padding:5px 10px;font-size:11px;color:#374151;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
-          <span>▤</span><span>나머지 관점 보기 (상황·소재·디자인·페르소나)</span>
-        </button>
-      </div>
       <div class="reason-sep"></div>
       <div id="rp-desc-block">
         <div class="reason-desc-lbl" id="rp-desc-lbl">매칭 근거 — 이 설명이 쿼리와 가장 가까운 벡터였습니다</div>
@@ -2561,20 +2706,6 @@
       </div>
       <div class="reason-graph-hint">드래그로 회전 · 휠로 확대 · 중심(질문)에 가까울수록 유사 · 방향은 상품 간 유사도(PCA)</div>
     </div>
-    </div>
-  </div>
-</div>
-
-<!-- 나머지 관점 팝업 (하이브리드용) — 4개 관점 설명 -->
-<div class="reason-overlay" id="persp-overlay" style="z-index:2100;" onclick="if(event.target===this)closePerspPopup()">
-  <div class="reason-box" style="width:auto;">
-    <div class="reason-head">
-      <span class="reason-head-title">◈ 상품 관점별 설명</span>
-      <span class="reason-close" onclick="closePerspPopup()">×</span>
-    </div>
-    <div style="padding:14px 16px;width:560px;max-width:90vw;box-sizing:border-box;">
-      <div class="reason-desc-lbl" style="margin-bottom:8px;">상황·소재·디자인·페르소나 · 굵은 검은 테두리 = 매칭근거</div>
-      <div id="persp-body"></div>
     </div>
   </div>
 </div>

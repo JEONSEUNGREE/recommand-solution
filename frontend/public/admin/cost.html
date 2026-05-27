@@ -294,7 +294,7 @@
 <script>
 (function () {
   const API = 'http://192.168.101.27:8001';
-  const KRW = 1380;
+  const KRW = 1503; // USD→KRW 환율 (2026-05-27 기준)
 
   // ── advertiser from localStorage ──────────────────────────
   let advId = null;
@@ -306,6 +306,13 @@
   // ── helpers ───────────────────────────────────────────────
   function fmt(n)   { return Number(n).toLocaleString('ko-KR'); }
   function fmtK(n)  { return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(0)+'K' : String(n); }
+  // 원화(메인) — 금액 크기에 따라 소수 자릿수 자동 조정
+  function won(u)   {
+    const v = Number(u) * KRW;
+    const dp = v >= 100 ? 0 : v >= 1 ? 1 : 2;
+    return '₩' + v.toLocaleString('ko-KR', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  }
+  function usd(u, dp = 4) { return '$' + Number(u).toFixed(dp); }
   function esc(s)   { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function $$(id)   { return document.getElementById(id); }
 
@@ -346,15 +353,13 @@
     const url = API + '/products-enriched/token-stats' + (advId ? `?advertiser_id=${advId}` : '');
     const s = await fetch(url).then(r => { if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
 
-    const KRW_COST = (s.total_cost_usd * KRW);
-
-    // KPI
-    setKpi('k-cost', '$' + Number(s.total_cost_usd).toFixed(2), '',
-      `≈ ₩${Math.round(KRW_COST).toLocaleString('ko-KR')} (₩${KRW}/USD)`);
+    // KPI — 원화 메인, 달러 보조
+    setKpi('k-cost', won(s.total_cost_usd), ' ' + usd(s.total_cost_usd, 2),
+      `₩${KRW}/USD 기준 (2026-05-27)`);
     setKpi('k-total', fmt(s.total_enriched), '개',
       `embedded 완료 상품`);
-    setKpi('k-avg', '$' + Number(s.avg_cost_usd).toFixed(4), '',
-      `≈ ₩${Math.round(s.avg_cost_usd*KRW).toLocaleString('ko-KR')}/개`);
+    setKpi('k-avg', won(s.avg_cost_usd), ' ' + usd(s.avg_cost_usd, 4),
+      `상품당 평균 · ₩${KRW}/USD`);
     const sec = (s.avg_duration_ms / 1000).toFixed(1);
     setKpi('k-dur', sec, 's',
       `상품당 평균 처리 시간`);
@@ -417,7 +422,7 @@
       return `<tr>
         <td style="font-family:monospace;font-size:11.5px;">${esc(m.model_used || '(미기록)')}</td>
         <td class="num">${fmt(m.cnt)}개</td>
-        <td class="num">$${Number(m.cost_usd).toFixed(4)}</td>
+        <td class="num">${won(m.cost_usd)}<div style="font-size:10px;color:var(--text-4);font-weight:400;">${usd(m.cost_usd, 4)}</div></td>
         <td style="padding-right:16px;">
           <div style="display:flex;align-items:center;gap:8px;">
             <div style="flex:1;height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;">
@@ -445,13 +450,18 @@
     const cost = Number(d.total_cost_usd      || 0);
     const llm  = Number(d.llm_used            || 0);
 
+    const avgCost = llm > 0 ? cost / llm : 0;
+    const avgTok  = llm > 0 ? (inp + out) / llm : 0;
+
     $$('search-cost-body').innerHTML = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--line);">
         ${[
-          ['LLM 검색 수',  fmt(llm)+'건',         '총 검색 중 LLM 호출'],
-          ['누적 비용',    '$'+cost.toFixed(4),    '≈ ₩'+Math.round(cost*KRW).toLocaleString('ko-KR')],
-          ['입력 토큰',    fmtK(inp)+' tok',       'LLM 입력'],
-          ['출력 토큰',    fmtK(out)+' tok',       'LLM 생성'],
+          ['LLM 검색 수',     fmt(llm)+'건',              '총 검색 중 LLM 호출'],
+          ['누적 비용',       won(cost),                  usd(cost, 4)],
+          ['질문당 평균 비용', won(avgCost),               usd(avgCost, 5)+' / 질문'],
+          ['질문당 평균 토큰', fmt(Math.round(avgTok))+' tok', '입력+출력 / 질문'],
+          ['입력 토큰',       fmtK(inp)+' tok',            'LLM 입력'],
+          ['출력 토큰',       fmtK(out)+' tok',            'LLM 생성'],
         ].map(([l,v,s]) => `
           <div style="padding:12px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);">
             <div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">${l}</div>
@@ -482,7 +492,7 @@
         <div class="h-bar-outer">
           <div class="h-bar-inner ${isHigh ? 'accent' : ''}" style="width:${pct}%;" title="${esc(p.product_name)} — $${Number(p.cost_usd).toFixed(4)}"></div>
         </div>
-        <div class="h-bar-val">$${Number(p.cost_usd||0).toFixed(3)}</div>
+        <div class="h-bar-val">${won(p.cost_usd||0)}</div>
       </div>`;
     }).join('');
     $$('top-chart-body').innerHTML = `<div class="chart-wrap">${rows}</div>`;
@@ -525,7 +535,7 @@
       const p = items[i];
       if (!p) return;
       tooltip.innerHTML = `<b>${esc(p.product_name||'—')}</b><br>
-        비용: <b>$${Number(p.cost_usd||0).toFixed(4)}</b> (≈₩${Math.round((p.cost_usd||0)*KRW).toLocaleString('ko-KR')})<br>
+        비용: <b>${won(p.cost_usd||0)}</b> (${usd(p.cost_usd||0, 4)})<br>
         출력 토큰: ${fmt(p.output_tokens||0)} / 캐시: ${fmtK(p.cache_read_input_tokens||0)}`;
       tooltip.classList.add('show');
     });
@@ -591,9 +601,9 @@
             <div style="width:40px;height:4px;background:var(--surface-2);border-radius:2px;overflow:hidden;">
               <div style="width:${pct}%;height:100%;background:var(--${badgeColor});border-radius:2px;"></div>
             </div>
-            $${cost.toFixed(4)}
+            ${won(cost)}
           </div>
-          <div style="font-size:10.5px;color:var(--text-4);text-align:right;">≈₩${Math.round(cost*KRW).toLocaleString('ko-KR')}</div>
+          <div style="font-size:10.5px;color:var(--text-4);text-align:right;">${usd(cost, 4)}</div>
         </td>
         <td class="num" style="color:var(--text-3);">${dur}</td>
       </tr>`;

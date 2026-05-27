@@ -18,32 +18,34 @@ public class AdvertiserRepository {
 
     private final JdbcTemplate jdbc;
     private final SecretCipher cipher;
+    private final RowMapper<Advertiser> ROW;
 
     public AdvertiserRepository(JdbcTemplate jdbc, SecretCipher cipher) {
         this.jdbc = jdbc;
         this.cipher = cipher;
+        // ROW 는 cipher 를 참조하므로 cipher 할당 이후 생성자 본문에서 초기화한다.
+        // (필드 초기화자는 생성자 본문보다 먼저 실행돼 cipher 가 아직 null → 컴파일 에러)
+        this.ROW = (rs, rn) -> new Advertiser(
+                rs.getLong("id"),
+                rs.getString("name"),
+                rs.getString("host_type"),
+                rs.getString("shop_url"),
+                // 암호화 컬럼은 read 시 복호화. legacy plaintext 행은 그대로 통과.
+                cipher.decrypt(rs.getString("shop_key")),
+                cipher.decrypt(rs.getString("license_key")),
+                rs.getString("cafe24_mall_id"),
+                cipher.decrypt(rs.getString("cafe24_access_token")),
+                rs.getString("notes"),
+                rs.getString("selector_name"),
+                rs.getString("selector_detail"),
+                rs.getString("selector_price"),
+                rs.getString("image_attrs"),
+                rs.getString("detail_anchor_start"),
+                rs.getString("detail_anchor_end"),
+                rs.getObject("created_at", OffsetDateTime.class),
+                rs.getObject("updated_at", OffsetDateTime.class)
+        );
     }
-
-    private final RowMapper<Advertiser> ROW = (rs, rn) -> new Advertiser(
-            rs.getLong("id"),
-            rs.getString("name"),
-            rs.getString("host_type"),
-            rs.getString("shop_url"),
-            // 암호화 컬럼은 read 시 복호화. legacy plaintext 행은 그대로 통과.
-            cipher.decrypt(rs.getString("shop_key")),
-            cipher.decrypt(rs.getString("license_key")),
-            rs.getString("cafe24_mall_id"),
-            cipher.decrypt(rs.getString("cafe24_access_token")),
-            rs.getString("notes"),
-            rs.getString("selector_name"),
-            rs.getString("selector_detail"),
-            rs.getString("selector_price"),
-            rs.getString("image_attrs"),
-            rs.getString("detail_anchor_start"),
-            rs.getString("detail_anchor_end"),
-            rs.getObject("created_at", OffsetDateTime.class),
-            rs.getObject("updated_at", OffsetDateTime.class)
-    );
 
     public List<Advertiser> findAll() {
         return jdbc.query("SELECT * FROM advertisers ORDER BY id DESC", ROW);

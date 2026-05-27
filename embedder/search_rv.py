@@ -53,7 +53,8 @@ def _log_search(
     llm_output_tokens: Optional[int] = None,
     llm_cost_usd: Optional[float] = None,
     llm_parsed_json: Optional[dict] = None,
-) -> None:
+    version: str = "1.0",
+) -> Optional[int]:
     try:
         conn = psycopg.connect(DB_DSN)
         with conn.cursor() as cur:
@@ -62,8 +63,9 @@ def _log_search(
                    (query, semantic_query, llm_used, llm_provider, backend,
                     advertiser_id, result_count, keyword_filters, keyword_filter_relaxed,
                     llm_duration_ms, embed_duration_ms, total_duration_ms,
-                    llm_input_tokens, llm_output_tokens, llm_cost_usd, llm_parsed_json)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s::text[], %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                    llm_input_tokens, llm_output_tokens, llm_cost_usd, llm_parsed_json,
+                    version)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s::text[], %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
                    RETURNING id""",
                 (
                     query, semantic_query, llm_used, llm_provider, backend,
@@ -73,6 +75,7 @@ def _log_search(
                     llm_duration_ms, embed_duration_ms, total_duration_ms,
                     llm_input_tokens, llm_output_tokens, llm_cost_usd,
                     json.dumps(llm_parsed_json, ensure_ascii=False) if llm_parsed_json else None,
+                    version or "1.0",
                 ),
             )
             log_id = cur.fetchone()[0]
@@ -108,9 +111,11 @@ def _log_search(
                     )
         conn.commit()
         conn.close()
+        return log_id
     except Exception as e:
         import sys
         print(f"[search_log ERROR] {e}", file=sys.stderr)
+        return None
 
 
 # bge-m3 인코딩은 공유 로더(bge_model)를 통한다. 싱글톤이라 프로세스당 1회만 로드.
@@ -462,11 +467,20 @@ _LLM_PARSE_PROMPT = """너는 한국 쇼핑몰 검색어 분석가다. 사용자
 }
 
 ## 추론 가이드 — 적극 활용
-- 맞춤법 교정 (corrected_query): 오타·띄어쓰기·자모 오류만 고친다.
-  · "겨울에 따듯하게 입을 니투" → "겨울에 따뜻하게 입을 니트"
-  · "데이트할때 입기조은 원피스" → "데이트할 때 입기 좋은 원피스"
-  · 단, 브랜드명/고유명사/연예인 이름은 함부로 고치지 마라 (불확실하면 원문 유지).
-  · 의미를 바꾸거나 단어를 추가/삭제하지 마라. 순수 표기 교정만.
+- 맞춤법 교정 (corrected_query): 통상적으로 흔한 표기 오류는 적극적으로 모두 잡되, 의미는 절대 바꾸지 않는다.
+  교정 대상 유형:
+  ① 자모 분리/오결합: "악세사 리"→"악세사리", "귀 걸이"→"귀걸이", "ㅇ ㅑ 구"→ (불확실하면 원문)
+  ② 받침·맞춤법 오류: "따듯한"→"따뜻한", "되요"→"돼요", "할께요"→"할게요", "어떻해"→"어떡해", "낳다(낫다 의미)"→"낫다"
+  ③ 띄어쓰기: "입기조은"→"입기 좋은", "할때"→"할 때", "살수있는"→"살 수 있는", "겨울에입을"→"겨울에 입을"
+  ④ 키보드/이중자음 오타: "원피쓰"→"원피스", "옽피스"→"오피스", "바람마기"→"바람막이", "목거리"→"목걸이", "귀거리"→"귀걸이"
+  ⑤ 흔한 받침 누락/추가: "니투"→"니트", "팬츠"는 그대로, "맨투맨"은 그대로
+  · 외래어 표기는 데이터에서 통용되는 형태를 유지한다(예: "악세사리"는 그대로 — 굳이 "액세서리"로 바꾸지 마라). 불확실하면 원문.
+  · 브랜드명/고유명사/연예인/모델명/품번/사이즈("14k","XL","M사이즈")은 함부로 고치지 마라(불확실하면 원문 유지).
+  · 의미를 바꾸거나 단어를 추가/삭제하지 마라 — 순수 표기 교정만. 멀쩡한 단어를 억지로 바꾸지 마라(과교정 금지).
+  · 교정 결과(corrected_query)를 기준으로 semantic_query·filters 를 도출한다.
+  예) "겨울에 따듯하게 입을 니투" → "겨울에 따뜻하게 입을 니트"
+      "데이트할때 입기조은 원피스" → "데이트할 때 입기 좋은 원피스"
+      "시원해보이고 얇고 가벼운 악세사 리 추천해줘" → "시원해 보이고 얇고 가벼운 악세사리 추천해줘"
 - 성별 (target_gender): 상품을 사용·착용할 **구매자** 성별을 의미한다. 연예인/모델이 착용했다는 문맥에서의 성별은 target_gender가 아니다.
   · "여자/여성/엄마/딸을 위한 상품" → 여성
   · "남자/남성/아빠/아들을 위한 상품" → 남성
@@ -475,6 +489,11 @@ _LLM_PARSE_PROMPT = """너는 한국 쇼핑몰 검색어 분석가다. 사용자
 - 연예인 착용 + 성별: "남자연예인 착용" → target_gender=null, keyword_filters에 "남성 연예인" 추가
   · "여자연예인 착용" → target_gender=null, keyword_filters에 "여성 연예인" 추가
 - 연령: "20대" → min=20, max=29 / "30~40대" → min=30, max=49 / "어린이/키즈" → max=12 / 명시 없으면 null
+- category_contains — '구체적 카테고리'만. 실제 상품 카테고리값(귀걸이·목걸이·반지·팔찌·니트·세럼 등)과 직접 매칭되는 단어만 넣어라.
+  ※ category_contains 는 하드필터다 — 실제 카테고리값에 없는 단어를 넣으면 결과가 통째로 0건이 된다. 애매하면 반드시 null.
+  · "악세사리/악세사리/액세서리/주얼리/쥬얼리/패션소품/패션잡화/잡화/소품" 같은 포괄어·상위어는 특정 카테고리값과 안 맞음 → category_contains=null (의미는 semantic_query 로만 반영)
+  · 띄어쓰기 오타("악세사 리", "목 걸이")는 교정해서 판단하되, 포괄어면 null
+  · "팬던트→펜던트" 처럼 표기가 흔들리는데 실제 카테고리는 "목걸이"로 저장돼 있을 수 있는 모양·부속어는 category_contains 에 넣지 말고 keyword_filters/semantic_query 로 처리
 - 가격 표현 처리:
   · "N만원대" / "N만원 내외" → price_min=N*10000*0.9, price_max=N*10000*1.1 (예: "5만원대" → min=45000, max=55000)
   · "N만원 이하" / "N만원 미만" → price_max=N*10000
@@ -679,6 +698,8 @@ class SearchRvLlmReq(BaseModel):
     backend: Literal["bge", "openai"] = "bge"
     llm_provider: Literal["groq", "openai"] = "groq"
     k: int = 10
+    # 호출 클라이언트 버전 — 검색 이력 구분용. "1.0"=chat.html, "1.1"=chat2.html.
+    version: str = "1.0"
     # 하이브리드 검색. hybrid 는 backend="bge" 일 때만 동작.
     # 신호: dense(의미) + sparse(BGE 어휘) + morpheme(한국어 형태소, 선택).
     mode: Literal["dense", "hybrid"] = "dense"
@@ -994,14 +1015,30 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
                     s += wm * mn
                 c["score"] = s
 
-        # 상품별 최고 융합점수 관점만 대표로 남김
-        best: dict = {}
+        # 상품별로 그룹핑 → 대표(융합 최고 관점) + 신호별 채택 관점(dense/sparse/morph)을 함께 첨부.
+        # 거리/내적 모두 작을수록 좋음 → min 이 각 신호의 '채택' 관점.
+        groups: dict = {}
         for c in rows:
-            pid = c["rv_product_id"]
-            cur = best.get(pid)
-            if cur is None or c["score"] > cur["score"]:
-                best[pid] = c
-        out = sorted(best.values(), key=lambda x: x["score"], reverse=True)
+            groups.setdefault(c["rv_product_id"], []).append(c)
+        out = []
+        for grp in groups.values():
+            rep = max(grp, key=lambda x: x["score"])          # 융합 최고 = 대표
+            db = min(grp, key=lambda x: x["dense_dist"])       # dense 채택(의미 근거)
+            rep["dense_best_perspective"] = db["perspective"]
+            rep["dense_best_description"] = db["description"]
+            rep["dense_best_dist"]        = db["dense_dist"]
+            if use_s:
+                sb = min(grp, key=lambda x: x["sparse_ip"])    # sparse 채택(어휘 근거)
+                rep["sparse_best_perspective"] = sb["perspective"]
+                rep["sparse_best_description"] = sb["description"]
+                rep["sparse_best_ip"]          = sb["sparse_ip"]
+            if use_m:
+                mb = min(grp, key=lambda x: x["morph_ip"])     # 형태소 채택(한국어 단어 근거)
+                rep["morph_best_perspective"] = mb["perspective"]
+                rep["morph_best_description"] = mb["description"]
+                rep["morph_best_ip"]          = mb["morph_ip"]
+            out.append(rep)
+        out.sort(key=lambda x: x["score"], reverse=True)
         return out[:cand_k]
 
     def _run_hybrid(conn, where_list: list, where_params: list) -> list:
@@ -1131,7 +1168,7 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
             backend_label = req.backend
         if colbert_applied:
             backend_label += "+colbert"
-        _log_search(
+        log_id = _log_search(
             query=req.query, semantic_query=semantic_query, llm_used=True,
             llm_provider=req.llm_provider, backend=backend_label,
             advertiser_id=req.advertiser_id, result_count=len(items),
@@ -1142,8 +1179,10 @@ SELECT b.rv_product_id, b.advertiser_id, b.perspective, b.description,
             llm_output_tokens=_usage.get("output_tokens"),
             llm_cost_usd=_usage.get("cost_usd"),
             llm_parsed_json=_parsed_for_log,
+            version=req.version,
         )
         return {
+            "log_id": log_id,   # chat2(v1.1)가 narrate 결과를 이 로그에 붙일 때 사용
             "backend": req.backend,
             "mode": "hybrid" if hybrid else "dense",
             "fusion": req.fusion if hybrid else None,
