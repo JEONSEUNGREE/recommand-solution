@@ -275,7 +275,8 @@
     const backend = $('run-backend').value;
     const llm_query_parse = $('run-llm').checked;
     $('btn-run').disabled = true;
-    $('result-body').innerHTML = `<div class="section-state"><div class="mini-spinner"></div>검색 ${fmt(selectedSet.n_queries)}개 평가 중… <span class="hint">(1건당 수 초 · ${fmt(selectedSet.n_queries)}건 ≈ 수 분 소요${llm_query_parse ? ', LLM 정제 포함' : ''})</span></div>`;
+    const etaTxt = llm_query_parse ? '쿼리마다 LLM 정제 호출 — 수 분 소요' : '보통 수십 초';
+    $('result-body').innerHTML = `<div class="section-state"><div class="mini-spinner"></div>검색 ${fmt(selectedSet.n_queries)}개 평가 중… <span class="hint">(${etaTxt})</span></div>`;
     try {
       const r = await fetch(API + '/eval/run', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
