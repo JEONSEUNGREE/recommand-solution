@@ -121,6 +121,20 @@
 .ci-thumb .blocked-badge { position:absolute;top:4px;right:4px;background:var(--err);color:#fff;font-size:9.5px;font-weight:700;padding:2px 5px;border-radius:3px; }
 .ci-chk-pos { position:absolute;top:4px;left:4px; }
 
+/* ── tag filter row ── */
+.tag-filter-row { display:flex; align-items:flex-start; gap:10px; padding:8px 14px 10px; border-top:1px solid var(--line); }
+.tag-filter-lbl { font-size:11px; font-weight:700; color:var(--text-4); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; padding-top:5px; min-width:32px; }
+.tag-filter-area { flex:1; display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+.tf-chip { display:inline-flex; align-items:center; gap:3px; padding:3px 9px; border-radius:999px; font-size:11.5px; background:var(--surface-2); border:1px solid var(--line); color:var(--text-3); cursor:pointer; transition:all .12s; user-select:none; line-height:1.4; }
+.tf-chip:hover { border-color:var(--primary); color:var(--primary); }
+.tf-chip.sel { background:var(--primary-soft,#ede9fe); border-color:var(--primary); color:var(--primary); font-weight:700; }
+.tf-chip.sel .tf-x { display:inline; }
+.tf-x { display:none; font-size:13px; line-height:1; margin-left:1px; opacity:.7; }
+.tf-cnt { font-size:9.5px; opacity:.6; }
+.tf-more { font-size:11.5px; color:var(--info); cursor:pointer; padding:3px 6px; }
+.tf-more:hover { text-decoration:underline; }
+.tag-and-hint { font-size:11px; color:var(--text-4); white-space:nowrap; padding-top:5px; }
+
 /* ── img filter tabs ── */
 .ift-row { display:flex;gap:2px;background:var(--surface-2);padding:2px;border-radius:5px;border:1px solid var(--line); }
 .ift { padding:4px 10px;border-radius:4px;font-size:11.5px;font-weight:500;cursor:pointer;color:var(--text-3);transition:all var(--dur) var(--ease); }
@@ -242,12 +256,22 @@
                   <button class="btn btn-primary btn-sm" id="search-btn">검색</button>
                 </div>
               </div>
+              <div class="tag-filter-row">
+                <span class="tag-filter-lbl">태그</span>
+                <div class="tag-filter-area" id="tag-filter-area">
+                  <span style="font-size:11.5px;color:var(--text-4);">로딩 중…</span>
+                </div>
+                <span class="tag-and-hint">AND 조건</span>
+              </div>
             </div>
+
+            <div id="active-tag-bar" style="display:none;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 14px;background:var(--primary-soft,#ede9fe);border-radius:8px;margin-bottom:8px;border:1px solid var(--primary,#7c3aed);"></div>
 
             <div class="list-card">
               <div class="list-head">
                 <span class="total">총 <b id="result-total">—</b>건</span>
                 <span class="sp" style="flex:1;"></span>
+                <button class="btn btn-sm" id="normalize-tags-btn" style="font-size:11px;gap:4px;" title="tag_normalizer.py 규칙으로 전체 태그 재정규화">🔧 태그 정규화</button>
               </div>
               <table>
                 <thead><tr>
@@ -276,6 +300,26 @@
 
           <!-- ══════════ 크롤링 패널 ══════════ -->
           <div class="vtab-panel" id="panel-scrape">
+
+            <!-- ① 상품 목록 동기화 (MakeShop API → rv_products) -->
+            <div class="batch-panel" style="margin-bottom:10px;">
+              <div class="bp-head" style="margin-bottom:10px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>
+                상품 목록 동기화
+                <span style="font-size:11px;color:var(--text-4);font-weight:400;margin-left:4px;">MakeShop API → rv_products</span>
+                <div id="sync-list-badge" style="margin-left:auto;"></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span style="font-size:12px;color:var(--text-3);">shop_key · license_key가 등록된 경우 MakeShop Open API로 상품 목록을 가져옵니다.</span>
+                <button class="btn btn-sm" id="btn-sync-list" style="margin-left:auto;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>
+                  동기화 시작
+                </button>
+              </div>
+              <div id="sync-list-result" style="display:none;margin-top:10px;padding:10px 12px;border-radius:6px;font-size:12.5px;line-height:1.6;"></div>
+            </div>
+
+            <!-- ② 상세 스크랩 배치 -->
             <div class="batch-panel">
               <div class="bp-head">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
@@ -307,7 +351,7 @@
                   <span id="sp-err" style="font-size:11.5px;color:var(--err);"></span>
                 </div>
               </div>
-            </div>
+            </div><!-- /스크랩 배치 -->
 
             <!-- filter + sync product list -->
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
@@ -319,6 +363,10 @@
               </div>
               <div style="margin-left:auto;display:flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--line);border-radius:5px;background:rgba(78,64,120,.06);">
                 <span style="font-size:11px;color:var(--purple);font-weight:600;">행별 LLM</span>
+                <select class="bp-select" id="row-backend" title="cli: claude.exe Max 쿼터 / api: ANTHROPIC_API_KEY 별도 청구" style="height:26px;font-size:11.5px;">
+                  <option value="cli">CLI(Max)</option>
+                  <option value="api">API 키</option>
+                </select>
                 <select class="bp-select" id="row-model" style="height:26px;font-size:11.5px;"><option value="haiku">haiku</option><option value="sonnet">sonnet</option><option value="opus">opus</option></select>
                 <input class="bp-input" type="number" id="row-images" value="10" min="1" max="100" style="width:52px;height:26px;font-size:11.5px;">
                 <span style="font-size:11px;color:var(--text-4);">장</span>
@@ -356,6 +404,11 @@
                 <div id="enrich-status-badge"></div>
               </div>
               <div class="bp-row" id="enrich-controls">
+                <span class="bp-label">백엔드</span>
+                <select class="bp-select" id="ec-backend" title="cli: claude.exe Max 쿼터 / api: ANTHROPIC_API_KEY 별도 청구">
+                  <option value="cli">CLI(Max)</option>
+                  <option value="api">API 키</option>
+                </select>
                 <span class="bp-label">모델</span>
                 <select class="bp-select" id="ec-model"><option value="haiku">haiku (저렴)</option><option value="sonnet">sonnet (정확)</option><option value="opus">opus (최고급)</option></select>
                 <span class="bp-label">개수</span>
@@ -547,13 +600,16 @@
   // PANEL: 상품 목록 (Python Embedder)
   // ══════════════════════════════════════════════════════════
   let prodPage = 0, prodTotal = 0, prodQ = '', prodCat = '', prodEmbedOnly = false;
+  let prodTags = new Set();
+  let availableTags = [], showAllTags = false;
   const PROD_SIZE = 20;
+  const TAG_MAX = 25;
 
   async function loadEmbedderKpi() {
     try {
       const [cntRes, catRes] = await Promise.all([
-        fetch(EMBEDDER + '/products-enriched/count').then(r => r.json()),
-        fetch(EMBEDDER + '/products-enriched/categories').then(r => r.json()),
+        fetch(EMBEDDER + `/products-enriched/count?advertiser_id=${ADV}`).then(r => r.json()),
+        fetch(EMBEDDER + `/products-enriched/categories?advertiser_id=${ADV}`).then(r => r.json()),
       ]);
       const total = cntRes.total ?? 0, emb = cntRes.embedded ?? 0;
       $('kpi-total').textContent = fmt(total);
@@ -568,13 +624,74 @@
     } catch (_) {}
   }
 
+  async function loadEmbedderTags() {
+    try {
+      const r = await fetch(EMBEDDER + `/products-enriched/tags?advertiser_id=${ADV}`);
+      if (!r.ok) { $('tag-filter-area').innerHTML = '<span style="font-size:11.5px;color:var(--text-4);">—</span>'; return; }
+      availableTags = await r.json();
+      renderTagFilter();
+    } catch (_) { $('tag-filter-area').innerHTML = '<span style="font-size:11.5px;color:var(--text-4);">—</span>'; }
+  }
+
+  function renderTagFilter() {
+    const area = $('tag-filter-area');
+    if (!area) return;
+    if (!availableTags.length) { area.innerHTML = '<span style="font-size:11.5px;color:var(--text-4);">태그 없음</span>'; return; }
+    const visible = showAllTags ? availableTags : availableTags.slice(0, TAG_MAX);
+    const chips = visible.map(t => {
+      const name = typeof t === 'string' ? t : (t.tag || t.name || '');
+      const cnt  = typeof t === 'object' ? (t.cnt || t.count || '') : '';
+      const sel  = prodTags.has(name);
+      return `<span class="tf-chip${sel ? ' sel' : ''}" data-tag="${esc(name)}">${esc(name)}${cnt ? `<span class="tf-cnt">${cnt}</span>` : ''}<span class="tf-x">×</span></span>`;
+    }).join('');
+    const moreBtn = availableTags.length > TAG_MAX
+      ? `<span class="tf-more" onclick="toggleShowAllTags()">${showAllTags ? '접기' : `+${availableTags.length - TAG_MAX}개 더보기`}</span>`
+      : '';
+    area.innerHTML = chips + moreBtn;
+  }
+
+  $('tag-filter-area').addEventListener('click', e => {
+    const chip = e.target.closest('[data-tag]');
+    if (!chip) return;
+    const name = chip.dataset.tag;
+    if (prodTags.has(name)) prodTags.delete(name); else prodTags.add(name);
+    renderTagFilter();
+    renderActiveTagBar();
+    prodPage = 0;
+    loadProducts();
+  });
+  window.toggleShowAllTags = function() { showAllTags = !showAllTags; renderTagFilter(); };
+
+  function renderActiveTagBar() {
+    const bar = $('active-tag-bar');
+    if (!bar) return;
+    if (!prodTags.size) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    bar.innerHTML = '<span style="font-size:11px;font-weight:700;color:var(--text-4);white-space:nowrap;padding-top:1px;">선택된 태그:</span>'
+      + [...prodTags].map(t =>
+          `<span class="tf-chip sel" data-tag="${esc(t)}">${esc(t)}<span class="tf-x" style="display:inline;">×</span></span>`
+        ).join('')
+      + `<span id="clear-all-tags" style="font-size:11px;color:var(--text-4);cursor:pointer;text-decoration:underline;">전체 해제</span>`;
+  }
+
+  document.addEventListener('click', e => {
+    if (e.target.closest('#active-tag-bar [data-tag]')) {
+      const name = e.target.closest('[data-tag]').dataset.tag;
+      prodTags.delete(name);
+      renderTagFilter(); renderActiveTagBar(); prodPage = 0; loadProducts();
+    } else if (e.target.id === 'clear-all-tags') {
+      prodTags.clear(); renderTagFilter(); renderActiveTagBar(); prodPage = 0; loadProducts();
+    }
+  });
+
   async function loadProducts() {
     const tbody = $('prod-tbody');
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:36px;color:var(--text-4);"><div style="display:flex;align-items:center;justify-content:center;gap:8px;"><div class="spinner-ring"></div>로딩 중…</div></td></tr>`;
-    const p = new URLSearchParams({ page: prodPage, size: PROD_SIZE });
+    const p = new URLSearchParams({ page: prodPage, size: PROD_SIZE, advertiser_id: ADV });
     if (prodQ) p.set('q', prodQ);
     if (prodCat) p.set('category', prodCat);
     if (prodEmbedOnly) p.set('status', 'embedded');
+    if (prodTags.size) p.set('tags', [...prodTags].join(','));
     try {
       const d = await fetch(EMBEDDER + '/products-enriched?' + p).then(r => r.json());
       const items = d.items || d.content || d || [];
@@ -628,7 +745,21 @@
   $('btn-next').addEventListener('click', () => { prodPage++; loadProducts(); });
   $('search-btn').addEventListener('click', () => { prodQ = $('q-input').value.trim(); prodCat = $('cat-select').value; prodEmbedOnly = $('embedded-toggle').checked; prodPage = 0; loadProducts(); });
   $('q-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('search-btn').click(); });
-  $('reset-btn').addEventListener('click', () => { $('q-input').value=''; $('cat-select').value=''; $('embedded-toggle').checked=false; prodQ=''; prodCat=''; prodEmbedOnly=false; prodPage=0; loadProducts(); });
+  $('reset-btn').addEventListener('click', () => { $('q-input').value=''; $('cat-select').value=''; $('embedded-toggle').checked=false; prodQ=''; prodCat=''; prodEmbedOnly=false; prodTags.clear(); prodPage=0; renderTagFilter(); renderActiveTagBar(); loadProducts(); });
+
+  $('normalize-tags-btn').addEventListener('click', async () => {
+    const btn = $('normalize-tags-btn');
+    btn.disabled = true; btn.textContent = '⏳ 실행 중…';
+    try {
+      const r = await fetch(EMBEDDER + '/products-enriched/normalize-tags', { method: 'POST' }).then(r => r.json());
+      btn.textContent = `✅ ${r.changed}건 정규화`;
+      if (r.changed > 0) { availableTags = []; loadEmbedderTags(); loadProducts(); }
+      setTimeout(() => { btn.disabled = false; btn.innerHTML = '🔧 태그 정규화'; }, 3000);
+    } catch (e) {
+      btn.textContent = '❌ 실패';
+      setTimeout(() => { btn.disabled = false; btn.innerHTML = '🔧 태그 정규화'; }, 2000);
+    }
+  });
 
   // ── Detail modal (enriched) ───────────────────────────────
   window.modalUnblockImg = async function(blockId, btn) {
@@ -679,23 +810,48 @@
 
       let imgHtml = '';
       if (localCount > 0) {
-        // 모든 이미지를 썸네일 그리드로 — 클릭하면 그 이미지의 분류 설명만 팝업
+        const IMG_TYPE_SHORT = {main:'대표',lifestyle:'연출',detail:'디테일',infographic:'인포',size_chart:'사이즈',color_options:'색상',spec_table:'스펙',care_guide:'관리',certification:'인증',packaging:'패키지',related_product:'관련상품',noise:'노이즈',other:'기타'};
         const thumbs = Array.from({length: localCount}, (_,i) => {
           const proxyUrl = imgBase + i;
           const srcUrl   = srcUrls[i] || '';
           const blocked  = srcUrl && isBlocked(srcUrl);
           const entry    = blocked ? getBlockEntry(srcUrl) : null;
           const sha1     = sha1ByIndex[i];
-          const hasType  = sha1 && typeBySha1[sha1];
-          const imgStyle = `width:86px;height:86px;object-fit:cover;border-radius:4px;display:block;`;
-          return `<div class="modal-img-wrap${blocked?' is-blocked':''} img-types-trigger" style="width:86px;height:86px;cursor:zoom-in;" onclick="openImgTypesPopup(${i})" title="${hasType?'이미지 분석 보기':'분류 정보 없음'}">
-            <img class="detail-thumb" src="${proxyUrl}" style="${imgStyle}" onerror="this.style.display='none'">
+          const t        = sha1 && typeBySha1[sha1];
+          const skipped  = t && !t.used_for_attributes;
+          const typeLbl  = t ? (IMG_TYPE_SHORT[t.image_type] || t.image_type) : null;
+          let overlay = '';
+          if (blocked) {
+            overlay = `<div class="modal-img-blocked-dim"></div>
+              <div class="modal-img-blocked-badge">차단됨</div>
+              <button class="modal-img-unblock-btn" onclick="event.stopPropagation();modalUnblockImg(${entry.id},this)">🔓 해제</button>`;
+          } else if (skipped) {
+            overlay = `<div style="position:absolute;inset:0;background:rgba(0,0,0,.45);border-radius:4px;pointer-events:none;"></div>
+              <div style="position:absolute;top:4px;left:4px;background:rgba(200,80,0,.9);color:#fff;font-size:9.5px;font-weight:700;padding:2px 5px;border-radius:3px;pointer-events:none;">제외</div>`;
+          } else if (!t) {
+            overlay = `<div style="position:absolute;bottom:3px;left:50%;transform:translateX(-50%);white-space:nowrap;background:rgba(80,80,80,.75);color:rgba(255,255,255,.85);font-size:9px;padding:1px 5px;border-radius:3px;pointer-events:none;">미분석</div>`;
+          }
+          const typeBadge = typeLbl && !blocked
+            ? `<div style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.62);color:#fff;font-size:9px;padding:1px 4px;border-radius:3px;pointer-events:none;">${esc(typeLbl)}</div>`
+            : '';
+          const title = blocked ? '차단된 이미지'
+            : skipped ? `제외됨: ${t.rejection_reason||t.image_type||'미사용'}`
+            : t ? `${typeLbl||t.image_type} — 클릭하면 분석 결과`
+            : 'LLM 미분석 (imageLimit 초과 등)';
+          return `<div class="modal-img-wrap${blocked?' is-blocked':''} img-types-trigger" style="position:relative;width:86px;height:86px;cursor:zoom-in;" onclick="openImgTypesPopup(${i})" title="${esc(title)}">
+            <img class="detail-thumb" src="${proxyUrl}" style="width:86px;height:86px;object-fit:cover;border-radius:4px;display:block;" onerror="this.style.display='none'">
             <div class="modal-img-idx">${i+1}</div>
-            ${blocked?`<div class="modal-img-blocked-dim"></div><div class="modal-img-blocked-badge">차단됨</div><button class="modal-img-unblock-btn" onclick="event.stopPropagation();modalUnblockImg(${entry.id},this)">🔓 해제</button>`:''}
+            ${overlay}${typeBadge}
           </div>`;
         }).join('');
-        imgHtml = `<div class="modal-field"><div class="lbl">크롤링 이미지 (${localCount}장) · 이미지를 누르면 분석 결과가 나옵니다</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;margin-top:6px;">${thumbs}</div></div>`;
+        const legend = `<div style="display:flex;gap:10px;font-size:11px;color:var(--text-3);margin-bottom:6px;flex-wrap:wrap;">
+          <span><span style="display:inline-block;width:10px;height:10px;background:rgba(200,80,0,.9);border-radius:2px;margin-right:3px;vertical-align:middle;"></span>제외 (LLM 분석했으나 미사용)</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:rgba(180,0,0,.7);border-radius:2px;margin-right:3px;vertical-align:middle;"></span>차단됨</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:rgba(80,80,80,.75);border-radius:2px;margin-right:3px;vertical-align:middle;"></span>미분석 (LLM 미전송)</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:rgba(0,0,0,.62);border-radius:2px;margin-right:3px;vertical-align:middle;"></span>우상단 = 이미지 타입</span>
+        </div>`;
+        imgHtml = `<div class="modal-field"><div class="lbl">크롤링 이미지 (${localCount}장) · 이미지를 누르면 분석 결과</div>
+          ${legend}<div style="display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;">${thumbs}</div></div>`;
       } else if (d.image_url) {
         const mainBlocked = isBlocked(d.image_url);
         const mainEntry   = mainBlocked ? getBlockEntry(d.image_url) : null;
@@ -852,6 +1008,24 @@
   let batchTimer = null;
   const SYNC_SIZE = 20;
 
+  // ── 행별 LLM 진행 추적 (새로고침 생존) ──
+  const LS_ENRICH_KEY = `enrich_progress_${ADV}`;
+  const enrichingCodes = new Map(); // code → startEpoch
+  function _saveEnrichingCodes() {
+    try { localStorage.setItem(LS_ENRICH_KEY, JSON.stringify([...enrichingCodes])); } catch {}
+  }
+  function _loadEnrichingCodes() {
+    try {
+      const raw = localStorage.getItem(LS_ENRICH_KEY);
+      if (!raw) return;
+      const now = Date.now();
+      JSON.parse(raw).forEach(([c, t]) => {
+        if (now - t < 5 * 60 * 1000) enrichingCodes.set(c, t); // 5분 이내만 복원
+      });
+    } catch {}
+  }
+  _loadEnrichingCodes();
+
   // filter tab handlers for both panels
   ['scrape','enrich'].forEach(type => {
     const tabsId = type === 'scrape' ? 'scrape-filter-tabs' : 'enrich-filter-tabs';
@@ -873,10 +1047,12 @@
   $('enrich-pgn-next').addEventListener('click', () => { syncPage.enrich++;loadSyncProducts('enrich'); });
 
   async function loadSyncProducts(type) {
-    const loadEl = $(type+'-tbl-loading');
-    const emptyEl = $(type+'-tbl-empty');
-    const tableEl = $(type+'-prod-table');
-    const tbodyEl = $(type+'-prod-tbody');
+    // scrape 패널 HTML ID는 'sync-' 접두어 사용 (enrich는 'enrich-')
+    const pfx = type === 'scrape' ? 'sync' : 'enrich';
+    const loadEl = $(pfx+'-tbl-loading');
+    const emptyEl = $(pfx+'-tbl-empty');
+    const tableEl = $(pfx+'-prod-table');
+    const tbodyEl = $(pfx+'-prod-tbody');
     if (loadEl) loadEl.style.display='block';
     if (emptyEl) emptyEl.style.display='none';
     if (tableEl) tableEl.style.display='none';
@@ -921,9 +1097,10 @@
   }
 
   function renderSyncTable(type, items) {
-    const tbodyEl = $(type + '-prod-tbody');
-    const tableEl = $(type + '-prod-table');
-    const emptyEl = $(type + '-tbl-empty');
+    const pfx = type === 'scrape' ? 'sync' : 'enrich';
+    const tbodyEl = $(pfx + '-prod-tbody');
+    const tableEl = $(pfx + '-prod-table');
+    const emptyEl = $(pfx + '-tbl-empty');
     if (!items.length) { if(emptyEl) emptyEl.style.display='block'; return; }
     const model  = $('row-model').value;
     const images = $('row-images').value;
@@ -944,9 +1121,11 @@
         ? `<img class="prod-img-sm" src="${esc(p.imageUrl)}" alt="" onerror="this.style.display='none'">`
         : `<span class="prod-img-ph"></span>`;
       const actFetch   = `<button class="btn btn-sm" onclick="actScrape('${esc(p.productCode)}')">Fetch</button>`;
-      const actEnrich  = p.scrapeStatus === 'scraped'
-        ? `<button class="btn btn-sm btn-primary" onclick="actEnrich('${esc(p.productCode)}',false)" title="모델:${model} 이미지:${images}장">🤖 Enrich</button>` : '';
-      const actRe = isEnriched
+      const isEnriching = enrichingCodes.has(p.productCode);
+      const enrichingBtn = `<button class="btn btn-sm" disabled style="opacity:.7;cursor:default;"><span class="spin" style="width:11px;height:11px;border-width:2px;"></span> LLM 작업중</button>`;
+      const actEnrich  = isEnriching ? enrichingBtn : (p.scrapeStatus === 'scraped'
+        ? `<button class="btn btn-sm btn-primary" onclick="actEnrich('${esc(p.productCode)}',false)" title="백엔드:${($('row-backend')?.value)||'cli'} 모델:${model} 이미지:${images}장">🤖 Enrich</button>` : '');
+      const actRe = !isEnriching && isEnriched
         ? `<button class="btn btn-sm" style="background:var(--warn-soft);color:var(--warn);border-color:var(--warn);" onclick="actEnrich('${esc(p.productCode)}',true)">🔄 재분석</button>` : '';
       const actDetail = isEnriched
         ? `<button class="btn btn-sm" onclick="openSyncDetail(${p.id})">🔍 상세</button>` : '';
@@ -975,15 +1154,28 @@
   };
 
   window.actEnrich = async function(code, force) {
-    const model = $('row-model').value, images = $('row-images').value;
+    const model   = $('row-model').value;
+    const images  = $('row-images').value;
+    const backend = ($('row-backend')?.value) || 'cli';
     if (force && !confirm(`이미 enriched된 상품입니다. 재분석 시 LLM 비용이 발생합니다.\n계속하시겠습니까?`)) return;
+    enrichingCodes.set(code, Date.now());
+    _saveEnrichingCodes();
+    loadSyncProducts(activePanel); // 즉시 재렌더 → 버튼 → "LLM 작업중"
     try {
-      const qs = new URLSearchParams({model, imageLimit:images, force:String(force)});
+      const qs = new URLSearchParams({model, imageLimit:images, force:String(force), backend});
       const r = await fetch(`${BOOT}/advertisers/${ADV}/products/${code}/enrich/llm?${qs}`, {method:'POST'});
       const j = await r.json();
       if (!r.ok) throw new Error(j.message || `HTTP ${r.status}`);
-      loadSyncProducts(activePanel);
+      // enrich 본체는 성공했지만 임베딩이 실패한 케이스 — DB는 extracted 상태로 남음
+      if (j && j.embed_error) {
+        alert(`Enrich 본체는 성공했으나 임베딩 단계 실패:\n${j.embed_error}\n\n임베딩만 다시 돌리려면 같은 버튼 한번 더 누르거나 잠시 후 재분석 하세요.`);
+      }
     } catch(e) { alert(`Enrich 실패: ${e.message}`); }
+    finally {
+      enrichingCodes.delete(code);
+      _saveEnrichingCodes();
+      loadSyncProducts(activePanel);
+    }
   };
 
   window.openSyncDetail = async function(rvId) {
@@ -991,12 +1183,81 @@
     $('modal-body').innerHTML = `<div style="text-align:center;padding:30px;"><span class="spin"></span></div>`;
     $('detail-modal').classList.add('open');
     try {
+      if (!blockPatterns.length) await loadBlockPatterns();
       const r = await fetch(`${EMBEDDER}/products-enriched/${rvId}`);
       const j = await r.json();
       if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`);
       $('modal-title').textContent = j.product_name || `rv_id=${rvId}`;
       const chips = arr => arr.filter(Boolean).map(t => `<span class="attr-chip">${esc(String(t))}</span>`).join('');
       const db = (key, lbl) => j['desc_'+key] ? `<div class="desc-block ${key}"><div class="dl">${lbl}</div>${esc(j['desc_'+key])}</div>` : '';
+
+      // 이미지 렌더링 (차단 마킹 포함)
+      const imgBase    = EMBEDDER + '/products-enriched/' + rvId + '/image/';
+      const imgFiles   = Array.isArray(j.images) ? j.images : [];
+      const srcUrls    = Array.isArray(j.image_src_urls) ? j.image_src_urls : [];
+      const localCount = imgFiles.length || (j.image_local_count || 0);
+      const sha1ByIdx  = imgFiles.map(p => String(p).split(/[\\/]/).pop().replace(/\.[^.]+$/,''));
+      const typeBySha1 = {};
+      (Array.isArray(j.image_types) ? j.image_types : []).forEach(t => { if (t?.sha1) typeBySha1[t.sha1] = t; });
+      window._imgTypeBySha1  = typeBySha1;
+      window._imgSha1ByIndex = sha1ByIdx;
+      window._imgBase        = imgBase;
+
+      const IMG_TYPE_SHORT = {main:'대표',lifestyle:'연출',detail:'디테일',infographic:'인포',size_chart:'사이즈',color_options:'색상',spec_table:'스펙',care_guide:'관리',certification:'인증',packaging:'패키지',related_product:'관련상품',noise:'노이즈',other:'기타'};
+      let imgHtml = '';
+      if (localCount > 0) {
+        const thumbs = Array.from({length: localCount}, (_,i) => {
+          const srcUrl  = srcUrls[i] || '';
+          const blocked = srcUrl && isBlocked(srcUrl);
+          const entry   = blocked ? getBlockEntry(srcUrl) : null;
+          const sha1    = sha1ByIdx[i];
+          const t       = sha1 && typeBySha1[sha1];
+          const skipped = t && !t.used_for_attributes;  // 분석에 미사용
+          const typeLbl = t ? (IMG_TYPE_SHORT[t.image_type] || t.image_type) : null;
+
+          // 상태에 따른 오버레이
+          let overlay = '';
+          if (blocked) {
+            overlay = `<div class="modal-img-blocked-dim"></div>
+              <div class="modal-img-blocked-badge">차단됨</div>
+              <button class="modal-img-unblock-btn" onclick="event.stopPropagation();modalUnblockImg(${entry.id},this)">🔓 해제</button>`;
+          } else if (skipped) {
+            overlay = `<div style="position:absolute;inset:0;background:rgba(0,0,0,.45);border-radius:4px;pointer-events:none;"></div>
+              <div style="position:absolute;top:4px;left:4px;background:rgba(200,80,0,.9);color:#fff;font-size:9.5px;font-weight:700;padding:2px 5px;border-radius:3px;pointer-events:none;">제외</div>`;
+          } else if (!t) {
+            overlay = `<div style="position:absolute;bottom:3px;left:50%;transform:translateX(-50%);white-space:nowrap;background:rgba(80,80,80,.75);color:rgba(255,255,255,.85);font-size:9px;padding:1px 5px;border-radius:3px;pointer-events:none;">미분석</div>`;
+          }
+
+          // 이미지 타입 뱃지 (우상단)
+          const typeBadge = typeLbl && !blocked
+            ? `<div style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.62);color:#fff;font-size:9px;padding:1px 4px;border-radius:3px;pointer-events:none;">${esc(typeLbl)}</div>`
+            : '';
+
+          const title = blocked ? '차단된 이미지'
+            : skipped ? `제외됨: ${t.rejection_reason||t.image_type||'미사용'}`
+            : t ? `${typeLbl||t.image_type} — 클릭하면 분석 결과`
+            : 'LLM 미분석 (imageLimit 초과 등)';
+
+          return `<div class="modal-img-wrap${blocked?' is-blocked':''} img-types-trigger" style="position:relative;width:86px;height:86px;cursor:zoom-in;" onclick="openImgTypesPopup(${i})" title="${esc(title)}">
+            <img class="detail-thumb" src="${imgBase+i}" style="width:86px;height:86px;object-fit:cover;border-radius:4px;display:block;" onerror="this.style.display='none'">
+            <div class="modal-img-idx">${i+1}</div>
+            ${overlay}${typeBadge}
+          </div>`;
+        }).join('');
+
+        // 범례
+        const legend = `<div style="display:flex;gap:10px;font-size:11px;color:var(--text-3);margin-bottom:6px;flex-wrap:wrap;">
+          <span><span style="display:inline-block;width:10px;height:10px;background:rgba(200,80,0,.9);border-radius:2px;margin-right:3px;vertical-align:middle;"></span>제외 (LLM 분석했으나 미사용)</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:rgba(180,0,0,.7);border-radius:2px;margin-right:3px;vertical-align:middle;"></span>차단됨</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:rgba(80,80,80,.75);border-radius:2px;margin-right:3px;vertical-align:middle;"></span>미분석 (LLM 미전송)</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:rgba(0,0,0,.62);border-radius:2px;margin-right:3px;vertical-align:middle;"></span>우상단 = 이미지 타입</span>
+        </div>`;
+
+        imgHtml = `<div class="modal-field"><div class="lbl">크롤링 이미지 (${localCount}장)</div>
+          ${legend}
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;">${thumbs}</div></div>`;
+      }
+
       $('modal-body').innerHTML = `
         <div style="margin-bottom:14px;">
           <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
@@ -1006,13 +1267,53 @@
           </div>
           ${j.tags&&j.tags.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${j.tags.map(t=>`<span class="attr-chip" style="font-size:11px;">${esc(typeof t==='object'?t.tag:t)}</span>`).join('')}</div>`:''}
         </div>
+        ${imgHtml}
         ${db('situation','상황')}${db('style','스타일')}${db('persona','페르소나')}
         <div style="font-size:11.5px;color:var(--text-3);font-family:monospace;margin-top:10px;">rv_id=${j.rv_product_id} · ${j.enriched_at?.slice(0,16)||'?'} · ${j.duration_ms||'?'}ms</div>
       `;
     } catch(e) { $('modal-body').innerHTML = `<p style="color:var(--err);">오류: ${e.message}</p>`; }
   };
 
-  // batch scrape
+  // ① 상품 목록 동기화
+  $('btn-sync-list').addEventListener('click', async () => {
+    const btn = $('btn-sync-list');
+    const badge = $('sync-list-badge');
+    const resultEl = $('sync-list-result');
+    btn.disabled = true;
+    btn.textContent = '동기화 중…';
+    badge.innerHTML = '<span class="badge info" style="font-size:11px;"><span class="dot"></span>실행 중</span>';
+    resultEl.style.display = 'none';
+    const t0 = Date.now();
+    try {
+      const r = await fetch(`${BOOT}/advertisers/${ADV}/sync`, { method: 'POST' });
+      const j = await r.json();
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+      if (!r.ok) throw new Error(j.message || `HTTP ${r.status}`);
+      const inserted = j.inserted ?? j.newCount ?? 0;
+      const updated  = j.updated  ?? j.updatedCount ?? 0;
+      const total    = j.total    ?? j.totalFetched ?? 0;
+      badge.innerHTML = '<span class="badge ok" style="font-size:11px;"><span class="dot"></span>완료</span>';
+      resultEl.style.background = 'var(--ok-soft, #f0fdf4)';
+      resultEl.style.border = '1px solid #bbf7d0';
+      resultEl.style.color = 'var(--ok)';
+      resultEl.innerHTML = `✓ 완료 (${elapsed}s) — 전체 <b>${fmt(total)}</b>개 · 신규 <b>${fmt(inserted)}</b>개 · 업데이트 <b>${fmt(updated)}</b>개`;
+      resultEl.style.display = 'block';
+      loadSyncProducts('scrape');
+      loadKpiSync();
+    } catch (e) {
+      badge.innerHTML = '<span class="badge err" style="font-size:11px;"><span class="dot"></span>실패</span>';
+      resultEl.style.background = 'var(--err-soft)';
+      resultEl.style.border = '1px solid #fca5a5';
+      resultEl.style.color = 'var(--err)';
+      resultEl.innerHTML = `✗ 실패: ${e.message}`;
+      resultEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg> 동기화 시작';
+    }
+  });
+
+  // ② 상세 스크랩 배치
   $('btn-start-scrape').addEventListener('click', async () => {
     const mode=$('sc-mode').value, count=+$('sc-count').value, batchsize=+$('sc-batchsize').value;
     const concur=+$('sc-concur').value, interval=+$('sc-interval').value;
@@ -1031,10 +1332,11 @@
   $('btn-start-enrich').addEventListener('click', async () => {
     const model=$('ec-model').value, count=+$('ec-count').value, images=+$('ec-images').value;
     const concur=+$('ec-concur').value, interval=+$('ec-interval').value, embed=$('ec-embed').value;
+    const backend = ($('ec-backend')?.value) || 'cli';
     const perMin={haiku:40,sonnet:120,opus:180}[model]||40;
     const estMin=Math.round(count*perMin/(60*concur));
-    if (!confirm(`Enrich+Embed 배치\nmodel=${model} · ${count}개 · 이미지 ${images}장 · embed=${embed}\n예상 ~${estMin}분`)) return;
-    const qs=new URLSearchParams({count,model,imageLimit:images,concurrency:concur,intervalMs:interval,embedBackend:embed});
+    if (!confirm(`Enrich+Embed 배치\nbackend=${backend} · model=${model} · ${count}개 · 이미지 ${images}장 · embed=${embed}\n예상 ~${estMin}분`)) return;
+    const qs=new URLSearchParams({count,model,imageLimit:images,concurrency:concur,intervalMs:interval,embedBackend:embed,backend});
     await fetch(`${BOOT}/advertisers/${ADV}/products/batch-enrich?${qs}`,{method:'POST'});
     startBatchPoll();
   });
@@ -1214,6 +1516,7 @@
   // boot
   loadKpiSync();
   loadEmbedderKpi();
+  loadEmbedderTags();
   loadProducts();
   loadBlockPatterns(); // 상품 목록 탭에서도 차단 여부 표시하기 위해 미리 로드
   startBatchPoll();

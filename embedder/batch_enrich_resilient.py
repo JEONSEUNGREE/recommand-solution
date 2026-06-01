@@ -7,6 +7,7 @@ claude CLI 사용량 한도(429)에 걸리면 reset 시각까지 자동 대기 �
 
 사용:
   python -m embedder.batch_enrich_resilient --workers 2 --image-limit 30 --model haiku
+  python -m embedder.batch_enrich_resilient --advertiser 4 --workers 2 --model haiku   # 피핀만
 """
 
 import argparse
@@ -60,20 +61,79 @@ def _set_pause(reset_at: float | None) -> None:
     _log(f"사용량 한도 도달 — {datetime.fromtimestamp(target):%Y-%m-%d %H:%M:%S} 까지 대기")
 
 
-def fetch_pending(limit: int | None = None) -> list[int]:
-    """scraped 인데 아직 embedded 가 아닌 rv_product id 목록."""
-    sql = """
+_GARBAGE_NAME_PATTERNS = ("고객님", "결재창", "결제창")
+
+def _is_garbage_name(name: str) -> bool:
+    return any(p in name for p in _GARBAGE_NAME_PATTERNS)
+
+
+def mark_low_quality(conn: "psycopg.Connection") -> int:
+    """품질 기준 미달 상품을 product_enriched에 skip_low_quality로 등록.
+
+    기준:
+      1. display = 'N'  (미진열)
+      2. 상품명에 '고객님' / '결재창' / '결제창' 포함
+      3. 이미지 0개 AND 본문 30자 미만  (완전 껍데기)
+    이미 처리(embedded / skip_low_quality)된 상품은 건드리지 않는다.
+    """
+    garbage_patterns = " OR ".join(
+        f"rp.product_name ILIKE '%{p}%'" for p in _GARBAGE_NAME_PATTERNS
+    )
+    sql = f"""
+        INSERT INTO product_enriched (rv_product_id, advertiser_id, product_code, enrich_status, enriched_at)
+        SELECT rp.id, rp.advertiser_id, rp.product_code, 'skip_low_quality', NOW()
+          FROM rv_products rp
+          LEFT JOIN product_enriched pe ON pe.rv_product_id = rp.id
+         WHERE rp.scrape_status = 'scraped'
+           AND (pe.rv_product_id IS NULL OR pe.enrich_status NOT IN ('embedded', 'skip_low_quality'))
+           AND (
+                 rp.raw_payload->>'display' = 'N'
+              OR ({garbage_patterns})
+              OR (rp.image_local_count = 0 AND (rp.body_text IS NULL OR LENGTH(rp.body_text) < 30))
+           )
+        ON CONFLICT (rv_product_id) DO UPDATE
+           SET enrich_status = 'skip_low_quality', enriched_at = NOW()
+         WHERE product_enriched.enrich_status NOT IN ('embedded', 'skip_low_quality')
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql)
+        return cur.rowcount
+
+
+def fetch_pending(limit: int | None = None, advertiser_id: int | None = None) -> list[int]:
+    """품질 통과 & 아직 embedded 아닌 rv_product id 목록.
+
+    skip_low_quality 마킹은 main() 에서 미리 호출한 mark_low_quality() 가 담당.
+    advertiser_id 가 주어지면 해당 광고주만 필터링.
+
+    NOTE: ILIKE 패턴을 SQL 리터럴로 박지 않고 파라미터로 넘긴다.
+    SQL 안의 '%고객님%' 같은 한글 리터럴 + params 조합이면 psycopg 가
+    '%' 를 placeholder 로 잘못 파싱하다가 한글 멀티바이트 중간에서 decode 실패.
+    """
+    params: list = [f"%{p}%" for p in _GARBAGE_NAME_PATTERNS]
+    adv_cond = ""
+    if advertiser_id is not None:
+        adv_cond = "AND rp.advertiser_id = %s"
+        params.append(advertiser_id)
+
+    sql = f"""
         SELECT rp.id
           FROM rv_products rp
           LEFT JOIN product_enriched pe ON pe.rv_product_id = rp.id
          WHERE rp.scrape_status = 'scraped'
-           AND (pe.rv_product_id IS NULL OR pe.enrich_status != 'embedded')
+           AND rp.raw_payload->>'display' = 'Y'
+           AND NOT (rp.image_local_count = 0 AND (rp.body_text IS NULL OR LENGTH(rp.body_text) < 30))
+           AND rp.product_name NOT ILIKE %s
+           AND rp.product_name NOT ILIKE %s
+           AND rp.product_name NOT ILIKE %s
+           AND (pe.rv_product_id IS NULL OR pe.enrich_status NOT IN ('embedded', 'skip_low_quality'))
+           {adv_cond}
          ORDER BY rp.id
     """
     if limit:
         sql += f" LIMIT {int(limit)}"
     with psycopg.connect(DB_DSN) as conn, conn.cursor() as cur:
-        cur.execute(sql)
+        cur.execute(sql, params)
         return [r[0] for r in cur.fetchall()]
 
 
@@ -142,14 +202,21 @@ def main() -> int:
     ap.add_argument("--model", default="haiku")
     ap.add_argument("--embed-backend", default="bge", choices=["bge", "openai", "both"])
     ap.add_argument("--limit", type=int, default=None, help="처리 상품 수 제한 (테스트용)")
+    ap.add_argument("--advertiser", type=int, default=None, help="특정 광고주 ID만 처리 (예: 4=피핀)")
     args = ap.parse_args()
 
     permanent_fail: set = set()
     prev_remaining: int | None = None
     pass_no = 0
 
+    with psycopg.connect(DB_DSN) as conn:
+        marked = mark_low_quality(conn)
+        conn.commit()
+    if marked:
+        _log(f"품질 미달 {marked}건 → skip_low_quality 마킹")
+
     while True:
-        pending = [i for i in fetch_pending(args.limit) if i not in permanent_fail]
+        pending = [i for i in fetch_pending(args.limit, args.advertiser) if i not in permanent_fail]
         if not pending:
             _log("모든 상품 처리 완료.")
             break

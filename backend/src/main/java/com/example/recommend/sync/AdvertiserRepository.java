@@ -88,12 +88,19 @@ public class AdvertiserRepository {
     public void update(long id, String name, String hostType, String shopUrl, String shopKey, String licenseKey, String notes,
                        String selectorName, String selectorDetail, String selectorPrice, String imageAttrs,
                        String detailAnchorStart, String detailAnchorEnd) {
+        // 키가 비어 있으면 null 전달 → SQL CASE WHEN으로 기존 값 유지
+        final String encShopKey     = (shopKey     != null && !shopKey.isBlank())     ? cipher.encrypt(shopKey)     : null;
+        final String encLicenseKey  = (licenseKey  != null && !licenseKey.isBlank())  ? cipher.encrypt(licenseKey)  : null;
         jdbc.update(
-                "UPDATE advertisers SET name = ?, host_type = ?, shop_url = ?, shop_key = ?, license_key = ?, notes = ?, " +
-                        "selector_name = ?, selector_detail = ?, selector_price = ?, image_attrs = ?, " +
+                "UPDATE advertisers SET name = ?, host_type = ?, shop_url = ?, " +
+                        "shop_key     = CASE WHEN ? IS NULL THEN shop_key     ELSE ? END, " +
+                        "license_key  = CASE WHEN ? IS NULL THEN license_key  ELSE ? END, " +
+                        "notes = ?, selector_name = ?, selector_detail = ?, selector_price = ?, image_attrs = ?, " +
                         "detail_anchor_start = ?, detail_anchor_end = ?, updated_at = NOW() WHERE id = ?",
-                name, hostType, shopUrl, cipher.encrypt(shopKey), cipher.encrypt(licenseKey), notes,
-                selectorName, selectorDetail, selectorPrice, imageAttrs,
+                name, hostType, shopUrl,
+                encShopKey, encShopKey,
+                encLicenseKey, encLicenseKey,
+                notes, selectorName, selectorDetail, selectorPrice, imageAttrs,
                 detailAnchorStart, detailAnchorEnd, id);
     }
 

@@ -30,20 +30,46 @@ from PIL import Image
 DB_DSN = os.environ.get("DB_DSN", "postgresql://app:app@localhost:5433/recommend")
 
 
+from .tag_normalizer import normalize_tags  # noqa: E402
+
+
 def _resolve_claude_bin() -> str:
     """claude 실행파일 절대경로. shell 없이 직접 실행하기 위해 .exe 경로를 찾는다.
 
     shell=True 로 'claude' 를 실행하면 cmd.exe → claude.exe 2단 구조라
     타임아웃 시 cmd.exe 만 죽고 claude.exe 가 고아로 남아 파이프를 막는다.
+
+    탐색 순서:
+      1) CLAUDE_BIN 환경변수
+      2) %APPDATA%\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe
+      3) %USERPROFILE%\\AppData\\Roaming\\... (서비스 프로세스 등 APPDATA 누락 대비)
+      4) shutil.which("claude.exe") / which("claude") (PATH 탐색)
+      5) fallback "claude" — subprocess(shell=False)에서는 .exe 없으면 WinError 2.
     """
     from pathlib import Path as _P
+    import shutil
+
     env = os.environ.get("CLAUDE_BIN")
     if env and _P(env).exists():
         return env
-    appdata = os.environ.get("APPDATA", "")
-    cand = _P(appdata) / "npm" / "node_modules" / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe"
-    if cand.exists():
-        return str(cand)
+
+    candidates: list[_P] = []
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        candidates.append(_P(appdata) / "npm" / "node_modules" / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe")
+    userprofile = os.environ.get("USERPROFILE")
+    if userprofile:
+        candidates.append(_P(userprofile) / "AppData" / "Roaming" / "npm" / "node_modules" / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe")
+    for c in candidates:
+        if c.exists():
+            return str(c)
+
+    # PATH에 등록된 claude.exe (claude.ps1 / claude.cmd 가 아닌 .exe 만)
+    for name in ("claude.exe", "claude"):
+        found = shutil.which(name)
+        if found and found.lower().endswith(".exe"):
+            return found
+
     return env or "claude"
 
 
@@ -204,6 +230,7 @@ OUTPUT_SCHEMA = {
                     "is_main_product": {"type": "boolean", "description": "true=본 상품의 이미지 / false=다른 상품·배너·안내문 등 본 상품 무관"},
                     "used_for_attributes": {"type": "boolean", "description": "true=이 이미지의 정보를 본 상품의 common/category_attributes/tags/descriptions에 사용함 / false=오염 방지를 위해 사용하지 않음"},
                     "rejection_reason": {"type": "string", "description": "used_for_attributes=false인 경우 사유 (예: '추천 상품 안내', '브랜드 배너', '호환 본체 사진')"},
+                    "content_description": {"type": "string", "description": "이미지에 보이는 내용을 1~2문장으로 객관적으로 설명. 상품 외형·색상·착용 모습·텍스트 등 시각적 정보 기술. used_for_attributes=false면 왜 제외됐는지 포함."},
                 },
             },
         },
@@ -274,11 +301,12 @@ descriptions와 tags는 텍스트·이미지에서 **실제로 관찰·확인된
 원문에 연예인 착용 정보가 실제로 있으면 — 그때만 그대로 기술한다 (지어내지 말 것).
 
 [이미지 처리 — 엄격 규칙]
-입력된 **모든** 이미지 sha1에 대해 다음 4가지를 빠짐없이 채워라:
+입력된 **모든** 이미지 sha1에 대해 다음 5가지를 빠짐없이 채워라:
 1. image_type — main/lifestyle/detail/infographic/size_chart/color_options/spec_table/care_guide/certification/packaging/related_product/noise/other
 2. is_main_product — true=본 상품 / false=다른 상품·배너·고객센터 안내·결제안내·추천상품 등
 3. used_for_attributes — true=본 상품 정보 추출에 활용 / false=오염 방지 격리. is_main_product=false면 반드시 false.
 4. rejection_reason — used_for_attributes=false인 사유 (해당 없으면 "")
+5. content_description — 이미지 내용을 1~2문장으로 객관적 기술 (색상·형태·착용 모습·텍스트 등 시각 정보)
 
 [오염 방지 핵심 — 절대 규칙]
 - 본 상품과 다른 상품의 정보(예: 호환 본체의 SPF, 추천 상품의 가격, 다른 상품의 사이즈/색상)를
@@ -362,10 +390,15 @@ def _run_claude(cmd: list[str], input_text: str, timeout: int) -> subprocess.Com
     in_p, out_p, err_p = work / "in.txt", work / "out.txt", work / "err.txt"
     try:
         in_p.write_text(input_text, encoding="utf-8")
+        # CLI 호출 시 ANTHROPIC_API_KEY 를 자식 프로세스 환경에서 제거 —
+        # 환경에 키가 있으면 claude.exe 가 Max 구독 대신 API 키로 청구한다 (footgun).
+        # 우리가 의도한 'API 백엔드'는 call_claude_api() 별도 경로로만.
+        _child_env = os.environ.copy()
+        _child_env.pop("ANTHROPIC_API_KEY", None)
         with open(in_p, "r", encoding="utf-8") as fi, \
              open(out_p, "w", encoding="utf-8") as fo, \
              open(err_p, "w", encoding="utf-8") as fe:
-            proc = subprocess.Popen(cmd, stdin=fi, stdout=fo, stderr=fe)
+            proc = subprocess.Popen(cmd, stdin=fi, stdout=fo, stderr=fe, env=_child_env)
             try:
                 proc.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
@@ -414,8 +447,12 @@ def call_claude(prompt: str, system_prompt: str, model: str | None = None) -> tu
         ".claude.json",
     )
     # claude CLI 가 드물게 응답 없이 hang → subprocess 타임아웃으로 끊고 재시도.
-    # 정상 enrich 는 3분 이내. 타임아웃 5분, hang 시 최대 3회만 재시도(과도한 대기 방지).
-    call_timeout = int(os.environ.get("ENRICH_CALL_TIMEOUT", "300"))
+    # 모델별 정상 응답시간 차이가 큼:
+    #  - haiku  : 1~3분
+    #  - sonnet : 4~8분 (이미지 많을수록 길어짐)
+    # 모델별 기본 타임아웃 자동 설정. 환경변수 ENRICH_CALL_TIMEOUT 로 override.
+    _default_timeout = 900 if "sonnet" in chosen_model.lower() else 300
+    call_timeout = int(os.environ.get("ENRICH_CALL_TIMEOUT", str(_default_timeout)))
     for attempt in range(5):
         try:
             res = _run_claude(cmd, full_payload, call_timeout)
@@ -511,25 +548,216 @@ def call_claude(prompt: str, system_prompt: str, model: str | None = None) -> tu
     if model_usage:
         # 가장 큰 토큰 소비 모델
         used_model = max(model_usage.items(), key=lambda x: x[1].get("inputTokens", 0))[0]
+
+    # CLI 도 API 와 동일한 정의의 input_tokens 저장 — base + cache_write + cache_read.
+    # (콘솔과 일치하고, API 백엔드 결과와 직접 비교 가능)
+    _in_base = usage.get("input_tokens") or 0
+    _cache_w = usage.get("cache_creation_input_tokens") or 0
+    _cache_r = usage.get("cache_read_input_tokens") or 0
+    _in_total = _in_base + _cache_w + _cache_r
+
     meta = {
         "model": used_model or envelope.get("model"),
-        "input_tokens": usage.get("input_tokens"),
+        "input_tokens": _in_total,
         "output_tokens": usage.get("output_tokens"),
-        "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
-        "cache_creation_input_tokens": usage.get("cache_creation_input_tokens"),
+        "cache_read_input_tokens": _cache_r,
+        "cache_creation_input_tokens": _cache_w,
+        # CLI 측 cost_usd 는 claude CLI 자체 계산값 — Max 구독 시 "추정치" 의미.
+        # 실제 청구는 구독 정액제이므로 회계 목적엔 사용 X. API 와 구분 위해
+        # backend 라벨도 raw 에 명시.
         "cost_usd": envelope.get("total_cost_usd"),
         "duration_ms": envelope.get("duration_ms"),
-        "raw": res.stdout,
+        "raw": json.dumps({
+            "backend": "claude_cli",
+            "note": "cost_usd 는 Max 구독 추정치 — 실제 청구는 구독료에 포함",
+            "envelope_usage": usage,
+            "model_usage": model_usage,
+            "total_cost_usd": envelope.get("total_cost_usd"),
+            "duration_ms": envelope.get("duration_ms"),
+            "stdout": res.stdout,
+        }, ensure_ascii=False),
     }
     return data, meta
 
 
-def call_claude_filter(image_paths: list[Path]) -> set[str]:
+# ── 모델 단축어 → Anthropic API 풀 ID ──────────────────────────────
+_API_MODEL_MAP: dict[str, str] = {
+    "haiku":  "claude-haiku-4-5-20251001",
+    "sonnet": "claude-sonnet-4-6",
+    "opus":   "claude-opus-4-7",
+}
+
+
+def call_claude_api(
+    text_prompt: str,
+    system_prompt: str,
+    image_paths: list[Path],
+    model: str | None = None,
+) -> tuple[dict, dict]:
+    """Anthropic Python SDK 직접 호출 (ANTHROPIC_API_KEY 필요).
+
+    CLI output 모드와 달리 API 키 쿼터를 쓴다.
+    이미지는 base64로 인코딩해 content block으로 전달.
+    """
+    import base64
+    import time as _time
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다.")
+
+    try:
+        import anthropic as _anthropic
+    except ImportError:
+        raise RuntimeError("anthropic 패키지가 설치되지 않았습니다. pip install anthropic")
+
+    chosen_model = model or os.environ.get("CLAUDE_MODEL", "sonnet")
+    # 단축어 → 풀 ID 변환 (이미 풀 ID 이면 그대로 사용)
+    chosen_model = _API_MODEL_MAP.get(chosen_model, chosen_model)
+
+    # content blocks: 이미지 → text 순서
+    content: list[dict] = []
+    for p in image_paths:
+        try:
+            with open(p, "rb") as fh:
+                b64 = base64.standard_b64encode(fh.read()).decode()
+            content.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/jpeg", "data": b64},
+            })
+        except Exception as e:
+            print(f"[call_claude_api] skip image {p.name}: {e}", file=sys.stderr)
+
+    # 이미지 sha1 목록을 텍스트에 포함해 "파일명(sha1)으로 분류하라" 지시 유지
+    sha1_list = "\n".join(f"- {p.stem}" for p in image_paths)
+    content.append({
+        "type": "text",
+        "text": (
+            f"{text_prompt}\n\n"
+            f"[이미지 sha1 목록 (전송 순서와 동일)]\n{sha1_list}\n\n"
+            "위에서 전달된 이미지들을 순서대로 분석하고, "
+            "각 이미지의 sha1(목록의 값)을 기준으로 image_types를 채워라."
+        ),
+    })
+
+    schema_str = json.dumps(OUTPUT_SCHEMA, ensure_ascii=False, indent=2)
+    full_system = (
+        f"{system_prompt}\n\n"
+        f"=== 반드시 따라야 할 JSON 스키마 ===\n{schema_str}\n\n"
+        "=== 출력 ===\nJSON 한 덩어리만. 코드펜스(```) 없이. 위 스키마 따라."
+    )
+
+    client = _anthropic.Anthropic(api_key=api_key)
+    t0 = _time.time()
+    resp = client.messages.create(
+        model=chosen_model,
+        max_tokens=8192,
+        system=full_system,
+        messages=[{"role": "user", "content": content}],
+    )
+    elapsed_ms = int((_time.time() - t0) * 1000)
+
+    raw_text = resp.content[0].text if resp.content else ""
+
+    # JSON 파싱 (call_claude 와 동일 로직)
+    import re as _re
+    text = raw_text.strip()
+    m = _re.search(r"```(?:json)?\s*\n?(.+?)\n?```", text, _re.DOTALL)
+    if m:
+        text = m.group(1).strip()
+    elif "{" in text and "}" in text:
+        text = text[text.index("{"):text.rindex("}") + 1]
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        cleaned = _re.sub(r'\\([^"\\\\/bfnrtu])', r'\1', text)
+        try:
+            data = json.loads(cleaned)
+        except json.JSONDecodeError as e2:
+            try:
+                import json5
+                data = json5.loads(cleaned)
+            except Exception:
+                raise RuntimeError(
+                    f"JSON parse failed: {e2.msg} at pos {e2.pos}. "
+                    f"Context: {cleaned[max(0,e2.pos-80):e2.pos+80]!r}"
+                )
+
+    usage = resp.usage
+    # Anthropic 공식 단가 (per 1M tokens, USD).
+    # 캐시 단가 규칙 — write = base × 1.25, read = base × 0.10. (사용자가 prompt caching
+    # 활성화하지 않았어도, server-side ephemeral cache 가 잡힐 수 있어 합산 필요.)
+    # https://docs.anthropic.com/en/docs/about-claude/pricing
+    _COST_PER_MTok = {
+        # model_id: (input, output, cache_write(=in*1.25), cache_read(=in*0.10))
+        "claude-haiku-4-5-20251001": (0.80, 4.0,   1.00, 0.08),
+        "claude-sonnet-4-6":         (3.00, 15.0,  3.75, 0.30),
+        "claude-opus-4-7":           (15.0, 75.0, 18.75, 1.50),
+    }
+    # SDK 의 모든 토큰 필드 (None 안전):
+    in_base    = getattr(usage, "input_tokens", 0) or 0            # 캐시 미적용 input (vision tok 포함)
+    out_tok    = getattr(usage, "output_tokens", 0) or 0
+    cache_w    = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    cache_r    = getattr(usage, "cache_read_input_tokens", 0) or 0
+    # 실제 청구 input 총합 — 콘솔 표시와 일치하도록 모든 input 계열 합산.
+    in_tok_total = in_base + cache_w + cache_r
+
+    in_p, out_p, cw_p, cr_p = _COST_PER_MTok.get(chosen_model, (3.0, 15.0, 3.75, 0.30))
+    cost_usd = (
+        in_base * in_p +
+        cache_w * cw_p +
+        cache_r * cr_p +
+        out_tok * out_p
+    ) / 1_000_000
+
+    # raw 에는 콘솔과 대조 가능한 모든 필드를 JSON 으로 저장 — 단순 텍스트가 아닌 구조.
+    # (raw_response 컬럼은 jsonb 가능. 텍스트도 함께 보존.)
+    raw_payload = {
+        "backend": "claude_api",
+        "model": chosen_model,
+        "usage": {
+            "input_tokens": in_base,
+            "output_tokens": out_tok,
+            "cache_creation_input_tokens": cache_w,
+            "cache_read_input_tokens": cache_r,
+            "input_tokens_total": in_tok_total,
+        },
+        "cost_usd_breakdown": {
+            "input":       round(in_base * in_p  / 1_000_000, 6),
+            "cache_write": round(cache_w * cw_p / 1_000_000, 6),
+            "cache_read":  round(cache_r * cr_p / 1_000_000, 6),
+            "output":      round(out_tok * out_p / 1_000_000, 6),
+            "total":       round(cost_usd, 6),
+        },
+        "pricing_per_mtok": {"input": in_p, "output": out_p,
+                              "cache_write": cw_p, "cache_read": cr_p},
+        "duration_ms": elapsed_ms,
+        "text": raw_text,
+    }
+
+    meta = {
+        "model": chosen_model,
+        # DB의 input_tokens 컬럼은 콘솔과 일치하는 "총 입력 토큰" — base + cache_w + cache_r
+        "input_tokens": in_tok_total,
+        "output_tokens": out_tok,
+        "cache_read_input_tokens": cache_r,
+        "cache_creation_input_tokens": cache_w,
+        "cost_usd": cost_usd,
+        "duration_ms": elapsed_ms,
+        "raw": json.dumps(raw_payload, ensure_ascii=False),
+    }
+    return data, meta
+
+
+def call_claude_filter(image_paths: list[Path], backend: str = "cli") -> set[str]:
     """Pass 1 — 빠른 이미지 필터.
 
     모든 이미지를 haiku에게 보내 '본 상품 관련 이미지 sha1 배열'만 받아온다.
     출력 토큰이 극히 적어 (이미지 수 × ~20토큰) 비용 미미.
     실패 시 전체 이미지 sha1 집합을 반환해 기존 동작 유지.
+
+    backend="api" 면 Anthropic SDK 직접 호출 (Pass 2와 동일 백엔드 사용,
+    Max 토큰 안 씀). "cli" 면 claude.exe Max 구독 사용 (기본/기존 동작).
     """
     images_block = "\n".join(f"- {p.as_posix()}" for p in image_paths)
     prompt = f"""다음 이미지들을 보고 실제 판매 중인 본 상품에 관한 이미지의 sha1(파일명, 확장자 제외)만 JSON 배열로 출력하라.
@@ -542,8 +770,54 @@ def call_claude_filter(image_paths: list[Path]) -> set[str]:
 
 출력 규칙: JSON 배열만, 설명·머리말 없이. 예) ["abc123", "def456"]"""
 
-    import time as _t
     fallback = {p.stem for p in image_paths}
+
+    # ── API 백엔드: anthropic SDK 로 직접 호출 (Max 토큰 안 씀) ──
+    if backend == "api":
+        try:
+            import anthropic as _anthropic
+            import base64
+            api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+            if not api_key:
+                print("[enrich_claude] filter: ANTHROPIC_API_KEY 미설정 — 전체 이미지 사용",
+                      file=sys.stderr)
+                return fallback
+            content: list[dict] = []
+            for p in image_paths:
+                try:
+                    with open(p, "rb") as fh:
+                        b64 = base64.standard_b64encode(fh.read()).decode()
+                    content.append({"type": "image",
+                                    "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}})
+                except Exception as e:
+                    print(f"[enrich_claude] filter skip {p.name}: {e}", file=sys.stderr)
+            content.append({"type": "text", "text": prompt})
+            client = _anthropic.Anthropic(api_key=api_key)
+            filter_model = _API_MODEL_MAP.get("haiku", "claude-haiku-4-5-20251001")
+            resp = client.messages.create(
+                model=filter_model, max_tokens=512,
+                messages=[{"role": "user", "content": content}],
+            )
+            text = (resp.content[0].text if resp.content else "").strip()
+            import re as _re
+            m = _re.search(r"\[.*?\]", text, _re.DOTALL)
+            if m:
+                try:
+                    sha1_list = json.loads(m.group())
+                    result = {str(s) for s in sha1_list}
+                    print(f"[enrich_claude] filter(api): {len(image_paths)} → {len(result)} images kept",
+                          file=sys.stderr)
+                    return result if result else fallback
+                except Exception:
+                    pass
+            print("[enrich_claude] filter(api) parse failed, using all images", file=sys.stderr)
+            return fallback
+        except Exception as e:
+            print(f"[enrich_claude] filter(api) failed ({e}), using all images", file=sys.stderr)
+            return fallback
+
+    # ── CLI 백엔드 (Max 구독) — 기존 동작 ──
+    import time as _t
     filter_timeout = int(os.environ.get("ENRICH_FILTER_TIMEOUT", "180"))
     res = None
     for attempt in range(2):
@@ -657,7 +931,8 @@ def upsert_enriched(conn, rv_product_id: int, prod: dict, data: dict, meta: dict
               enrich_method, model_used, input_tokens, output_tokens,
               cache_read_input_tokens, cache_creation_input_tokens,
               cost_usd, duration_ms,
-              raw_response, enrich_error
+              raw_response, enrich_error,
+              enrich_status, enriched_at
             ) VALUES (%s,%s,%s, %s,%s, %s,%s,%s, %s,%s,%s, %s,%s,
                       %s::jsonb,%s::jsonb,%s::jsonb,
                       %s::jsonb,
@@ -666,7 +941,8 @@ def upsert_enriched(conn, rv_product_id: int, prod: dict, data: dict, meta: dict
                       %s,%s,%s,%s,
                       %s,%s,
                       %s,%s,
-                      %s,%s)
+                      %s,%s,
+                      'extracted',NOW())
             ON CONFLICT (rv_product_id) DO UPDATE SET
               category=EXCLUDED.category,
               category_confidence=EXCLUDED.category_confidence,
@@ -687,7 +963,7 @@ def upsert_enriched(conn, rv_product_id: int, prod: dict, data: dict, meta: dict
               cache_creation_input_tokens=EXCLUDED.cache_creation_input_tokens,
               cost_usd=EXCLUDED.cost_usd, duration_ms=EXCLUDED.duration_ms,
               raw_response=EXCLUDED.raw_response, enrich_error=EXCLUDED.enrich_error,
-              enriched_at=NOW()
+              enrich_status='extracted', enriched_at=NOW()
             """,
             (
                 rv_product_id, prod["advertiser_id"], prod["product_code"],
@@ -698,11 +974,11 @@ def upsert_enriched(conn, rv_product_id: int, prod: dict, data: dict, meta: dict
                 json.dumps(data.get("category_attributes") or {}, ensure_ascii=False),
                 json.dumps(data.get("related_products") or [], ensure_ascii=False),
                 json.dumps(data.get("set_components") or [], ensure_ascii=False),
-                json.dumps(data.get("tags") or [], ensure_ascii=False),
+                json.dumps(normalize_tags(data.get("tags") or []), ensure_ascii=False),
                 desc_map.get("situation"), desc_map.get("material"),
                 desc_map.get("style"), desc_map.get("persona"),
                 json.dumps(data.get("images") or [], ensure_ascii=False),
-                "claude_cli", meta.get("model"),
+                meta.get("enrich_method") or "claude_cli", meta.get("model"),
                 meta.get("input_tokens"), meta.get("output_tokens"),
                 meta.get("cache_read_input_tokens"), meta.get("cache_creation_input_tokens"),
                 meta.get("cost_usd"), meta.get("duration_ms"),
@@ -721,8 +997,13 @@ def run_enrich_one(
     save_db: bool = True,
     keep_workdir: bool = False,
     conn=None,
+    backend: str = "cli",
 ) -> dict:
     """단일 상품 enrich 실행 (CLI/HTTP 공용 진입점).
+
+    backend:
+      - "cli" (기본) — claude.exe `-p --output-format json` (Max 구독 쿼터 사용)
+      - "api"        — Anthropic Python SDK 직접 호출 (ANTHROPIC_API_KEY 사용)
 
     Returns: 추출된 data dict (DB 저장 여부는 save_db로).
     """
@@ -793,14 +1074,20 @@ def run_enrich_one(
             resized = resize_images(img_paths, workdir)
 
             # Pass 1: 빠른 이미지 필터 — 비상품 이미지 미리 제거 (이미지 4장 초과 시만)
+            # backend 인자를 그대로 전달해 Max 구독 / API 키 일관성 유지.
             if len(resized) > 4:
-                keep_sha1s = call_claude_filter(resized)
+                keep_sha1s = call_claude_filter(resized, backend=backend)
                 filtered = [p for p in resized if p.stem in keep_sha1s]
                 resized = filtered if filtered else resized  # 전부 걸러지면 원본 사용
 
             # Pass 2: 필터된 이미지로 전체 분석
             prompt = make_user_prompt(meta, resized)
-            data, call_meta = call_claude(prompt, SYSTEM_PROMPT, model=model)
+            if backend == "api":
+                data, call_meta = call_claude_api(prompt, SYSTEM_PROMPT, resized, model=model)
+                call_meta["enrich_method"] = "claude_api"
+            else:
+                data, call_meta = call_claude(prompt, SYSTEM_PROMPT, model=model)
+                call_meta["enrich_method"] = "claude_cli"
             if save_db:
                 upsert_enriched(conn, rv_product_id, prod, data, call_meta, err=None)
             return {
@@ -809,6 +1096,7 @@ def run_enrich_one(
                 "data": data,
                 "meta": {k: v for k, v in call_meta.items() if k != "raw"},
                 "n_images": len(resized),
+                "backend": backend,
             }
         finally:
             if not keep_workdir:

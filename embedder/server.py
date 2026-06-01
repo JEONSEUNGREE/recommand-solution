@@ -10,6 +10,41 @@ Spring Boot가 자연어 검색어를 보내면 1024차원 벡터로 인코딩�
 import pyarrow  # noqa: F401  # 반드시 다른 무거운 네이티브 import보다 먼저
 
 import os
+from pathlib import Path as _Path
+
+# CLAUDE_BIN 이 환경변수에 없으면 잘 알려진 위치를 자동으로 주입.
+# enrich_claude 모듈이 import되기 전에 설정해야 CLAUDE_BIN 상수가 올바르게 결정됨.
+def _ensure_claude_bin() -> None:
+    """CLAUDE_BIN을 유효한 .exe 절대경로로 강제 설정.
+
+    기존 env 값이 있더라도 .exe로 끝나고 실제 파일이 존재해야만 유지한다.
+    그렇지 않으면 (예: 'claude', 'claude.CMD', 빈 문자열, 존재하지 않는 경로)
+    잘 알려진 위치를 재탐색해서 덮어쓴다. 이러면 subprocess.Popen(shell=False)
+    에서 WinError 2 / 216 으로 죽지 않는다.
+    """
+    current = os.environ.get("CLAUDE_BIN", "")
+    if current and current.lower().endswith(".exe") and _Path(current).exists():
+        print(f"[server] CLAUDE_BIN ok (env): {current}", flush=True)
+        return
+    if current:
+        # em-dash 대신 ASCII 하이픈 — Windows stdout cp949 인코딩이 깨지지 않게.
+        print(f"[server] CLAUDE_BIN env invalid ({current!r}) - re-resolving", flush=True)
+    appdata = os.environ.get("APPDATA") or ""
+    userprofile = os.environ.get("USERPROFILE") or ""
+    candidates = [
+        _Path(appdata) / "npm/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+        _Path(userprofile) / "AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+        # 마지막 폴백 — 환경변수가 비어 있어도 동작
+        _Path(r"C:\Users\pc\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe"),
+    ]
+    for c in candidates:
+        if c.exists():
+            os.environ["CLAUDE_BIN"] = str(c)
+            print(f"[server] CLAUDE_BIN auto-set: {c}", flush=True)
+            return
+    print("[server] WARNING: claude.exe not found - /enrich-llm/run will fail", flush=True)
+
+_ensure_claude_bin()
 
 from dotenv import load_dotenv
 
@@ -30,6 +65,7 @@ from .products_list import router as products_list_router, logs_router
 from .rv_products_api import router as rv_products_router
 from .narrate import router as narrate_router  # chat2.html 전용 — 추천 내러티브(신규/독립)
 from .eval import router as eval_router  # 검색 품질 평가 (Gecko/오늘의집 방식, NDCG@10)
+from .search_rv_tags import router as search_rv_tags_router  # 태그 강화 검색 (기존과 완전 독립)
 
 MODEL_NAME = bge_model.MODEL_NAME
 DIM = bge_model.DIM
@@ -70,6 +106,7 @@ app.include_router(logs_router)
 app.include_router(rv_products_router)
 app.include_router(narrate_router)
 app.include_router(eval_router)
+app.include_router(search_rv_tags_router)
 
 
 class EmbedRequest(BaseModel):

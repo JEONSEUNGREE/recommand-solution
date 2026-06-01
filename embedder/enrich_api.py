@@ -123,6 +123,8 @@ class EnrichRunReq(BaseModel):
     embed_backend: Literal["bge", "openai", "both"] = "bge"
     # 이미 enrich(extracted/validated)된 상품이면 LLM 호출 스킵하고 embed만
     skip_enrich_if_done: bool = True
+    # Claude 호출 백엔드 — cli(claude.exe Max 구독 쿼터) / api(ANTHROPIC_API_KEY)
+    backend: Literal["cli", "api"] = "cli"
 
 
 @router.post("/run")
@@ -149,24 +151,41 @@ def run(req: EnrichRunReq):
                 model=req.model,
                 image_limit=req.image_limit,
                 save_db=req.save_db,
+                backend=req.backend,
             )
             result_summary.update({
                 "product_code": result["product_code"],
                 "n_images": result["n_images"],
                 "model": req.model,
+                "backend": req.backend,
                 "category": (result["data"].get("category") or {}).get("name"),
                 "n_tags": len(result["data"].get("tags") or []),
                 "n_ignored": len(result["data"].get("ignored_observations") or []),
             })
 
+        # 임베딩 단계는 분리 — 실패해도 enrich 자체는 성공으로 응답.
+        # 임베딩 self-call(localhost:8001/embed) 일시 끊김 / OPENAI 키 누락 등으로
+        # enrich 본체까지 500 으로 보일 이유는 없다. 사용자는 임베딩만 따로 재시도 가능.
         if req.also_embed:
-            from .embed_descriptions import embed_one as _embed_one
-            with _psycopg.connect(_DSN) as conn:
-                er = _embed_one(conn, req.rv_product_id, req.embed_backend)
-            result_summary.update({
-                "embedded": er.get("embedded"),
-                "embed_backend": req.embed_backend,
-            })
+            try:
+                from .embed_descriptions import embed_one as _embed_one
+                with _psycopg.connect(_DSN) as conn:
+                    er = _embed_one(conn, req.rv_product_id, req.embed_backend)
+                result_summary.update({
+                    "embedded": er.get("embedded"),
+                    "embed_backend": req.embed_backend,
+                })
+            except Exception as embed_err:
+                traceback.print_exc()
+                result_summary.update({
+                    "embedded": 0,
+                    "embed_backend": req.embed_backend,
+                    "embed_error": str(embed_err)[:300],
+                    "embed_retry_hint": (
+                        f'POST /enrich-llm/run {{"rv_product_id":{req.rv_product_id},'
+                        f'"skip_enrich_if_done":true,"also_embed":true}}'
+                    ),
+                })
 
         return result_summary
     except Exception as e:

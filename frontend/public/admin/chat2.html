@@ -760,6 +760,13 @@
                   <span class="ctrl-lbl" style="color:#9CA3AF;">재정렬</span>
                 </label>
               </div>
+              <div class="ctrl-pill" style="border-color:#7C3AED40;background:#F5F3FF;">
+                <span class="ctrl-lbl" style="color:#7C3AED;">채널</span>
+                <select id="channel-sel" class="ctrl-sel" style="color:#7C3AED;font-weight:600;">
+                  <option value="classic">기존 4관점</option>
+                  <option value="tags">태그 강화 (5채널)</option>
+                </select>
+              </div>
               <div class="ctrl-pill" id="debug-pill">
                 <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:inherit;">
                   <input type="checkbox" id="debug-chk" style="accent-color:#D97706;">
@@ -897,6 +904,7 @@
   const morphChk   = document.getElementById('morph-chk');
   const colbertChk = document.getElementById('colbert-chk');
   const debugChk   = document.getElementById('debug-chk');
+  const channelSel = document.getElementById('channel-sel');
 
   let isSending = false;
   let advId = null, advName = null;
@@ -915,7 +923,8 @@
       mode = 'hybrid·' + fusionSel.value + (morphChk.checked ? '+형태소' : '');
     }
     if (colbertChk && colbertChk.checked) mode += '+ColBERT';
-    document.getElementById('chat-head-sub').textContent = mode + ' · ' + embed + ' · ' + llm;
+    const ch = channelSel.value === 'tags' ? ' · 태그강화' : '';
+    document.getElementById('chat-head-sub').textContent = mode + ch + ' · ' + embed + ' · ' + llm;
   }
   llmSel.addEventListener('change', updateHeadSub);
   embedSel.addEventListener('change', updateHeadSub);
@@ -935,6 +944,7 @@
   morphChk.addEventListener('change', updateHeadSub);
   colbertChk.addEventListener('change', updateHeadSub);
   debugChk.addEventListener('change', updateHeadSub);
+  channelSel.addEventListener('change', updateHeadSub);
   syncHybridOpts();
 
   // ── 광고주 초기화 ────────────────────────────────────────────
@@ -1475,11 +1485,12 @@
     const loadEl = appendAILoading();
 
     try {
+      const useTagsCh = channelSel.value === 'tags';
       const body = {
         query: txt,
         advertiser_id: advId,
         k: Math.max(1, Math.min(50, parseInt(kInp.value) || 10)),
-        backend: embedSel.value,
+        backend: useTagsCh ? 'bge' : embedSel.value,  // 태그 채널은 BGE 전용
         llm_provider: 'openai',   // chat2: 검색 쿼리 파싱도 무조건 gpt-4o-mini
         mode: modeSel.value,
         fusion: fusionSel.value,
@@ -1488,7 +1499,8 @@
         use_colbert: colbertChk.checked,
         version: '1.1',   // chat2.html = 추천 채팅 v1.1
       };
-      const res  = await fetch(EMBEDDER + '/search-rv-llm', {
+      const endpoint = useTagsCh ? '/search-rv-tags-llm' : '/search-rv-llm';
+      const res  = await fetch(EMBEDDER + endpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });

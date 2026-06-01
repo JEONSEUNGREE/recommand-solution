@@ -4,6 +4,7 @@ Enrich 상품 목록 + 상세 조회 API.
 GET /products-enriched           - 페이지네이션 목록 (상품명 LIKE, 태그 필터, 카테고리 필터)
 GET /products-enriched/count     - 전체 / embedded 건수
 GET /products-enriched/categories - 카테고리 목록 (embedded 기준)
+GET /products-enriched/tags      - 태그 목록 + 빈도 (embedded 기준)
 GET /products-enriched/{rv_id}   - 단건 상세
 
 GET /search-logs                 - 검색 로그 목록 (페이지네이션, zero-result 필터)
@@ -19,6 +20,8 @@ from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from psycopg.rows import dict_row
+
+from .tag_normalizer import normalize_tags
 
 DB_DSN = os.environ.get("DB_DSN", "postgresql://app:app@localhost:5433/recommend")
 
@@ -101,16 +104,82 @@ def patch_endorser_tag(
 
 
 @router.get("/categories")
-def list_categories():
+def list_categories(advertiser_id: Optional[int] = Query(None)):
+    adv_cond = "AND advertiser_id = %s" if advertiser_id else ""
+    params = [advertiser_id] if advertiser_id else []
     with _conn() as conn, conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(f"""
             SELECT category, COUNT(*) AS cnt
               FROM product_enriched
              WHERE enrich_status = 'embedded' AND category IS NOT NULL
+               {adv_cond}
              GROUP BY category
              ORDER BY cnt DESC, category
-        """)
+        """, params)
         return cur.fetchall()
+
+
+@router.get("/tags")
+def list_tags(limit: int = Query(200, ge=1, le=1000), advertiser_id: Optional[int] = Query(None)):
+    """embedded 상품의 태그 목록 (빈도 내림차순)."""
+    adv_cond = "AND pe.advertiser_id = %s" if advertiser_id else ""
+    params = [advertiser_id, limit] if advertiser_id else [limit]
+    with _conn() as conn, conn.cursor() as cur:
+        cur.execute(f"""
+            WITH tag_names AS (
+                SELECT
+                    CASE
+                        WHEN jsonb_typeof(t) = 'string' THEN t #>> '{{}}'
+                        ELSE t->>'tag'
+                    END AS tag
+                  FROM product_enriched pe,
+                       jsonb_array_elements(pe.tags) AS t
+                 WHERE pe.enrich_status = 'embedded'
+                   AND pe.tags IS NOT NULL
+                   AND jsonb_array_length(pe.tags) > 0
+                   {adv_cond}
+            )
+            SELECT tag, COUNT(*) AS cnt
+              FROM tag_names
+             WHERE tag IS NOT NULL AND tag <> ''
+             GROUP BY tag
+             ORDER BY cnt DESC, tag
+             LIMIT %s
+        """, params)
+        return cur.fetchall()
+
+
+@router.post("/normalize-tags")
+def run_normalize_tags(dry_run: bool = Query(False)):
+    """태그 정규화 일괄 실행. tag_normalizer.py 규칙 적용 후 DB 업데이트."""
+    with _conn() as conn, conn.cursor() as cur:
+        cur.execute(r"""
+            SELECT rv_product_id, tags
+              FROM product_enriched
+             WHERE tags IS NOT NULL AND tags != 'null'::jsonb
+               AND jsonb_array_length(tags) > 0
+        """)
+        rows = cur.fetchall()
+
+    total = len(rows)
+    changed_ids = []
+    updates = []
+    for row in rows:
+        raw = row["tags"]
+        original = raw if isinstance(raw, list) else json.loads(raw)
+        normalized = normalize_tags(original)
+        if normalized != original:
+            changed_ids.append(row["rv_product_id"])
+            updates.append((json.dumps(normalized, ensure_ascii=False), row["rv_product_id"]))
+
+    if not dry_run and updates:
+        with _conn() as conn, conn.cursor() as cur:
+            cur.executemany(
+                "UPDATE product_enriched SET tags = %s WHERE rv_product_id = %s",
+                updates,
+            )
+
+    return {"total": total, "changed": len(changed_ids), "dry_run": dry_run}
 
 
 @router.get("/token-stats")
@@ -205,14 +274,17 @@ def list_product_costs(
 
 
 @router.get("/count")
-def get_count():
+def get_count(advertiser_id: Optional[int] = Query(None)):
+    adv_cond = "WHERE advertiser_id = %s" if advertiser_id else ""
+    params = [advertiser_id] if advertiser_id else []
     with _conn() as conn, conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(f"""
             SELECT
                 COUNT(*) AS total,
                 COUNT(*) FILTER (WHERE enrich_status = 'embedded') AS embedded
             FROM product_enriched
-        """)
+            {adv_cond}
+        """, params)
         return cur.fetchone()
 
 
@@ -220,14 +292,19 @@ def get_count():
 def list_products(
     q: Optional[str] = Query(None, description="상품명 LIKE 검색"),
     code: Optional[str] = Query(None, description="상품코드 LIKE 검색"),
-    tag: Optional[str] = Query(None, description="태그 name 포함 검색"),
+    tag: Optional[str] = Query(None, description="태그 단일 포함 검색"),
+    tags: Optional[str] = Query(None, description="태그 AND 필터, 콤마 구분 (예: 14k,골드귀걸이)"),
     category: Optional[str] = Query(None, description="카테고리 LIKE 검색"),
     status: Optional[str] = Query(None, description="enrich_status 필터 (예: embedded)"),
+    advertiser_id: Optional[int] = Query(None, description="광고주 필터"),
     page: int = Query(0, ge=0),
     size: int = Query(20, ge=1, le=100),
 ):
     conditions = []
     params: list = []
+    if advertiser_id:
+        conditions.append("pe.advertiser_id = %s")
+        params.append(advertiser_id)
 
     if q:
         conditions.append("rp.product_name ILIKE %s")
@@ -238,6 +315,13 @@ def list_products(
     if tag:
         conditions.append("pe.tags::text ILIKE %s")
         params.append(f"%{tag}%")
+    if tags:
+        for t in tags.split(","):
+            t = t.strip()
+            if t:
+                # JSON 배열 내 정확한 태그명 매칭: "tagname" 형태로 존재하는지 확인
+                conditions.append('pe.tags::text ILIKE %s')
+                params.append(f'%"{t}"%')
     if category:
         conditions.append("pe.category ILIKE %s")
         params.append(f"%{category}%")

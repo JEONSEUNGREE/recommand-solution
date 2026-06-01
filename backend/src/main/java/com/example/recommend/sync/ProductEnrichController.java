@@ -155,8 +155,9 @@ public class ProductEnrichController {
                                 @PathVariable("code") String code,
                                 @RequestParam(defaultValue = "haiku") String model,
                                 @RequestParam(defaultValue = "10") int imageLimit,
-                                @RequestParam(defaultValue = "false") boolean force) throws IOException {
-        return service.enrichLlm(advertiserId, code, model, imageLimit);
+                                @RequestParam(defaultValue = "false") boolean force,
+                                @RequestParam(defaultValue = "cli") String backend) throws IOException {
+        return service.enrichLlm(advertiserId, code, model, imageLimit, backend);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -170,7 +171,8 @@ public class ProductEnrichController {
                                              @RequestParam(defaultValue = "30") int imageLimit,
                                              @RequestParam(defaultValue = "2") int concurrency,
                                              @RequestParam(defaultValue = "0") long intervalMs,
-                                             @RequestParam(defaultValue = "bge") String embedBackend) {
+                                             @RequestParam(defaultValue = "bge") String embedBackend,
+                                             @RequestParam(defaultValue = "cli") String backend) {
         ProductEnrichService.BatchProgress p = service.getEnrichProgress(advertiserId);
         if ("RUNNING".equals(p.status)) {
             return Map.of("status", "already_running", "advertiserId", advertiserId,
@@ -178,7 +180,7 @@ public class ProductEnrichController {
         }
         Thread t = new Thread(() -> {
             try {
-                service.batchEnrich(advertiserId, count, model, imageLimit, concurrency, intervalMs, embedBackend);
+                service.batchEnrich(advertiserId, count, model, imageLimit, concurrency, intervalMs, embedBackend, backend);
             } catch (Throwable th) {
                 org.slf4j.LoggerFactory.getLogger(ProductEnrichController.class)
                         .error("[BatchEnrich] thread crashed: {}", th.getMessage(), th);

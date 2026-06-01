@@ -29,10 +29,57 @@
     display:grid; place-items:center; color:var(--text-3); transition:all var(--dur) var(--ease); }
   .adv-card:hover .go { background:var(--primary); color:#fff; }
   .adv-card .go svg { width:14px; height:14px; stroke-width:2; fill:none; stroke:currentColor; }
+  /* 카드 하단 액션 버튼 */
+  .adv-card .card-actions { display:flex; gap:6px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
+  .adv-card .card-actions .btn-sm { flex:1; font-size:11.5px; padding:5px 0; border-radius:5px; border:1px solid var(--line);
+    background:var(--surface-2); color:var(--text-3); cursor:pointer; font-weight:600; transition:all var(--dur) var(--ease); }
+  .adv-card .card-actions .btn-sm:hover { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .adv-card .card-actions .btn-sm.danger:hover { background:var(--err); color:#fff; border-color:var(--err); }
+  .adv-card .card-actions .btn-sm.login { background:var(--primary-soft,#EEF2FF); border-color:var(--primary); color:var(--primary); }
+  .adv-card .card-actions .btn-sm.login:hover { background:var(--primary); color:#fff; }
+  .adv-card .card-actions .btn-sm.login.active-adv { background:var(--primary); color:#fff; cursor:default; }
+  /* 토스트 */
+  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(12px); background:var(--primary); color:#fff;
+    padding:10px 20px; border-radius:8px; font-size:13px; font-weight:600; z-index:9999;
+    opacity:0; pointer-events:none; transition:all 0.22s ease; white-space:nowrap; box-shadow:0 4px 16px rgba(37,99,235,.35); }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  /* 모달 */
+  .modal-bg { position:fixed; inset:0; background:rgba(10,10,10,0.45); z-index:1000; display:flex; align-items:center; justify-content:center; padding:16px; opacity:0; pointer-events:none; transition:opacity 0.18s ease; }
+  .modal-bg.open { opacity:1; pointer-events:all; }
+  .modal { background:#fff; border-radius:10px; width:100%; max-width:560px; max-height:90vh; display:flex; flex-direction:column;
+    box-shadow:0 20px 60px -10px rgba(10,10,10,0.25); transform:translateY(12px); transition:transform 0.18s ease; }
+  .modal-bg.open .modal { transform:translateY(0); }
+  .modal-head { display:flex; align-items:center; justify-content:space-between; padding:20px 24px 16px; border-bottom:1px solid var(--line); flex-shrink:0; }
+  .modal-head h2 { font-size:16px; font-weight:700; margin:0; }
+  .modal-close { width:28px; height:28px; border-radius:6px; border:1px solid var(--line); background:var(--surface-2);
+    display:grid; place-items:center; cursor:pointer; color:var(--text-3); }
+  .modal-close:hover { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .modal-close svg { width:14px; height:14px; stroke-width:2; fill:none; stroke:currentColor; }
+  .modal-body { padding:20px 24px; overflow-y:auto; flex:1; }
+  .modal-foot { padding:16px 24px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px; flex-shrink:0; }
+  /* 폼 */
+  .form-section { margin-bottom:20px; }
+  .form-section-label { font-size:11px; font-weight:700; color:var(--text-4); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px; }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .form-field { display:flex; flex-direction:column; gap:5px; margin-bottom:10px; }
+  .form-field label { font-size:12px; font-weight:600; color:var(--text-2); }
+  .form-field label .req { color:var(--err); margin-left:2px; }
+  .form-field input, .form-field select, .form-field textarea {
+    border:1px solid var(--line); border-radius:6px; padding:8px 10px; font-size:13px;
+    font-family:inherit; background:#fff; color:var(--text); outline:none; transition:border-color var(--dur) var(--ease);
+  }
+  .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color:var(--primary); }
+  .form-field .hint { font-size:11px; color:var(--text-4); }
+  .form-field textarea { resize:vertical; min-height:60px; }
+  .adv-details summary { font-size:12px; font-weight:600; color:var(--text-3); cursor:pointer; user-select:none; padding:8px 0; }
+  .adv-details summary:hover { color:var(--text); }
+  .adv-details[open] summary { color:var(--text); }
+  /* 상태 */
   .empty { text-align:center; padding:60px 20px; color:var(--text-4); }
   .spin { display:inline-block; width:16px; height:16px; border:2px solid var(--line); border-top-color:var(--text-3); border-radius:50%; animation:spin 0.7s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
   .err-box { background:var(--err-soft); border:1px solid #f0c0c0; border-radius:6px; padding:12px 16px; color:var(--err); font-size:12.5px; margin-top:12px; }
+  .modal-err { background:var(--err-soft); border:1px solid #f0c0c0; border-radius:6px; padding:10px 14px; color:var(--err); font-size:12px; margin-bottom:12px; display:none; }
 </style>
 </head>
 <body data-route="sync-advertisers" data-depth="1">
@@ -51,6 +98,10 @@
             <button class="btn" id="btn-refresh">
               <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>
               새로고침
+            </button>
+            <button class="btn btn-primary" id="btn-new">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              신규 광고주 등록
             </button>
           </div>
         </div>
@@ -72,6 +123,128 @@
     </main>
   </div>
 
+  <!-- 등록/수정 모달 -->
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="modal-title">신규 광고주 등록</h2>
+        <button class="modal-close" id="modal-close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-err" id="modal-err"></div>
+
+        <!-- 기본 정보 -->
+        <div class="form-section">
+          <div class="form-section-label">기본 정보</div>
+          <div class="form-field">
+            <label>광고주명 <span class="req">*</span></label>
+            <input type="text" id="f-name" placeholder="예: 루브르파리">
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>호스트 타입 <span class="req">*</span></label>
+              <select id="f-host">
+                <option value="makeshop">makeshop</option>
+                <option value="cafe24">cafe24</option>
+                <option value="godo">godo</option>
+                <option value="imweb">imweb</option>
+                <option value="custom">custom</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-field">
+            <label>쇼핑몰 URL <span class="req">*</span></label>
+            <input type="text" id="f-url" placeholder="예: https://shop.example.com">
+          </div>
+          <div class="form-field">
+            <label>메모</label>
+            <textarea id="f-notes" placeholder="담당자, 계약 정보 등 자유 메모"></textarea>
+          </div>
+        </div>
+
+        <!-- API 키 -->
+        <div class="form-section">
+          <div class="form-section-label">API 키</div>
+          <div class="form-field">
+            <label>Shop Key</label>
+            <input type="text" id="f-shopkey" placeholder="신규 등록 시 입력" data-default-placeholder="신규 등록 시 입력">
+            <span class="hint">암호화 저장됩니다. 수정 시 비워두면 기존 키가 유지됩니다.</span>
+          </div>
+          <div class="form-field">
+            <label>License Key</label>
+            <input type="text" id="f-licensekey" placeholder="신규 등록 시 입력" data-default-placeholder="신규 등록 시 입력">
+          </div>
+        </div>
+
+        <!-- 고급 설정 (접기/펼치기) -->
+        <details class="adv-details">
+          <summary>고급 설정 (셀렉터 · 앵커)</summary>
+          <div style="margin-top:12px;">
+            <div class="form-section-label">CSS 셀렉터 오버라이드</div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>상품명 셀렉터</label>
+                <input type="text" id="f-sel-name" placeholder=".product-title">
+              </div>
+              <div class="form-field">
+                <label>가격 셀렉터</label>
+                <input type="text" id="f-sel-price" placeholder=".product-price">
+              </div>
+            </div>
+            <div class="form-field">
+              <label>상세 셀렉터</label>
+              <input type="text" id="f-sel-detail" placeholder=".product-detail">
+            </div>
+            <div class="form-field">
+              <label>이미지 속성</label>
+              <input type="text" id="f-image-attrs" placeholder="data-src,src">
+            </div>
+            <div class="form-section-label" style="margin-top:14px;">앵커 (주석/문자열 잘라내기)</div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>앵커 시작</label>
+                <input type="text" id="f-anchor-start" placeholder="<!-- detail_start -->">
+              </div>
+              <div class="form-field">
+                <label>앵커 끝</label>
+                <input type="text" id="f-anchor-end" placeholder="<!-- detail_end -->">
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="modal-cancel">취소</button>
+        <button class="btn btn-primary" id="modal-save">
+          <span id="save-label">등록</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 로그인 토스트 -->
+  <div class="toast" id="login-toast"></div>
+
+  <!-- 삭제 확인 모달 -->
+  <div class="modal-bg" id="del-bg">
+    <div class="modal" style="max-width:400px;">
+      <div class="modal-head">
+        <h2>광고주 삭제</h2>
+        <button class="modal-close" id="del-close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:14px;color:var(--text-2);line-height:1.6;margin:0;">
+          <b id="del-name"></b> 광고주를 삭제합니다.<br>
+          연결된 상품 데이터가 모두 삭제될 수 있습니다. 계속하시겠습니까?
+        </p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="del-cancel">취소</button>
+        <button class="btn" id="del-confirm" style="background:var(--err);color:#fff;border-color:var(--err);">삭제</button>
+      </div>
+    </div>
+  </div>
+
   <script src="../partials.js"></script>
   <script src="../enhance.js"></script>
   <script>
@@ -82,6 +255,10 @@
     const loading = document.getElementById('loading');
     const empty = document.getElementById('empty');
     const errBox = document.getElementById('err-box');
+
+    // 현재 편집 중인 광고주 ID (null = 신규)
+    let editId = null;
+    let deleteId = null;
 
     function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
 
@@ -96,16 +273,18 @@
       const enriched = a.llm_enriched ?? 0;
       const pct = total > 0 ? Math.round(scraped / total * 100) : 0;
       return `
-        <div class="adv-card" onclick="location.href='products.html?adv=${a.id}'">
-          <div class="go"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
-          <div class="id">#${a.id}</div>
-          <div class="name">${a.name}</div>
-          <div class="url">${a.shop_url || ''}</div>
-          <div class="chips">
-            ${hostBadge(a.host_type)}
-            ${a.shop_key ? `<span class="chip">key 등록됨</span>` : ''}
+        <div class="adv-card" id="card-${a.id}">
+          <div class="go" onclick="location.href='products.html?adv=${a.id}'" title="상품 목록으로 이동">
+            <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
           </div>
-          <div class="metrics">
+          <div class="id">#${a.id}</div>
+          <div class="name" onclick="location.href='products.html?adv=${a.id}'">${a.name}</div>
+          <div class="url" onclick="location.href='products.html?adv=${a.id}'">${a.shopUrl || ''}</div>
+          <div class="chips">
+            ${hostBadge(a.hostType)}
+            ${a.shopKey ? `<span class="chip">key 등록됨</span>` : ''}
+          </div>
+          <div class="metrics" onclick="location.href='products.html?adv=${a.id}'">
             <div class="metric">
               <div class="mv">${fmt(total)}</div>
               <div class="ml">전체 상품</div>
@@ -119,9 +298,15 @@
               <div class="ml">LLM 정제</div>
             </div>
           </div>
+          <div class="card-actions">
+            <button class="btn-sm login" onclick="loginAs(${a.id}, '${a.name.replace(/'/g, "\\'")}', '${(a.shopUrl||'').replace(/'/g, "\\'")}')">로그인</button>
+            <button class="btn-sm" onclick="openEdit(${a.id})">수정</button>
+            <button class="btn-sm danger" onclick="openDelete(${a.id}, '${a.name.replace(/'/g, "\\'")}')">삭제</button>
+          </div>
         </div>`;
     }
 
+    // ── 데이터 로드 ──────────────────────────────────────────────
     async function load() {
       loading.style.display = 'block';
       grid.style.display = 'none';
@@ -133,7 +318,6 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const list = await res.json();
 
-        // Fetch per-advertiser counts from the products endpoint
         const enriched = await Promise.allSettled(
           list.map(a => fetch(`${API}/advertisers/${a.id}/products?page=0&size=1`).then(r => r.ok ? r.json() : null))
         );
@@ -160,6 +344,7 @@
         else {
           grid.innerHTML = list.map(renderCard).join('');
           grid.style.display = 'grid';
+          markActiveAdv();
         }
       } catch (e) {
         errBox.textContent = `API 연결 실패: ${e.message} — Spring Boot(8090)가 실행 중인지 확인하세요.`;
@@ -169,7 +354,195 @@
       }
     }
 
+    // ── 광고주 로그인 ─────────────────────────────────────────────
+    let toastTimer = null;
+    function loginAs(id, name, shopUrl) {
+      localStorage.setItem('aira_adv', JSON.stringify({ id, name, shopUrl }));
+      // 사이드바 광고주명 즉시 반영
+      const nameEl = document.getElementById('side-adv-name');
+      if (nameEl) nameEl.textContent = `#${id} ${name}`;
+      // 카드 버튼 상태 갱신
+      document.querySelectorAll('.card-actions .btn-sm.login').forEach(btn => btn.classList.remove('active-adv'));
+      const card = document.getElementById(`card-${id}`);
+      if (card) card.querySelector('.btn-sm.login').classList.add('active-adv');
+      // 토스트
+      const toast = document.getElementById('login-toast');
+      toast.textContent = `✓ ${name} 광고주로 로그인됨`;
+      toast.classList.add('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+
+    function markActiveAdv() {
+      try {
+        const adv = JSON.parse(localStorage.getItem('aira_adv') || 'null');
+        if (!adv) return;
+        const card = document.getElementById(`card-${adv.id}`);
+        if (card) card.querySelector('.btn-sm.login')?.classList.add('active-adv');
+      } catch (_) {}
+    }
+
+    // ── 등록/수정 모달 ────────────────────────────────────────────
+    const modalBg = document.getElementById('modal-bg');
+
+    function openNew() {
+      editId = null;
+      document.getElementById('modal-title').textContent = '신규 광고주 등록';
+      document.getElementById('save-label').textContent = '등록';
+      clearForm();
+      modalBg.classList.add('open');
+    }
+
+    async function openEdit(id) {
+      try {
+        const res = await fetch(`${API}/advertisers/${id}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const a = await res.json();
+        editId = id;
+        document.getElementById('modal-title').textContent = '광고주 수정';
+        document.getElementById('save-label').textContent = '저장';
+        fillForm(a);
+        modalBg.classList.add('open');
+      } catch (e) {
+        alert(`광고주 정보 로드 실패: ${e.message}`);
+      }
+    }
+
+    function closeModal() {
+      modalBg.classList.remove('open');
+      document.getElementById('modal-err').style.display = 'none';
+    }
+
+    function clearForm() {
+      ['f-name','f-url','f-shopkey','f-licensekey','f-notes',
+       'f-sel-name','f-sel-detail','f-sel-price','f-image-attrs',
+       'f-anchor-start','f-anchor-end'].forEach(id => {
+        const el = document.getElementById(id);
+        el.value = '';
+        el.placeholder = el.dataset.defaultPlaceholder || '';
+      });
+      document.getElementById('f-host').value = 'makeshop';
+    }
+
+    function fillForm(a) {
+      // Spring Boot Jackson 기본 = camelCase
+      document.getElementById('f-name').value = a.name || '';
+      document.getElementById('f-host').value = a.hostType || 'makeshop';
+      document.getElementById('f-url').value = a.shopUrl || '';
+      // 키는 마스킹 상태로 내려옴 — 비워두면 기존 값 유지, 새 값 입력 시 덮어씀
+      const skEl = document.getElementById('f-shopkey');
+      const lkEl = document.getElementById('f-licensekey');
+      skEl.value = '';
+      lkEl.value = '';
+      skEl.placeholder = a.shopKey ? `현재: ${a.shopKey} (변경 시 입력)` : '없음';
+      lkEl.placeholder = a.licenseKey ? `현재: ${a.licenseKey} (변경 시 입력)` : '없음';
+      document.getElementById('f-notes').value = a.notes || '';
+      document.getElementById('f-sel-name').value = a.selectorName || '';
+      document.getElementById('f-sel-detail').value = a.selectorDetail || '';
+      document.getElementById('f-sel-price').value = a.selectorPrice || '';
+      document.getElementById('f-image-attrs').value = a.imageAttrs || '';
+      document.getElementById('f-anchor-start').value = a.detailAnchorStart || '';
+      document.getElementById('f-anchor-end').value = a.detailAnchorEnd || '';
+    }
+
+    function readForm() {
+      return {
+        name: document.getElementById('f-name').value.trim(),
+        hostType: document.getElementById('f-host').value,
+        shopUrl: document.getElementById('f-url').value.trim(),
+        shopKey: document.getElementById('f-shopkey').value.trim(),
+        licenseKey: document.getElementById('f-licensekey').value.trim(),
+        notes: document.getElementById('f-notes').value.trim(),
+        selectorName: document.getElementById('f-sel-name').value.trim(),
+        selectorDetail: document.getElementById('f-sel-detail').value.trim(),
+        selectorPrice: document.getElementById('f-sel-price').value.trim(),
+        imageAttrs: document.getElementById('f-image-attrs').value.trim(),
+        detailAnchorStart: document.getElementById('f-anchor-start').value.trim(),
+        detailAnchorEnd: document.getElementById('f-anchor-end').value.trim(),
+      };
+    }
+
+    async function save() {
+      const errEl = document.getElementById('modal-err');
+      errEl.style.display = 'none';
+      const body = readForm();
+
+      if (!body.name) { errEl.textContent = '광고주명을 입력하세요.'; errEl.style.display = 'block'; return; }
+      if (!body.shopUrl) { errEl.textContent = '쇼핑몰 URL을 입력하세요.'; errEl.style.display = 'block'; return; }
+
+      const saveBtn = document.getElementById('modal-save');
+      saveBtn.disabled = true;
+      document.getElementById('save-label').textContent = '저장 중…';
+
+      try {
+        const url = editId ? `${API}/advertisers/${editId}` : `${API}/advertisers`;
+        const method = editId ? 'PUT' : 'POST';
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(`HTTP ${res.status}: ${txt}`);
+        }
+        closeModal();
+        load();
+      } catch (e) {
+        errEl.textContent = `저장 실패: ${e.message}`;
+        errEl.style.display = 'block';
+      } finally {
+        saveBtn.disabled = false;
+        document.getElementById('save-label').textContent = editId ? '저장' : '등록';
+      }
+    }
+
+    // ── 삭제 모달 ─────────────────────────────────────────────────
+    const delBg = document.getElementById('del-bg');
+
+    function openDelete(id, name) {
+      deleteId = id;
+      document.getElementById('del-name').textContent = name;
+      delBg.classList.add('open');
+    }
+
+    function closeDelete() {
+      delBg.classList.remove('open');
+      deleteId = null;
+    }
+
+    async function confirmDelete() {
+      if (!deleteId) return;
+      const btn = document.getElementById('del-confirm');
+      btn.disabled = true;
+      btn.textContent = '삭제 중…';
+      try {
+        const res = await fetch(`${API}/advertisers/${deleteId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        closeDelete();
+        load();
+      } catch (e) {
+        alert(`삭제 실패: ${e.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '삭제';
+      }
+    }
+
+    // ── 이벤트 바인딩 ─────────────────────────────────────────────
     document.getElementById('btn-refresh').addEventListener('click', load);
+    document.getElementById('btn-new').addEventListener('click', openNew);
+    document.getElementById('modal-close').addEventListener('click', closeModal);
+    document.getElementById('modal-cancel').addEventListener('click', closeModal);
+    document.getElementById('modal-save').addEventListener('click', save);
+    document.getElementById('del-close').addEventListener('click', closeDelete);
+    document.getElementById('del-cancel').addEventListener('click', closeDelete);
+    document.getElementById('del-confirm').addEventListener('click', confirmDelete);
+
+    // 모달 바깥 클릭 시 닫기
+    modalBg.addEventListener('click', e => { if (e.target === modalBg) closeModal(); });
+    delBg.addEventListener('click', e => { if (e.target === delBg) closeDelete(); });
+
     load();
   </script>
 </body>

@@ -1,0 +1,1971 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIRA · 파이프라인 흐름도</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="styles.css">
+<style>
+/* ── 레이아웃 ─────────────────────────────────── */
+.pg-head { margin-bottom: 20px; }
+.pg-head h1 { font-size: 18px; font-weight: 700; color: var(--text); margin: 0 0 4px; }
+.pg-head p  { font-size: 12.5px; color: var(--text-4); margin: 0; }
+
+.query-bar {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 28px;
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+.query-bar label { font-size: 12px; font-weight: 600; color: var(--text-4); white-space: nowrap; }
+.query-bar select {
+  flex: 1; font-size: 13px; font-family: inherit;
+  border: 1px solid var(--line-2); border-radius: 7px;
+  padding: 7px 10px; background: #fafafa; color: var(--text);
+  cursor: pointer; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center; background-size: 16px;
+  padding-right: 30px;
+}
+.query-bar select:focus { outline: none; border-color: var(--primary); }
+.q-badge { font-size: 11px; background: #EDE9FE; color: #6D28D9; padding: 3px 8px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+
+/* ── 플로우 컨테이너 ─────────────────────────── */
+.flow { display: flex; flex-direction: column; gap: 0; }
+
+.flow-stage {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 0 14px;
+}
+
+.flow-line {
+  display: grid; grid-template-columns: 48px 1fr;
+  gap: 0 14px; height: 28px; align-items: center;
+}
+.flow-line-dot {
+  display: flex; justify-content: center;
+}
+.flow-line-dot::after {
+  content: '';
+  width: 2px; height: 28px;
+  background: var(--line-2); display: block;
+}
+.flow-arrow-label {
+  font-size: 11px; color: var(--text-4); padding-left: 2px;
+  display: flex; align-items: center; gap: 6px; font-family: ui-monospace, monospace;
+}
+
+.stage-num {
+  width: 48px; display: flex; justify-content: center; padding-top: 18px;
+}
+.stage-num-inner {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 11.5px; font-weight: 700; color: #fff; flex-shrink: 0;
+}
+
+.stage-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
+.stage-head {
+  padding: 14px 16px;
+  display: flex; align-items: center; gap: 10px;
+  cursor: pointer; user-select: none;
+}
+.stage-head:hover { background: #fafafa; }
+
+.stage-icon {
+  width: 34px; height: 34px; border-radius: 8px;
+  display: grid; place-items: center; flex-shrink: 0;
+  font-size: 16px;
+}
+.stage-info { flex: 1; min-width: 0; }
+.stage-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
+.stage-sub   { font-size: 11.5px; color: var(--text-4); margin-top: 2px; font-family: ui-monospace, monospace; }
+.stage-tags  { display: flex; gap: 5px; margin-top: 4px; flex-wrap: wrap; }
+.stag { font-size: 10.5px; padding: 2px 7px; border-radius: 20px; font-weight: 600; }
+
+.stage-right { display: flex; align-items: center; gap: 8px; }
+.stage-ms { font-size: 11px; font-family: ui-monospace, monospace; color: var(--text-4); }
+.stage-toggle {
+  width: 22px; height: 22px; display: grid; place-items: center;
+  color: var(--text-4); transition: transform .2s;
+  flex-shrink: 0;
+}
+.stage-toggle svg { width: 14px; height: 14px; }
+.stage-toggle.open { transform: rotate(180deg); }
+
+.stage-body {
+  border-top: 1px solid var(--line);
+  display: none;
+}
+.stage-body.open { display: block; }
+
+.stage-section { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.stage-section:last-child { border-bottom: none; }
+.sec-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text-4); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.sec-title svg { width: 12px; height: 12px; }
+
+/* ── 코드/데이터 블록 ──────────────────────────── */
+.code-block {
+  background: #1e1e2e; color: #cdd6f4;
+  border-radius: 8px; padding: 12px 14px;
+  font-size: 12px; line-height: 1.8;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  overflow-x: auto; white-space: pre; tab-size: 2;
+  max-height: 340px; overflow-y: auto;
+}
+.code-block::-webkit-scrollbar { width: 4px; height: 4px; }
+.code-block::-webkit-scrollbar-thumb { background: #45475a; border-radius: 2px; }
+
+.json-key   { color: #89b4fa; }
+.json-str   { color: #a6e3a1; }
+.json-num   { color: #fab387; }
+.json-null  { color: #6c7086; }
+.json-bool  { color: #cba6f7; }
+.json-punc  { color: #6c7086; }
+.comment    { color: #6c7086; font-style: italic; }
+.hl         { color: #f9e2af; }
+
+/* prompt toggle button */
+.btn-prompt {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; padding: 5px 12px;
+  border-radius: 7px; border: 1px solid var(--primary);
+  color: var(--primary); background: transparent;
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.btn-prompt:hover { background: var(--primary); color: #fff; }
+.btn-prompt svg { width: 13px; height: 13px; }
+.btn-prompt.active { background: var(--primary); color: #fff; }
+
+.prompt-block {
+  display: none; margin-top: 10px;
+}
+.prompt-block.open { display: block; }
+.prompt-desc { font-size: 12px; color: var(--text-4); margin-bottom: 8px; line-height: 1.6; }
+
+/* data flow rows */
+.data-row { display: flex; gap: 8px; margin-bottom: 6px; align-items: flex-start; }
+.data-label {
+  font-size: 11px; font-weight: 700; padding: 3px 8px;
+  border-radius: 4px; white-space: nowrap; flex-shrink: 0; margin-top: 1px;
+}
+.data-val {
+  font-size: 12px; color: #374151; line-height: 1.6; font-family: ui-monospace, monospace;
+  word-break: break-all;
+}
+.data-val.dimmed { color: var(--text-4); }
+
+/* signal badges */
+.sig-dense  { background: #EFF6FF; color: #1D4ED8; }
+.sig-sparse { background: #F0FDF4; color: #15803D; }
+.sig-morph  { background: #FFF7ED; color: #C2410C; }
+.sig-colbert{ background: #F5F3FF; color: #6D28D9; }
+.sig-llm    { background: #FDF4FF; color: #9333EA; }
+.sig-llm2   { background: #FFF1F2; color: #BE123C; }
+.sig-db     { background: #F0FDF4; color: #166534; }
+.sig-py     { background: #FFFBEB; color: #92400E; }
+.sig-ui     { background: #F0F9FF; color: #0369A1; }
+
+/* timing bar */
+.timeline {
+  background: #F9FAFB; border: 1px solid var(--line);
+  border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;
+  overflow-x: auto;
+}
+.tl-title { font-size: 11px; font-weight: 700; color: var(--text-4); margin-bottom: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.tl-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.tl-name { font-size: 11.5px; color: var(--text); width: 160px; flex-shrink: 0; }
+.tl-bar-wrap { flex: 1; height: 14px; background: #E5E7EB; border-radius: 3px; overflow: hidden; }
+.tl-bar { height: 100%; border-radius: 3px; transition: width .3s; }
+.tl-ms { font-size: 11px; font-family: ui-monospace, monospace; color: var(--text-4); width: 60px; text-align: right; flex-shrink: 0; }
+
+/* stage-specific colors */
+.s-user   { background: #F3F4F6; }
+.c-user   { background: #6B7280; }
+.s-llm    { background: #F5F3FF; }
+.c-llm    { background: #7C3AED; }
+.s-embed  { background: #EFF6FF; }
+.c-embed  { background: #2563EB; }
+.s-db     { background: #F0FDF4; }
+.c-db     { background: #16A34A; }
+.s-fuse   { background: #FFFBEB; }
+.c-fuse   { background: #D97706; }
+.s-cb     { background: #F5F3FF; }
+.c-cb     { background: #6D28D9; }
+.s-save   { background: #F0F9FF; }
+.c-save   { background: #0284C7; }
+.s-narr   { background: #FFF1F2; }
+.c-narr   { background: #E11D48; }
+.s-render { background: #F0FDF4; }
+.c-render { background: #059669; }
+
+.stag.llm    { background: #F5F3FF; color: #7C3AED; }
+.stag.embed  { background: #EFF6FF; color: #2563EB; }
+.stag.db     { background: #F0FDF4; color: #16A34A; }
+.stag.py     { background: #FFFBEB; color: #D97706; }
+.stag.openai { background: #FFF1F2; color: #E11D48; }
+
+/* ── pill toggle (열기/닫기 모두) ─── */
+.expand-hint {
+  font-size: 11px; color: var(--text-4);
+  padding: 6px 16px 8px; text-align: right; cursor: pointer;
+}
+.expand-hint:hover { color: var(--primary); }
+
+/* colbert diagram */
+.maxsim-diagram {
+  font-family: ui-monospace, monospace; font-size: 12px;
+  line-height: 1.9; color: var(--text);
+}
+.maxsim-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.maxsim-tok { background: #EDE9FE; color: #6D28D9; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.maxsim-arrow { color: var(--text-4); }
+.maxsim-best { background: #F0FDF4; color: #15803D; padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+.maxsim-score { color: #D97706; font-weight: 700; }
+
+/* ── 탭 네비게이션 ───────────────────────────── */
+.tab-nav {
+  display: flex; gap: 4px; margin-bottom: 24px;
+  border-bottom: 2px solid var(--line);
+}
+.tab-btn {
+  font-size: 13px; font-weight: 600; padding: 9px 18px;
+  border: none; background: transparent; cursor: pointer;
+  color: var(--text-4); border-bottom: 2px solid transparent;
+  margin-bottom: -2px; transition: color .15s, border-color .15s;
+  border-radius: 6px 6px 0 0;
+}
+.tab-btn:hover { color: var(--primary); background: #f8f8ff; }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: #f0eeff; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* enrich pipeline stage colors */
+.s-scrape { background: #F0F9FF; }
+.c-scrape  { background: #0284C7; }
+.s-vlm     { background: #FFF7ED; }
+.c-vlm     { background: #EA580C; }
+.s-haiku   { background: #FDF4FF; }
+.c-haiku   { background: #A21CAF; }
+.s-sonnet  { background: #F5F3FF; }
+.c-sonnet  { background: #7C3AED; }
+.s-embed2  { background: #EFF6FF; }
+.c-embed2  { background: #2563EB; }
+.s-done    { background: #F0FDF4; }
+.c-done    { background: #059669; }
+
+.stag.scrape  { background: #E0F2FE; color: #0369A1; }
+.stag.vlm     { background: #FEF3C7; color: #92400E; }
+.stag.claude  { background: #EDE9FE; color: #6D28D9; }
+.stag.haiku   { background: #FAE8FF; color: #86198F; }
+
+/* narrate result */
+.narr-intro {
+  background: #FFF1F2; border-left: 3px solid #E11D48;
+  padding: 10px 12px; border-radius: 0 8px 8px 0;
+  font-size: 13px; line-height: 1.8; color: #374151;
+  margin-bottom: 10px;
+}
+.narr-item {
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  margin-bottom: 6px; font-size: 12px; line-height: 1.7;
+}
+.narr-item-name { font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.narr-item-reason { color: #4B5563; }
+</style>
+</head>
+<body data-route="pipeline">
+<div class="shell">
+<div id="side-mount"></div>
+<main class="main">
+<div id="top-mount"></div>
+
+  <div class="pg-head">
+    <h1>파이프라인 흐름도</h1>
+    <p>검색 파이프라인(Hybrid + ColBERT) 및 상품 데이터 처리(크롤링 → LLM 분석 → 임베딩) 전체 과정</p>
+  </div>
+
+  <!-- 탭 네비게이션 -->
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('search', this)">🔍 검색 파이프라인</button>
+    <button class="tab-btn" onclick="switchTab('enrich', this)">🛍️ 상품 데이터 처리</button>
+  </div>
+
+  <!-- ====== TAB 1: 검색 파이프라인 ====== -->
+  <div id="tab-search" class="tab-panel active">
+
+  <!-- 예시 쿼리 선택 -->
+  <div class="query-bar">
+    <label>예시 쿼리</label>
+    <select id="qselect" onchange="switchQuery(this.value)">
+      <option value="0">봄에 데이트하기 좋은 14k 귀걸이 5만원대</option>
+      <option value="1">시원해 보이고 얇고 가벼운 악세사 리 추천해줘</option>
+      <option value="2">손예진 귀걸이</option>
+    </select>
+    <span class="q-badge" id="q-mode-badge">Hybrid + ColBERT</span>
+  </div>
+
+  <!-- 총 소요 시간 타임라인 -->
+  <div class="timeline">
+    <div class="tl-title">단계별 처리 시간 (일반적인 조건 기준)</div>
+    <div class="tl-row">
+      <div class="tl-name">① LLM 쿼리 파싱</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:32%;background:#7C3AED;"></div></div>
+      <div class="tl-ms">~820ms</div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-name">② Dense 임베딩</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:6%;background:#2563EB;"></div></div>
+      <div class="tl-ms">~130ms</div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-name">③ Sparse + 형태소</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:9%;background:#0EA5E9;"></div></div>
+      <div class="tl-ms">~220ms</div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-name">④ ColBERT 토큰 임베딩</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:12%;background:#6D28D9;"></div></div>
+      <div class="tl-ms">~290ms</div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-name">⑤ pgvector 검색 + 융합</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:3%;background:#16A34A;"></div></div>
+      <div class="tl-ms">~60ms</div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-name">⑥ ColBERT MaxSim 재정렬</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:8%;background:#D97706;"></div></div>
+      <div class="tl-ms">~190ms</div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-name">⑦ /narrate (GPT-4o-mini)</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:78%;background:#E11D48;"></div></div>
+      <div class="tl-ms">~2,100ms</div>
+    </div>
+    <div class="tl-row" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px;">
+      <div class="tl-name" style="font-weight:700;">총 응답 시간</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:100%;background:#374151;"></div></div>
+      <div class="tl-ms" style="font-weight:700;">~3,800ms</div>
+    </div>
+  </div>
+
+  <!-- ─── 플로우 시작 ─── -->
+  <div class="flow">
+
+    <!-- STEP 0: 사용자 입력 -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-user">0</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-user">💬</div>
+          <div class="stage-info">
+            <div class="stage-title">사용자 질문 입력</div>
+            <div class="stage-sub" id="q-raw-sub">raw_query: "봄에 데이트하기 좋은 14k 귀걸이 5만원대"</div>
+            <div class="stage-tags">
+              <span class="stag" style="background:#F3F4F6;color:#374151;">chat2.html</span>
+              <span class="stag" style="background:#F3F4F6;color:#374151;">POST /search-rv-llm</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="sec-title">요청 페이로드 (chat2.html → embedder :8001)</div>
+            <div class="code-block" id="req-payload">
+<span class="comment">// POST http://localhost:8001/search-rv-llm</span>
+<span class="json-punc">{</span>
+  <span class="json-key">"query"</span><span class="json-punc">:</span>          <span class="json-str" id="q-req-query">"봄에 데이트하기 좋은 14k 귀걸이 5만원대"</span><span class="json-punc">,</span>
+  <span class="json-key">"advertiser_id"</span><span class="json-punc">:</span>  <span class="json-num">1</span><span class="json-punc">,</span>
+  <span class="json-key">"backend"</span><span class="json-punc">:</span>       <span class="json-str">"bge"</span><span class="json-punc">,</span>       <span class="comment">// BAAI/bge-m3 (1024d)</span>
+  <span class="json-key">"llm_provider"</span><span class="json-punc">:</span>  <span class="json-str">"groq"</span><span class="json-punc">,</span>
+  <span class="json-key">"mode"</span><span class="json-punc">:</span>         <span class="json-str">"hybrid"</span><span class="json-punc">,</span>
+  <span class="json-key">"fusion"</span><span class="json-punc">:</span>       <span class="json-str">"rrf"</span><span class="json-punc">,</span>
+  <span class="json-key">"use_morpheme"</span><span class="json-punc">:</span>  <span class="json-bool">true</span><span class="json-punc">,</span>
+  <span class="json-key">"use_colbert"</span><span class="json-punc">:</span>   <span class="json-bool">true</span><span class="json-punc">,</span>
+  <span class="json-key">"colbert_top"</span><span class="json-punc">:</span>   <span class="json-num">50</span><span class="json-punc">,</span>         <span class="comment">// 1차 후보 50개 뽑아서 재정렬</span>
+  <span class="json-key">"k"</span><span class="json-punc">:</span>             <span class="json-num">10</span><span class="json-punc">,</span>
+  <span class="json-key">"version"</span><span class="json-punc">:</span>      <span class="json-str">"1.1"</span>           <span class="comment">// chat2.html = v1.1</span>
+<span class="json-punc">}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>_llm_parse_query(query, provider="groq") 호출</span>
+      </div>
+    </div>
+
+    <!-- STEP 1: LLM 파싱 -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-llm">1</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-llm">🧠</div>
+          <div class="stage-info">
+            <div class="stage-title">LLM 쿼리 파싱</div>
+            <div class="stage-sub">Groq · llama-3.3-70b-versatile · temperature=0.1</div>
+            <div class="stage-tags">
+              <span class="stag llm">LLM</span>
+              <span class="stag py">오타 교정</span>
+              <span class="stag py">필터 추출</span>
+              <span class="stag py">semantic_query 생성</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">~820ms</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="sec-title">역할</div>
+            <p style="font-size:12.5px;color:#4B5563;line-height:1.7;margin:0;">
+              자연어 쿼리에서 <b>오타/띄어쓰기 교정</b>, 임베딩용 <b>semantic_query</b> 정제,
+              가격·카테고리·성별·키워드 등 <b>하드 필터</b> 추출을 한 번에 수행합니다.
+              결과 JSON은 이후 임베딩과 DB 검색에 직접 사용됩니다.
+            </p>
+          </div>
+          <div class="stage-section">
+            <button class="btn-prompt" onclick="togglePrompt(this, 'prompt-parse')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              시스템 프롬프트 보기 (_LLM_PARSE_PROMPT)
+            </button>
+            <div class="prompt-block" id="prompt-parse">
+              <div class="prompt-desc">
+                <b>파일:</b> embedder/search_rv.py · <code>_LLM_PARSE_PROMPT</code> (L449~568)<br>
+                <b>모델:</b> Groq <code>llama-3.3-70b-versatile</code> · temperature 0.1 · max_tokens 500 · response_format json_object<br>
+                <b>사용자 메시지:</b> raw query 그대로
+              </div>
+              <div class="code-block" style="max-height:520px;">너는 한국 쇼핑몰 검색어 분석가다. 사용자의 자연어 쿼리를 적극적으로 분석해 다음 JSON으로 변환하라.
+
+<span class="hl">## 스키마</span>
+{
+  "corrected_query": "오타·띄어쓰기·맞춤법만 교정. 의미·단어·의도는 절대 바꾸지 말 것.",
+  "semantic_query":  "임베딩 검색용 — filters로 분리되는 성별/연령/브랜드/가격만 빼고, 상황·소재·디자인·착용맥락은 원문 의도 그대로",
+  "filters": {
+    "target_gender": "여성|남성|공용" 또는 null,
+    "category_contains": "귀걸이|목걸이|바람막이… 구체적 카테고리만 (포괄어=null)",
+    "perspective_preference": "situation|material|style|persona" 또는 null,
+    "keyword_filters": ["결과를 반드시 한정해야 하는 명시적 속성 키워드"],
+    "price_min": int(원) 또는 null,
+    "price_max": int(원) 또는 null,
+    "price_tier": "budget|mid|premium|luxury" 또는 null
+  },
+  "notes": "결정 사유 한 줄"
+}
+
+<span class="hl">## 주요 규칙</span>
+- 맞춤법 교정 유형 ①자모분리 ②받침오류 ③띄어쓰기 ④키보드오타 ⑤받침누락
+  "악세사 리"→"악세사리", "목거리"→"목걸이", "귀거리"→"귀걸이"
+- category_contains: 포괄어(악세사리·주얼리·잡화) → null. 애매하면 null
+- price: "N만원대" → min=N×10000×0.9, max=N×10000×1.1
+- keyword_filters: 연예인 이름·14k·실버·하트 등 명시적 한정어만. 분위기어는 semantic_query로
+- ※ "스타"는 절대 keyword_filters에 넣지 마라 ("스타일"의 부분문자열)
+
+<span class="hl">## 예시</span>
+쿼리: "봄에 데이트하기 좋은 14k 귀걸이 5만원대"
+→ {"corrected_query":"봄에 데이트하기 좋은 14k 귀걸이 5만원대",
+    "semantic_query":"봄 데이트 14k 귀걸이",
+    "filters":{"category_contains":"귀걸이","price_min":45000,"price_max":55000,
+               "perspective_preference":"situation","keyword_filters":["14k"]},
+    "notes":"봄 데이트 상황 + 14k 소재 + 5만원대"}
+
+쿼리: "손예진 귀걸이"
+→ {"corrected_query":"손예진 귀걸이",
+    "semantic_query":"손예진 귀걸이",
+    "filters":{"category_contains":"귀걸이","keyword_filters":["손예진"]},
+    "notes":"특정 연예인 이름 직접 명시"}
+
+<span class="comment">--- 이하 전체 프롬프트 약 120줄 (embedder/search_rv.py L449 참조) ---</span></div>
+            </div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">출력 예시</div>
+            <div class="code-block" id="llm-output-block">
+<span class="comment">// LLM 응답 (JSON)</span>
+<span class="json-punc">{</span>
+  <span class="json-key">"corrected_query"</span><span class="json-punc">:</span>  <span class="json-str" id="q-corrected">"봄에 데이트하기 좋은 14k 귀걸이 5만원대"</span><span class="json-punc">,</span>
+  <span class="json-key">"semantic_query"</span><span class="json-punc">:</span>   <span class="json-str" id="q-semantic">"봄 데이트 14k 귀걸이"</span><span class="json-punc">,</span>
+  <span class="json-key">"filters"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+    <span class="json-key">"target_gender"</span><span class="json-punc">:</span>         <span class="json-null">null</span><span class="json-punc">,</span>
+    <span class="json-key">"category_contains"</span><span class="json-punc">:</span>     <span class="json-str" id="q-cat">"귀걸이"</span><span class="json-punc">,</span>
+    <span class="json-key">"perspective_preference"</span><span class="json-punc">:</span> <span class="json-str" id="q-persp">"situation"</span><span class="json-punc">,</span>
+    <span class="json-key">"keyword_filters"</span><span class="json-punc">:</span>       <span class="json-punc">[</span><span class="json-str" id="q-kw">"14k"</span><span class="json-punc">],</span>
+    <span class="json-key">"price_min"</span><span class="json-punc">:</span>             <span class="json-num" id="q-pmin">45000</span><span class="json-punc">,</span>
+    <span class="json-key">"price_max"</span><span class="json-punc">:</span>             <span class="json-num" id="q-pmax">55000</span>
+  <span class="json-punc">},</span>
+  <span class="json-key">"notes"</span><span class="json-punc">:</span>  <span class="json-str" id="q-notes">"봄 데이트 상황 + 14k 소재 + 5만원대"</span><span class="json-punc">,</span>
+  <span class="json-key">"_usage"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+    <span class="json-key">"input_tokens"</span><span class="json-punc">:</span>  <span class="json-num">1847</span><span class="json-punc">,</span>
+    <span class="json-key">"output_tokens"</span><span class="json-punc">:</span> <span class="json-num">94</span><span class="json-punc">,</span>
+    <span class="json-key">"cost_usd"</span><span class="json-punc">:</span>     <span class="json-num">0.00011726</span>   <span class="comment">// ≈ ₩0.18</span>
+  <span class="json-punc">}</span>
+<span class="json-punc">}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>semantic_query → 4가지 임베딩 순차 실행 (dense → sparse → 형태소 → colbert)</span>
+      </div>
+    </div>
+
+    <!-- STEP 2: 임베딩 -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-embed">2</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-embed">🔢</div>
+          <div class="stage-info">
+            <div class="stage-title">BGE-M3 멀티 임베딩</div>
+            <div class="stage-sub">BAAI/bge-m3 · Dense 1024d + Sparse vocab + 형태소 + ColBERT 토큰</div>
+            <div class="stage-tags">
+              <span class="stag embed">:8001 dense</span>
+              <span class="stag embed">:8002 sparse</span>
+              <span class="stag embed">:8002 morpheme</span>
+              <span class="stag embed">:8003 colbert</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">~640ms 합산</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="sec-title">입력</div>
+            <div class="data-row">
+              <span class="data-label sig-llm">semantic_query</span>
+              <span class="data-val" id="embed-input">"봄 데이트 14k 귀걸이"</span>
+            </div>
+            <p style="font-size:12px;color:var(--text-4);margin:6px 0 0;line-height:1.6;">
+              LLM이 정제한 semantic_query를 임베딩. 원문 raw_query가 아님에 주의.
+            </p>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">출력 — 4가지 벡터</div>
+
+            <div class="data-row" style="margin-bottom:10px;">
+              <span class="data-label sig-dense">Dense 1024d</span>
+              <span class="data-val dimmed">[ 0.0213, -0.1432, 0.0876, 0.0541, -0.0234, 0.1103, -0.0892, 0.0317, ... ]
+<span style="color:var(--text-4);font-size:11px;">→ pgvector: embedding_bge <=> query_vec (코사인 거리)</span></span>
+            </div>
+
+            <div class="data-row" style="margin-bottom:10px;">
+              <span class="data-label sig-sparse">Sparse (BGE vocab)</span>
+              <span class="data-val dimmed">{귀: 0.031, 걸이: 0.289, 14k: 0.312, 봄: 0.178, 데이트: 0.141, 골드: 0.092, ...}
+<span style="color:var(--text-4);font-size:11px;">→ pgvector: embedding_sparse &lt;#&gt; query_sparse (음의 내적, 작을수록 유사)</span>
+<span style="color:var(--text-4);font-size:11px;">※ 단음절 토큰(귀 등) SPARSE_MIN_TOKEN_CHARS=2로 검색 시 필터링됨</span></span>
+            </div>
+
+            <div class="data-row" style="margin-bottom:10px;">
+              <span class="data-label sig-morph">형태소 (Kiwi TF-IDF)</span>
+              <span class="data-val dimmed">{귀걸이: 0.412, 봄: 0.231, 데이트: 0.193, 14k: 0.118, 좋다: 0.089, ...}
+<span style="color:var(--text-4);font-size:11px;">→ pgvector: embedding_morpheme &lt;#&gt; query_morpheme (음의 내적)</span>
+<span style="color:var(--text-4);font-size:11px;">BGE가 음절로 쪼개는 한국어 단어를 Kiwi 형태소 분석으로 보완</span></span>
+            </div>
+
+            <div class="data-row">
+              <span class="data-label sig-colbert">ColBERT 토큰 (8×128d)</span>
+              <span class="data-val dimmed">쿼리 토큰 8개 × 각 128d 벡터 → 8×128 행렬
+  [봄] → [ 0.041, -0.082, 0.113, ... ]  (128d)
+  [데이트] → [ 0.098, -0.031, 0.076, ... ]  (128d)
+  [14] → [ 0.132,  0.054, -0.041, ... ]  (128d)
+  [k]  → [ 0.087,  0.023, -0.093, ... ]  (128d)
+  [귀걸이] → [ 0.201, -0.045, 0.088, ... ]  (128d)
+  ... (총 8 토큰)
+<span style="color:var(--text-4);font-size:11px;">→ MaxSim 재정렬에서 상품 colbert_vecs와 내적 계산</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>필터 조건 + 4가지 임베딩 → PostgreSQL / pgvector 검색</span>
+      </div>
+    </div>
+
+    <!-- STEP 3: 벡터 검색 -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-db">3</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-db">🗄️</div>
+          <div class="stage-info">
+            <div class="stage-title">pgvector 벡터 검색</div>
+            <div class="stage-sub">PostgreSQL · product_descriptions 전량 스캔 · cand_k=50</div>
+            <div class="stage-tags">
+              <span class="stag db">PostgreSQL</span>
+              <span class="stag db">pgvector</span>
+              <span class="stag py">category 필터</span>
+              <span class="stag py">price 필터</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">~50ms</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="sec-title">적용 필터</div>
+            <div class="data-row"><span class="data-label sig-db">하드필터</span><span class="data-val">pe.category ILIKE <span id="f-cat">'%귀걸이%'</span></span></div>
+            <div class="data-row"><span class="data-label sig-db">하드필터</span><span class="data-val">COALESCE(sale_price, price) BETWEEN <span id="f-price">45000 AND 55000</span></span></div>
+            <div class="data-row"><span class="data-label sig-db">하드필터</span><span class="data-val">pd.description ILIKE <span id="f-kw">'%14k%'</span>  (keyword_filter)</span></div>
+            <div class="data-row"><span class="data-label sig-db">advertiser</span><span class="data-val">pd.advertiser_id = 1</span></div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">실행 SQL (하이브리드 방식)</div>
+            <div class="code-block">
+<span class="comment">-- 방식 B: product_descriptions 전체 행 (상품 × 4관점) 모두 가져와
+-- Python에서 관점 단위 융합(_fuse) 처리</span>
+WITH all_dist AS (
+    SELECT pd.rv_product_id, pd.advertiser_id,
+           pd.perspective, pd.description,
+           pd.embedding_bge <=> $1::vector    AS <span class="hl">dense_dist</span><span class="json-punc">,</span>
+           pd.embedding_sparse &lt;#&gt; $2::sparsevec AS <span class="hl">sparse_ip</span><span class="json-punc">,</span>
+           pd.embedding_morpheme &lt;#&gt; $3::sparsevec AS <span class="hl">morph_ip</span>
+      FROM product_descriptions pd
+      JOIN rv_products rv_p ON rv_p.id = pd.rv_product_id
+      LEFT JOIN product_enriched pe ON pe.rv_product_id = pd.rv_product_id
+     WHERE pd.embedding_bge IS NOT NULL
+       AND pd.advertiser_id = 1
+       AND COALESCE(rv_p.sale_price, rv_p.price) BETWEEN 45000 AND 55000
+       AND pe.category ILIKE '%귀걸이%'
+       AND (pd.description ILIKE '%14k%' OR pe.tags::text ILIKE '%14k%')
+)
+SELECT a.*, rv.product_name, rv.price, rv.sale_price, pe.brand, ...
+  FROM all_dist a
+  JOIN rv_products rv ON rv.id = a.rv_product_id
+  LEFT JOIN product_enriched pe ON pe.rv_product_id = a.rv_product_id;
+
+<span class="comment">-- 결과: 해당 광고주의 귀걸이 상품 × 4관점 전체 행
+-- 예: 상품 38개 × 평균 3.8관점 ≈ 145행 반환 (전부 _fuse로 전달)</span></div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">반환 행 예시 (상위 5개 dense 기준)</div>
+            <div class="code-block">
+rv_product_id | perspective | dense_dist | sparse_ip | morph_ip
+──────────────────────────────────────────────────────────────────
+       1234   | situation   |   0.1823   |  -0.4312  |  -0.3891   <span class="comment"># 봄 데이트용 14k 드롭 귀걸이</span>
+       1234   | material    |   0.2041   |  -0.5123  |  -0.2341
+       1234   | style       |   0.2234   |  -0.3891  |  -0.2105
+       1234   | persona     |   0.2891   |  -0.2341  |  -0.1823
+       2087   | material    |   0.1967   |  -0.5234  |  -0.4012   <span class="comment"># 14k 로즈골드 귀걸이</span>
+       2087   | situation   |   0.2103   |  -0.4891  |  -0.3234
+        ...   |     ...     |    ...     |    ...    |    ...
+<span class="comment">-- 총 ~145행을 Python _fuse()로 전달</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>전체 (상품×관점) 행 → Python _fuse() — RRF 관점 단위 융합</span>
+      </div>
+    </div>
+
+    <!-- STEP 4: 하이브리드 융합 -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-fuse">4</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-fuse">⚗️</div>
+          <div class="stage-info">
+            <div class="stage-title">하이브리드 RRF 융합</div>
+            <div class="stage-sub">Python · _fuse() · 방식 B — 관점 단위 융합 후 상품별 최고 관점 1행</div>
+            <div class="stage-tags">
+              <span class="stag py">RRF score</span>
+              <span class="stag py">관점 단위 융합</span>
+              <span class="stag py">신호별 채택 관점 저장</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">~10ms</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="sec-title">RRF 공식</div>
+            <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:2;">
+              <span style="color:#92400E;font-weight:700;">score</span>(행) =
+              &nbsp;&nbsp;<span style="color:#2563EB;">w_dense</span> / (60 + rank_dense)
+              &nbsp;+&nbsp;<span style="color:#15803D;">w_sparse</span> / (60 + rank_sparse)
+              &nbsp;+&nbsp;<span style="color:#C2410C;">w_morph</span> / (60 + rank_morph)
+              <br>
+              <span style="color:var(--text-4);font-size:11px;">가중치 (α=0.5, 형태소 1/3): w_dense≈0.333, w_sparse≈0.333, w_morph≈0.333</span>
+            </div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">처리 과정</div>
+            <div class="code-block">
+<span class="comment"># ① 모든 행에 dense/sparse/morph 랭킹 부여</span>
+<span class="json-punc">#</span>    dense_dist 오름차순 → rank_dense = 1,2,3,...
+<span class="json-punc">#</span>    sparse_ip  오름차순 → rank_sparse = 1,2,3,...
+<span class="json-punc">#</span>    morph_ip   오름차순 → rank_morph  = 1,2,3,...
+
+<span class="comment"># ② 각 행 RRF score 계산 (K=60)</span>
+row[1234,situation]: 0.333/(60+3) + 0.333/(60+8) + 0.333/(60+4) = <span class="hl">0.01620</span>
+row[1234,material]:  0.333/(60+7) + 0.333/(60+2) + 0.333/(60+11)= <span class="hl">0.01541</span>
+row[2087,material]:  0.333/(60+4) + 0.333/(60+1) + 0.333/(60+2) = <span class="hl">0.01598</span>
+...
+
+<span class="comment"># ③ 상품별 그룹핑 → 최고 score 행 = 대표 관점</span>
+상품 1234 → 대표: situation (score 0.01620)
+         → dense_best:  material  (dense_dist 최소)
+         → sparse_best: material  (sparse_ip 최소)
+         → morph_best:  situation (morph_ip 최소)
+
+<span class="comment"># ④ top-50 반환 (ColBERT 후보용)</span></div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">출력 — 상위 5개 상품</div>
+            <div class="code-block">
+rank | rv_product_id | perspective | score   | product_name
+─────────────────────────────────────────────────────────────
+  1  |     1234      | situation   | 0.01620 | 봄 데이트 14k 드롭 귀걸이
+  2  |     2087      | material    | 0.01598 | 14k 로즈골드 볼 귀걸이
+  3  |     3156      | situation   | 0.01571 | 벚꽃 시즌 14k 링 귀걸이
+  4  |     1891      | style       | 0.01543 | 미니멀 14k 오벌 귀걸이
+  5  |     4203      | situation   | 0.01512 | 봄 피크닉 골드 드롭 귀걸이
+ ...        ...                             ...
+ 50 |     7821      | material    | 0.01203 | 14k 체인 귀걸이
+<span class="comment">--  → 50개를 ColBERT MaxSim 재정렬로 전달</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>50 candidates + ColBERT query vectors → MaxSim 재정렬</span>
+      </div>
+    </div>
+
+    <!-- STEP 5: ColBERT MaxSim -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-cb">5</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-cb">🎯</div>
+          <div class="stage-info">
+            <div class="stage-title">ColBERT MaxSim 재정렬</div>
+            <div class="stage-sub">Python + DB · _colbert_rerank() · 50개 → 10개</div>
+            <div class="stage-tags">
+              <span class="stag" style="background:#F5F3FF;color:#6D28D9;">Late Interaction</span>
+              <span class="stag" style="background:#F5F3FF;color:#6D28D9;">MaxSim</span>
+              <span class="stag py">Token-level 정밀 매칭</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">~190ms</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="sec-title">MaxSim 공식</div>
+            <div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:2.2;">
+              <span style="color:#6D28D9;font-weight:700;">score</span>(q, d) =
+              &nbsp;<span style="color:#D97706;">Σᵢ</span> <span style="color:#2563EB;">max_j</span> ( q_i · d_j )
+              <br>
+              <span style="color:var(--text-4);font-size:11px;">각 쿼리 토큰 q_i에 대해 → 상품 토큰 d_j 중 내적이 가장 큰 값 → 합산</span>
+              <br>
+              <span style="color:var(--text-4);font-size:11px;">NumPy: sims = q_mat @ d_mat.T → sims.max(axis=1).sum()</span>
+            </div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">처리 과정 — "봄 데이트 14k 귀걸이" 예시</div>
+            <div class="maxsim-diagram">
+              <div style="font-size:11.5px;color:var(--text-4);margin-bottom:8px;">DB에서 50개 상품 colbert_vecs 조회 → 쿼리 토큰별 최대 내적 찾기</div>
+              <div class="maxsim-row">
+                <span class="maxsim-tok">봄</span>
+                <span class="maxsim-arrow">→ 상품 최근접 토큰:</span>
+                <span class="maxsim-best">봄, 봄날, 스프링</span>
+                <span class="maxsim-arrow">→ max =</span>
+                <span class="maxsim-score">0.892</span>
+              </div>
+              <div class="maxsim-row">
+                <span class="maxsim-tok">데이트</span>
+                <span class="maxsim-arrow">→ 상품 최근접 토큰:</span>
+                <span class="maxsim-best">데이트, 로맨틱</span>
+                <span class="maxsim-arrow">→ max =</span>
+                <span class="maxsim-score">0.871</span>
+              </div>
+              <div class="maxsim-row">
+                <span class="maxsim-tok">14</span>
+                <span class="maxsim-arrow">→ 상품 최근접 토큰:</span>
+                <span class="maxsim-best">14, 14k</span>
+                <span class="maxsim-arrow">→ max =</span>
+                <span class="maxsim-score">0.934</span>
+              </div>
+              <div class="maxsim-row">
+                <span class="maxsim-tok">k</span>
+                <span class="maxsim-arrow">→ 상품 최근접 토큰:</span>
+                <span class="maxsim-best">k, 골드, 금</span>
+                <span class="maxsim-arrow">→ max =</span>
+                <span class="maxsim-score">0.811</span>
+              </div>
+              <div class="maxsim-row">
+                <span class="maxsim-tok">귀걸이</span>
+                <span class="maxsim-arrow">→ 상품 최근접 토큰:</span>
+                <span class="maxsim-best">귀걸이, 이어링</span>
+                <span class="maxsim-arrow">→ max =</span>
+                <span class="maxsim-score">0.956</span>
+              </div>
+              <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-weight:700;color:#6D28D9;">
+                colbert_score = 0.892 + 0.871 + 0.934 + 0.811 + 0.956 + ... = <span style="font-size:15px;">12.43</span>
+              </div>
+            </div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">재정렬 결과 (50개 → 상위 10개)</div>
+            <div class="code-block">
+<span class="comment"># fusion_rank(RRF) vs colbert_rank — 순위가 달라지는 예</span>
+fusion_rank | colbert_rank | rv_product_id | colbert_score | product_name
+────────────────────────────────────────────────────────────────────────────
+     1      →     1        |     1234      |    12.43      | 봄 데이트 14k 드롭 귀걸이
+     5      →     2        |     4203      |    11.98      | 봄 피크닉 골드 드롭 귀걸이   <span class="comment">↑ +3</span>
+     2      →     3        |     2087      |    11.87      | 14k 로즈골드 볼 귀걸이
+     8      →     4        |     6412      |    11.72      | 봄 소풍 14k 플라워 귀걸이    <span class="comment">↑ +4</span>
+     3      →     5        |     3156      |    11.61      | 벚꽃 시즌 14k 링 귀걸이
+     4      →     6        |     1891      |    11.54      | 미니멀 14k 오벌 귀걸이
+    12      →     7        |     5304      |    11.39      | 14k 하트 귀걸이 봄 에디션    <span class="comment">↑ +5</span>
+     7      →     8        |     2931      |    11.27      | 14k 초승달 귀걸이
+     9      →     9        |     3847      |    11.18      | 골드 데이트룩 귀걸이
+    11      →    10        |     7023      |    10.94      | 봄날 14k 볼드 드롭 귀걸이    <span class="comment">↑ +1</span>
+<span class="comment">--  items[:10] → 최종 10개 확정</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>검색 완료 → search_logs 저장 (version='1.1') → log_id 반환</span>
+      </div>
+    </div>
+
+    <!-- STEP 6: 로그 저장 -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-save">6</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-save">💾</div>
+          <div class="stage-info">
+            <div class="stage-title">검색 로그 저장</div>
+            <div class="stage-sub">search_logs + search_log_results (version='1.1')</div>
+            <div class="stage-tags">
+              <span class="stag db">PostgreSQL INSERT</span>
+              <span class="stag db">log_id → /narrate로 전달</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">~20ms</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="code-block">
+<span class="comment">-- search_logs INSERT</span>
+INSERT INTO search_logs (
+    query, semantic_query, llm_used, llm_provider, backend,
+    advertiser_id, result_count, keyword_filters,
+    llm_duration_ms, embed_duration_ms, total_duration_ms,
+    llm_input_tokens, llm_output_tokens, llm_cost_usd,
+    llm_parsed_json, <span class="hl">version</span>
+) VALUES (
+    '봄에 데이트하기 좋은 14k 귀걸이 5만원대',
+    '봄 데이트 14k 귀걸이',
+    true, 'groq',
+    <span class="hl">'bge+dsm:rrf(d=0.33,s=0.33,m=0.33)+colbert'</span>,
+    1, 10, ARRAY['14k'], 820, 640, 1710,
+    1847, 94, 0.00011726,
+    '{"corrected_query":"봄에 데이트하기 좋은 14k 귀걸이 5만원대",...}'::jsonb,
+    <span class="hl">'1.1'</span>          <span class="comment">-- chat2.html 전용 버전</span>
+) RETURNING id;   <span class="comment">-- → log_id = 4827</span>
+
+<span class="comment">-- search_log_results: 10개 상품 순위·신호별 점수 저장</span>
+<span class="comment">-- (rank, colbert_score, dense_dist, sparse_ip, morph_ip, fusion_score ...)</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>10개 상품 + 원본 query → POST /narrate (GPT-4o-mini)</span>
+      </div>
+    </div>
+
+    <!-- STEP 7: /narrate -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-narr">7</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-narr">✍️</div>
+          <div class="stage-info">
+            <div class="stage-title">LLM 내러티브 생성 (/narrate)</div>
+            <div class="stage-sub">OpenAI · gpt-4o-mini · temperature=0.6 · max_tokens=2200</div>
+            <div class="stage-tags">
+              <span class="stag openai">GPT-4o-mini</span>
+              <span class="stag openai">인트로 문단</span>
+              <span class="stag openai">상품별 추천 이유</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">~2,100ms</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <p style="font-size:12.5px;color:#4B5563;line-height:1.7;margin:0;">
+              검색 결과 10개를 다시 LLM에 보내 <b>점원 스타일 인트로</b>와
+              <b>상품별 추천 이유</b>를 생성합니다.
+              성공 여부와 무관하게 200 응답 (graceful) — 실패 시 카드만 표시.
+            </p>
+          </div>
+          <div class="stage-section">
+            <button class="btn-prompt" onclick="togglePrompt(this, 'prompt-narrate')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              시스템 프롬프트 보기 (_SYSTEM_PROMPT)
+            </button>
+            <div class="prompt-block" id="prompt-narrate">
+              <div class="prompt-desc">
+                <b>파일:</b> embedder/narrate.py · <code>_SYSTEM_PROMPT</code> (L35~55)<br>
+                <b>모델:</b> OpenAI <code>gpt-4o-mini</code> · temperature 0.6 · max_tokens 2200 · response_format json_object<br>
+                <b>사용자 메시지:</b> _build_user_content(query, items) — 아래 포맷
+              </div>
+              <div class="code-block">
+<span class="hl">## 시스템 프롬프트 (narrate.py _SYSTEM_PROMPT)</span>
+
+당신은 한국 패션·라이프스타일 편집샵의 친절하고 센스 있는 매장 점원입니다.
+손님의 질문(상황·분위기·예산 등)과, 우리가 골라온 상품 목록이 주어집니다.
+실제 매장에서 손님 곁에서 권해주듯, 따뜻하고 다정하게 한국어로 작성하세요.
+
+1) intro: 손님의 질문 의도와 분위기에 공감하며 받아주는 소개 문단 (2~3문장).
+   - "~를 찾고 계셨죠?", "그런 분께 딱 맞는 걸로 골라봤어요" 처럼 점원이 말 걸듯 자연스럽게.
+   - 곧 추천 상품을 보여준다는 흐름으로 끝맺기. 과장·허위는 금지.
+2) 각 상품마다 reason: 이 상품이 왜 손님 상황에 잘 맞는지 구체적으로 (2~3문장).
+   - 반드시 제공된 '상품 설명'에 근거하여, 소재·핏/실루엣·색감·디테일·계절감·
+     활용 상황(코디/TPO) 중 실제로 해당하는 점을 구체적으로 짚어 설명할 것.
+   - "이런 점이 좋아요", "~하실 때 특히 잘 어울려요" 처럼 권하는 말투로.
+   - 없는 기능·소재를 지어내지 말 것. 가격/할인은 자연스러울 때만 가볍게.
+   - 모든 상품에 대해 빠짐없이 작성.
+
+반드시 아래 JSON 형식만 출력 (다른 텍스트 금지):
+{"intro": "...", "items": [{"rv_product_id": &lt;정수 그대로&gt;, "reason": "..."}]}
+rv_product_id 는 입력으로 받은 값을 그대로 사용하세요.
+
+문체 규칙: 자연스러운 한국어로만 쓰고, 한자·중국어·영어 표현을 섞지 마세요
+(브랜드·상품명 고유어는 예외). 정중하고 다정한 '~요' 체 중심.
+
+<span class="hl">## 사용자 메시지 포맷 (_build_user_content)</span>
+
+사용자 질문과 추천 상품 목록입니다. intro 와 각 상품 reason 을 작성하세요.
+
+{
+  "user_query": "봄에 데이트하기 좋은 14k 귀걸이 5만원대",
+  "products": [
+    {
+      "rv_product_id": 1234,
+      "product_name": "봄 데이트 14k 드롭 귀걸이",
+      "brand": "주얼리허브",
+      "category": "귀걸이",
+      "price": 54000,
+      "sale_price": 49900,
+      "description": "봄 데이트룩에 어울리는 14k 골드 드롭 귀걸이. 플라워 모티프..."
+    },
+    ... (10개)
+  ]
+}</div>
+            </div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">출력 예시</div>
+            <div class="narr-intro">
+              봄 데이트에 딱 어울리는 14k 귀걸이를 찾고 계셨죠? 5만원대라는 합리적인 가격에
+              로맨틱한 봄 분위기를 살려줄 귀걸이들을 골라봤어요. 따뜻한 계절 데이트룩에
+              살짝 포인트를 주고 싶은 분께 특히 잘 어울릴 것 같아요!
+            </div>
+            <div class="narr-item">
+              <div class="narr-item-name">#1234 · 봄 데이트 14k 드롭 귀걸이</div>
+              <div class="narr-item-reason">
+                14k 골드 소재라 피부 트러블 걱정 없이 오래 착용하실 수 있어요.
+                플라워 모티프의 드롭 디자인이 봄 데이트룩에 자연스럽게 어울리고,
+                49,900원이라 선물로도 부담 없이 좋아요 💛
+              </div>
+            </div>
+            <div class="narr-item">
+              <div class="narr-item-name">#4203 · 봄 피크닉 골드 드롭 귀걸이</div>
+              <div class="narr-item-reason">
+                가벼운 체인 드롭 형태라 봄 나들이나 피크닉 분위기에 특히 잘 어울려요.
+                14k 소재의 따뜻한 골드 색상이 봄 컬러 코디에 예쁘게 매치돼요.
+              </div>
+            </div>
+            <div style="text-align:center;font-size:12px;color:var(--text-4);padding:6px 0;">... 총 10개 상품 이유 생성 ...</div>
+            <div class="code-block" style="margin-top:8px;">
+<span class="comment">// _usage</span>
+<span class="json-punc">{</span>
+  <span class="json-key">"input_tokens"</span><span class="json-punc">:</span>  <span class="json-num">1923</span><span class="json-punc">,</span>
+  <span class="json-key">"output_tokens"</span><span class="json-punc">:</span> <span class="json-num">831</span><span class="json-punc">,</span>
+  <span class="json-key">"cost_usd"</span><span class="json-punc">:</span>     <span class="json-num">0.00078585</span>   <span class="comment">// ≈ ₩1.18</span>
+<span class="json-punc">}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>narration → PATCH /search-logs/4827/narration (fire-and-forget) + 화면 렌더링</span>
+      </div>
+    </div>
+
+    <!-- STEP 8: 렌더링 -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-render">8</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-render">🖥️</div>
+          <div class="stage-info">
+            <div class="stage-title">화면 렌더링 + narration 저장</div>
+            <div class="stage-sub">buildNarratedCards() · narration → search_logs.narration (async)</div>
+            <div class="stage-tags">
+              <span class="stag" style="background:#F0F9FF;color:#0369A1;">chat2.html 렌더</span>
+              <span class="stag db">narration 저장 (이력 재현용)</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">~5ms render</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="sec-title">동시 실행 (병렬)</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <div style="font-size:12px;font-weight:700;color:#059669;margin-bottom:6px;">① 화면 렌더링 (즉시)</div>
+                <div style="font-size:12px;color:#4B5563;line-height:1.7;">
+                  • <code>buildNarratedCards()</code><br>
+                  • intro 문단 표시<br>
+                  • 10개 상품 카드 + reason 텍스트<br>
+                  • 파이프라인 버튼 생성
+                </div>
+              </div>
+              <div>
+                <div style="font-size:12px;font-weight:700;color:#0284C7;margin-bottom:6px;">② narration 저장 (fire-and-forget)</div>
+                <div style="font-size:12px;color:#4B5563;line-height:1.7;">
+                  • POST /search-logs/4827/narration<br>
+                  • search_logs.narration JSONB 저장<br>
+                  • 이력에서 v1.1 로그 재클릭 시<br>&nbsp;&nbsp;LLM 재호출 없이 그대로 재현
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">v1.1 이력 재현 흐름</div>
+            <div style="font-size:12px;color:#4B5563;line-height:1.9;">
+              나중에 검색 이력 클릭 →
+              <span style="background:#FFF1F2;color:#BE123C;padding:1px 6px;border-radius:4px;font-size:11.5px;">loadLog()</span> →
+              <code>data.narration</code> 있으면 →
+              <span style="background:#F0FDF4;color:#166534;padding:1px 6px;border-radius:4px;font-size:11.5px;">buildNarratedCards()</span> 그대로 재현.
+              LLM 재호출 없음, 비용 0.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.flow -->
+
+  <!-- 비용 요약 (tab-1) -->
+  <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-top:24px;box-shadow:0 1px 4px rgba(0,0,0,.04);">
+    <div style="font-size:12px;font-weight:700;color:var(--text-4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">쿼리 1회 총 비용 (예시 기준)</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+      <div style="background:#F5F3FF;border-radius:8px;padding:10px 14px;">
+        <div style="font-size:11px;color:#7C3AED;font-weight:700;">LLM 파싱 (Groq)</div>
+        <div style="font-size:18px;font-weight:800;color:#6D28D9;margin:4px 0 2px;font-family:monospace;">$0.000117</div>
+        <div style="font-size:11px;color:var(--text-4);">≈ ₩0.18</div>
+      </div>
+      <div style="background:#FFF1F2;border-radius:8px;padding:10px 14px;">
+        <div style="font-size:11px;color:#BE123C;font-weight:700;">Narrate (GPT-4o-mini)</div>
+        <div style="font-size:18px;font-weight:800;color:#E11D48;margin:4px 0 2px;font-family:monospace;">$0.000786</div>
+        <div style="font-size:11px;color:var(--text-4);">≈ ₩1.18</div>
+      </div>
+      <div style="background:#F0FDF4;border-radius:8px;padding:10px 14px;">
+        <div style="font-size:11px;color:#166534;font-weight:700;">임베딩 (BGE-M3, 로컬)</div>
+        <div style="font-size:18px;font-weight:800;color:#16A34A;margin:4px 0 2px;font-family:monospace;">$0.000000</div>
+        <div style="font-size:11px;color:var(--text-4);">자체 서버 (무료)</div>
+      </div>
+      <div style="background:#F9FAFB;border:1px solid var(--line);border-radius:8px;padding:10px 14px;">
+        <div style="font-size:11px;color:var(--text-4);font-weight:700;">합계</div>
+        <div style="font-size:18px;font-weight:800;color:var(--text);margin:4px 0 2px;font-family:monospace;">$0.000903</div>
+        <div style="font-size:11px;color:var(--text-4);">≈ ₩1.36 / 검색 1회</div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /#tab-search (tab-1 끝) -->
+
+  <!-- ====== TAB 2: 상품 데이터 처리 ====== -->
+  <div id="tab-enrich" class="tab-panel">
+
+  <div class="pg-head" style="margin-bottom:20px;">
+    <p>쇼핑몰 상품 URL → 웹 크롤링 → VLM 이미지 분석 → Claude 2-Pass LLM 분석 → BGE-M3 벡터화 전체 과정</p>
+  </div>
+
+  <!-- 예시 상품 선택 -->
+  <div class="query-bar">
+    <label>예시 상품</label>
+    <select id="eselect" onchange="switchEnrich(this.value)">
+      <option value="0">루브르파리 · 봄 데이트 14k 골드 드롭 귀걸이</option>
+      <option value="1">루브르파리 · 실버 레이어드 목걸이 세트</option>
+    </select>
+    <span class="q-badge" style="background:#EDE9FE;color:#6D28D9;">2-Pass Claude</span>
+  </div>
+
+  <!-- 소요 시간 타임라인 -->
+  <div class="timeline">
+    <div class="tl-title">단계별 처리 시간 (상품 1개 기준)</div>
+    <div class="tl-row">
+      <div class="tl-name">① 웹 크롤링</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:10%;background:#0284C7;"></div></div>
+      <div class="tl-ms">~3s</div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-name">② VLM 이미지 분석</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:14%;background:#EA580C;"></div></div>
+      <div class="tl-ms">~4s</div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-name">③ Pass 1 필터 (Haiku)</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:5%;background:#A21CAF;"></div></div>
+      <div class="tl-ms">~1.5s</div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-name">④ Pass 2 분석 (Sonnet)</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:75%;background:#7C3AED;"></div></div>
+      <div class="tl-ms">~22s</div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-name">⑤ BGE-M3 벡터화</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:10%;background:#2563EB;"></div></div>
+      <div class="tl-ms">~3s</div>
+    </div>
+    <div class="tl-row" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px;">
+      <div class="tl-name" style="font-weight:700;">총 처리 시간</div>
+      <div class="tl-bar-wrap"><div class="tl-bar" style="width:100%;background:#374151;"></div></div>
+      <div class="tl-ms" style="font-weight:700;">~33s</div>
+    </div>
+  </div>
+
+  <!-- 플로우 -->
+  <div class="flow">
+
+    <!-- ENRICH STEP 0: URL 입력 -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-user">0</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-user">🔗</div>
+          <div class="stage-info">
+            <div class="stage-title">상품 URL 입력</div>
+            <div class="stage-sub" id="e-url-sub">url: "https://luuvreparis.co.kr/product/detail.html?product_no=1234"</div>
+            <div class="stage-tags">
+              <span class="stag" style="background:#F3F4F6;color:#374151;">sync/products.html</span>
+              <span class="stag" style="background:#F3F4F6;color:#374151;">POST /scrape/fetch</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="sec-title">요청 페이로드</div>
+            <div class="code-block">
+<span class="comment">// POST http://localhost:8001/scrape/fetch</span>
+<span class="json-punc">{</span>
+  <span class="json-key">"url"</span><span class="json-punc">:</span>           <span class="json-str" id="e-url">"https://luuvreparis.co.kr/product/detail.html?product_no=1234"</span><span class="json-punc">,</span>
+  <span class="json-key">"advertiser_id"</span><span class="json-punc">:</span> <span class="json-num">1</span><span class="json-punc">,</span>
+  <span class="json-key">"rv_product_id"</span><span class="json-punc">:</span> <span class="json-num">1234</span>
+<span class="json-punc">}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>HTTP GET → HTML parse → image download → extracted.json 저장</span>
+      </div>
+    </div>
+
+    <!-- ENRICH STEP 1: 웹 크롤링 -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-scrape">1</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-scrape">🕷️</div>
+          <div class="stage-info">
+            <div class="stage-title">웹 크롤링 (/scrape/fetch)</div>
+            <div class="stage-sub">HTTP GET + BeautifulSoup · 플랫폼 감지 · 이미지 다운로드 (최대 30개)</div>
+            <div class="stage-tags">
+              <span class="stag scrape">BeautifulSoup</span>
+              <span class="stag scrape">cafe24 파서</span>
+              <span class="stag py">body_text 추출</span>
+              <span class="stag py">이미지 다운로드</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">~3s</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="sec-title">처리 과정</div>
+            <div class="code-block">
+<span class="comment"># enrich.py — /scrape/fetch 엔드포인트</span>
+1. HTTP GET url (requests + User-Agent 스푸핑)
+2. platform 감지: cafe24 / shopify / makeshop / ...
+3. BeautifulSoup → platform별 파서로 body_text 추출
+   - cafe24: div.prdDetail, div.goods-description, table.tb-상품 등
+   - 텍스트 정제: HTML 태그 제거, 연속 공백·줄바꿈 정규화
+4. 이미지 URL 수집 (og:image + 상품 상세 이미지)
+   - img[src], img[data-src], srcset 파싱
+   - 배너/광고 이미지 경로 패턴 1차 필터 (cdn.cafe24.com/banner/ 등)
+5. 이미지 다운로드 → tmp/{advertiser_id}/{rv_product_id}/ 저장
+   - 최대 30개, 연결 오류 skip
+6. extracted.json 저장</div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">출력 — extracted.json</div>
+            <div class="code-block">
+<span class="json-punc">{</span>
+  <span class="json-key">"rv_product_id"</span><span class="json-punc">:</span> <span class="json-num">1234</span><span class="json-punc">,</span>
+  <span class="json-key">"url"</span><span class="json-punc">:</span>          <span class="json-str">"https://luuvreparis.co.kr/product/detail.html?product_no=1234"</span><span class="json-punc">,</span>
+  <span class="json-key">"platform"</span><span class="json-punc">:</span>    <span class="json-str">"cafe24"</span><span class="json-punc">,</span>
+  <span class="json-key">"product_name"</span><span class="json-punc">:</span><span class="json-str">"봄 데이트 14k 골드 드롭 귀걸이 (플라워 모티프)"</span><span class="json-punc">,</span>
+  <span class="json-key">"price"</span><span class="json-punc">:</span>       <span class="json-num">54000</span><span class="json-punc">,</span>
+  <span class="json-key">"sale_price"</span><span class="json-punc">:</span>  <span class="json-num">49900</span><span class="json-punc">,</span>
+  <span class="json-key">"body_text"</span><span class="json-punc">:</span>   <span class="json-str">"14K 골드 소재로 제작된 드롭형 귀걸이입니다. 플라워 모티프 디자인으로 봄 시즌에 특히 잘 어울립니다. 포스트형 잠금장치로 착용이 편리하며, 귀 피부에 안전한 니켈프리 소재입니다..."</span><span class="json-punc">,</span>
+  <span class="json-key">"images_found"</span><span class="json-punc">:</span> <span class="json-num">9</span><span class="json-punc">,</span>
+  <span class="json-key">"images_downloaded"</span><span class="json-punc">:</span> <span class="json-num">7</span><span class="json-punc">,</span>  <span class="comment">// 2개는 CDN 오류</span>
+  <span class="json-key">"image_paths"</span><span class="json-punc">:</span> <span class="json-punc">[</span>
+    <span class="json-str">"tmp/1/1234/img_01.jpg"</span><span class="json-punc">,</span>  <span class="comment">// 메인 상품 사진</span>
+    <span class="json-str">"tmp/1/1234/img_02.jpg"</span><span class="json-punc">,</span>  <span class="comment">// 착용 상세 샷</span>
+    <span class="json-str">"tmp/1/1234/img_03.jpg"</span><span class="json-punc">,</span>  <span class="comment">// 디테일 클로즈업</span>
+    <span class="json-str">"tmp/1/1234/img_04.jpg"</span><span class="json-punc">,</span>  <span class="comment">// 사이즈 안내 배너 ← Pass1이 필터할 예정</span>
+    <span class="json-str">"tmp/1/1234/img_05.jpg"</span><span class="json-punc">,</span>  <span class="comment">// 착용 코디 사진</span>
+    <span class="json-str">"tmp/1/1234/img_06.jpg"</span><span class="json-punc">,</span>  <span class="comment">// 소재 설명 배너 ← Pass1이 필터할 예정</span>
+    <span class="json-str">"tmp/1/1234/img_07.jpg"</span>   <span class="comment">// 봄 시즌 광고 배너 ← Pass1이 필터할 예정</span>
+  <span class="json-punc">]</span>
+<span class="json-punc">}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>image_paths (최대 4개) → Groq VLM → 이미지별 한국어 캡션 생성</span>
+      </div>
+    </div>
+
+    <!-- ENRICH STEP 2: VLM 이미지 분석 -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-vlm">2</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-vlm">🖼️</div>
+          <div class="stage-info">
+            <div class="stage-title">VLM 이미지 분석 (/scrape/vlm)</div>
+            <div class="stage-sub">Groq · meta-llama/llama-4-maverick-17b-128e-instruct · 최대 4장</div>
+            <div class="stage-tags">
+              <span class="stag vlm">Groq Vision</span>
+              <span class="stag vlm">한국어 캡션</span>
+              <span class="stag py">패션 어휘 특화</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">~4s</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <button class="btn-prompt" onclick="togglePrompt(this, 'prompt-vlm')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              VLM 프롬프트 보기 (VLM_PROMPT)
+            </button>
+            <div class="prompt-block" id="prompt-vlm">
+              <div class="prompt-desc">
+                <b>파일:</b> embedder/enrich.py · <code>VLM_PROMPT</code> (L474)<br>
+                <b>모델:</b> Groq <code>meta-llama/llama-4-maverick-17b-128e-instruct</code><br>
+                <b>입력:</b> 이미지 1장 (base64) + 아래 텍스트 프롬프트
+              </div>
+              <div class="code-block">이 상품 사진을 한국어로 묘사해줘.
+패션 검색에서 자주 쓰일 어휘로: 핏, 소재 텍스처, 컬러, 디테일, 착용감, 스타일, 계절감, 코디 활용 방식 등을 포함해서 묘사해줘.
+3~5문장.</div>
+            </div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">출력 — 이미지별 enriched_info</div>
+            <div class="code-block">
+<span class="comment">// img_01.jpg — 메인 상품 사진</span>
+<span class="json-str">"14k 골드 소재의 드롭형 귀걸이로, 작은 플라워 모티프가 여러 겹 매달린 레이어드 스타일입니다. 반짝이는 골드 컬러가 봄철 화사한 데이트룩과 잘 어울리며, 가볍고 얇은 체인 연결 방식으로 자연스럽게 흔들리는 실루엣을 만들어줍니다. 미니멀하면서도 포인트를 주기 좋은 디자인으로 캐주얼부터 세미포멀까지 다양하게 활용할 수 있습니다."</span>
+
+<span class="comment">// img_02.jpg — 착용 상세 샷</span>
+<span class="json-str">"귀에 착용한 모습으로, 드롭 길이는 약 2~3cm 정도로 귀밑을 살짝 벗어나는 적당한 길이감입니다. 골드 컬러가 피부톤과 자연스럽게 어울리며, 포스트형 잠금 방식으로 착용 시 안정감이 있습니다."</span>
+
+<span class="comment">// img_03.jpg — 디테일 클로즈업</span>
+<span class="json-str">"플라워 펜던트 디테일을 클로즈업한 사진으로, 꽃잎 하나하나의 질감이 섬세하게 표현되어 있습니다. 14k 골드 특유의 따뜻한 금빛이 잘 살아있으며, 표면 마감이 매끄럽고 광택이 좋습니다."</span>
+
+<span class="comment">// img_05.jpg — 착용 코디 사진</span>
+<span class="json-str">"흰색 셔츠와 베이지 팬츠 조합의 봄 데이트룩에 착용한 스타일링 컷입니다. 심플한 의상에 골드 귀걸이가 포인트 역할을 하며, 전체적으로 청순하고 여성스러운 무드를 연출합니다."</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>이미지 7개 &gt; 4개 임계값 초과 → Pass 1 Haiku 필터 실행 (아니면 Skip)</span>
+      </div>
+    </div>
+
+    <!-- ENRICH STEP 3: Pass 1 Haiku 필터 -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-haiku">3</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-haiku">🔵</div>
+          <div class="stage-info">
+            <div class="stage-title">Pass 1 이미지 필터 (Claude Haiku)</div>
+            <div class="stage-sub">claude-haiku-4-5 · 이미지 7개 → 상품 이미지 sha1 배열 반환</div>
+            <div class="stage-tags">
+              <span class="stag haiku">Claude Haiku</span>
+              <span class="stag haiku">이미지 수 &gt; 4일 때만 실행</span>
+              <span class="stag py">배너·광고 이미지 제거</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">~1.5s</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="sec-title">실행 조건</div>
+            <div style="font-size:12.5px;color:#4B5563;line-height:1.8;">
+              이미지 수가 4개 이하이면 <b>Skip</b> — 모든 이미지를 Pass 2에 그대로 전달.<br>
+              4개 초과이면 Haiku로 비용이 큰 Sonnet에 넘기기 전에 배너·광고·사이즈표 등
+              <b>비상품 이미지를 먼저 필터링</b>하여 Pass 2 입력 토큰을 줄임.
+            </div>
+          </div>
+          <div class="stage-section">
+            <button class="btn-prompt" onclick="togglePrompt(this, 'prompt-haiku')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Haiku 필터 프롬프트 보기 (call_claude_filter)
+            </button>
+            <div class="prompt-block" id="prompt-haiku">
+              <div class="prompt-desc">
+                <b>파일:</b> embedder/enrich_claude.py · <code>call_claude_filter()</code> (L527~576)<br>
+                <b>모델:</b> <code>claude-haiku-4-5-20251001</code> · 이미지 전체 + 텍스트 프롬프트<br>
+                <b>출력:</b> JSON — 상품 이미지 sha1 배열
+              </div>
+              <div class="code-block"><span class="hl">## 시스템 프롬프트</span>
+당신은 쇼핑몰 상품 이미지를 분류하는 전문가입니다.
+각 이미지를 보고, 실제 상품을 보여주는 이미지인지 판단하세요.
+
+<span class="hl">## 이미지 분류 기준</span>
+상품 이미지(포함):
+  - 상품 단독 촬영 (흰 배경, 스튜디오)
+  - 모델 착용 사진 (상품이 주인공)
+  - 상품 디테일 클로즈업
+
+비상품 이미지(제외):
+  - 사이즈 안내표, 소재 설명 배너
+  - 브랜드/이벤트/시즌 광고 배너
+  - 배송·교환·반품 안내 이미지
+  - 다른 상품 추천 이미지
+  - 브랜드 로고 단독 이미지
+
+<span class="hl">## 출력 형식</span>
+반드시 아래 JSON만 출력하세요 (다른 텍스트 금지):
+{"product_image_sha1s": ["sha1_hex_1", "sha1_hex_2", ...]}
+
+상품 이미지로 판단한 것들의 sha1 해시값만 배열에 포함하세요.
+확실하지 않으면 포함시키세요 (보수적으로 필터링).</div>
+            </div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">필터 결과</div>
+            <div class="code-block">
+<span class="comment">// Haiku 응답 — 7개 이미지 중 상품 이미지 sha1 배열</span>
+<span class="json-punc">{</span>
+  <span class="json-key">"product_image_sha1s"</span><span class="json-punc">:</span> <span class="json-punc">[</span>
+    <span class="json-str">"a3f8c2d1e4b5..."</span><span class="json-punc">,</span>  <span class="comment">← img_01.jpg (메인 상품)</span>
+    <span class="json-str">"b7e1a9f3c0d2..."</span><span class="json-punc">,</span>  <span class="comment">← img_02.jpg (착용 샷)</span>
+    <span class="json-str">"c9d4b2e8f1a3..."</span><span class="json-punc">,</span>  <span class="comment">← img_03.jpg (디테일)</span>
+    <span class="json-str">"f2a1c8d7e3b9..."</span>   <span class="comment">← img_05.jpg (코디 컷)</span>
+  <span class="json-punc">]</span>
+<span class="json-punc">}</span>
+<span class="comment">// img_04 (사이즈 배너), img_06 (소재 배너), img_07 (광고 배너) → 제외
+// 7개 → 4개로 축소, Pass 2로 전달</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>필터된 4개 이미지 + body_text + VLM 캡션 → claude CLI subprocess (Pass 2)</span>
+      </div>
+    </div>
+
+    <!-- ENRICH STEP 4: Pass 2 Claude Sonnet -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-sonnet">4</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-sonnet">🤖</div>
+          <div class="stage-info">
+            <div class="stage-title">Pass 2 상품 분석 (Claude Sonnet CLI)</div>
+            <div class="stage-sub">claude -p --model sonnet · SYSTEM_PROMPT + OUTPUT_SCHEMA + 이미지 4장</div>
+            <div class="stage-tags">
+              <span class="stag claude">Claude Sonnet</span>
+              <span class="stag claude">4관점 설명 생성</span>
+              <span class="stag claude">태그 추출</span>
+              <span class="stag claude">카테고리 분류</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">~22s</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="sec-title">실행 방식</div>
+            <div class="code-block">
+<span class="comment"># enrich_claude.py — run_enrich_one()</span>
+<span class="comment"># claude CLI를 subprocess로 호출 (claude -p --model sonnet)</span>
+result = subprocess.run(
+    [<span class="json-str">"claude"</span>, <span class="json-str">"-p"</span>, <span class="json-str">"--model"</span>, <span class="json-str">"claude-sonnet-4-6"</span>],
+    input=json.dumps(user_message),  <span class="comment"># make_user_prompt() 결과</span>
+    capture_output=True, text=True,
+    env={<span class="json-str">"ANTHROPIC_API_KEY"</span>: CLAUDE_API_KEY, ...}
+)
+output_json = json.loads(result.stdout)</div>
+          </div>
+          <div class="stage-section">
+            <button class="btn-prompt" onclick="togglePrompt(this, 'prompt-system')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              SYSTEM_PROMPT 보기 (enrich_claude.py L238)
+            </button>
+            <div class="prompt-block" id="prompt-system">
+              <div class="prompt-desc">
+                <b>파일:</b> embedder/enrich_claude.py · <code>SYSTEM_PROMPT</code> (L238~293)<br>
+                <b>역할:</b> 한국 쇼핑몰 상품 데이터 분석 전문가 · 57줄 지침
+              </div>
+              <div class="code-block" style="max-height:480px;">당신은 한국 패션·라이프스타일 쇼핑몰 상품 데이터 분석 전문가입니다.
+상품 URL, 본문 텍스트, 이미지를 보고 아래 OUTPUT SCHEMA에 맞는 JSON을 생성하세요.
+
+<span class="hl">## 5가지 추출 유형</span>
+1. category      — 대/중/소분류 정확히 분류
+2. product       — 상품명, 브랜드, 가격, 재질, 치수 등 기본정보
+3. common_attributes — 성별, 연령대, 시즌, 소재, 컬러
+4. tags          — 검색에 유용한 키워드 태그 배열
+5. descriptions  — 4관점 설명 (situation/material/style/persona)
+   - situation: 어떤 상황·TPO에 잘 어울리는지 (데이트, 출근, 여행 등)
+   - material:  소재·질감·내구성 중심 설명
+   - style:     핏·실루엣·디자인 특징 중심
+   - persona:   어떤 성향/스타일의 사람에게 어울리는지
+
+<span class="hl">## 절대 규칙 (오염 방지)</span>
+- 이미지에 보이지 않는 속성을 지어내지 마라
+- 본문에 없는 소재·기능을 추가하지 마라
+- 마케팅 문구 그대로 복사 금지 ("최고의", "완벽한", "혁신적인" 등)
+- 가격 정보는 제공된 데이터만 사용, 임의 추측 금지
+- 세트 상품이 아니면 set_components 빈 배열
+- trap_detection: 의심스러운 정보가 있으면 반드시 기록
+
+<span class="hl">## 마케팅 언어 금지 목록</span>
+최고의, 완벽한, 혁신적인, 독보적인, 압도적인, 최강의,
+럭셔리한 느낌, 고급스러운 소재 (소재가 명확하면 명확히 쓸 것),
+누구에게나 어울리는, 모든 코디에 매치되는
+
+<span class="hl">## make_user_prompt 형식</span>
+다음 정보를 바탕으로 상품 정보를 추출하세요:
+
+상품기본정보:
+  상품명: {product_name}
+  URL: {url}
+  플랫폼: {platform}
+  가격: {price}원 / 판매가: {sale_price}원
+
+본문텍스트:
+{body_text}
+
+이미지파일경로:
+{image_paths}  ← base64 인코딩된 이미지 포함
+
+<span class="comment">--- embedder/enrich_claude.py L238 참조 ---</span></div>
+            </div>
+          </div>
+          <div class="stage-section" style="margin-top:10px;">
+            <button class="btn-prompt" onclick="togglePrompt(this, 'prompt-schema')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              OUTPUT_SCHEMA 보기 (enrich_claude.py L91)
+            </button>
+            <div class="prompt-block" id="prompt-schema">
+              <div class="prompt-desc">
+                <b>파일:</b> embedder/enrich_claude.py · <code>OUTPUT_SCHEMA</code> (L91~235)<br>
+                <b>Claude가 반드시 이 스키마에 맞게 JSON을 출력해야 함</b>
+              </div>
+              <div class="code-block" style="max-height:440px;">
+<span class="json-punc">{</span>
+  <span class="json-key">"category"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+    <span class="json-key">"large"</span><span class="json-punc">:</span> <span class="json-str">"주얼리"</span><span class="json-punc">,</span>  <span class="json-key">"medium"</span><span class="json-punc">:</span> <span class="json-str">"귀걸이"</span><span class="json-punc">,</span>  <span class="json-key">"small"</span><span class="json-punc">:</span> <span class="json-str">"드롭귀걸이"</span>
+  <span class="json-punc">},</span>
+  <span class="json-key">"product"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+    <span class="json-key">"name"</span><span class="json-punc">:</span>    <span class="json-str">"string"</span><span class="json-punc">,</span>
+    <span class="json-key">"brand"</span><span class="json-punc">:</span>   <span class="json-str">"string | null"</span><span class="json-punc">,</span>
+    <span class="json-key">"material"</span><span class="json-punc">:</span><span class="json-str">"string | null"</span><span class="json-punc">,</span>
+    <span class="json-key">"weight_g"</span><span class="json-punc">:</span><span class="json-str">"number | null"</span><span class="json-punc">,</span>
+    <span class="json-key">"size_mm"</span><span class="json-punc">:</span> <span class="json-str">"string | null"</span>
+  <span class="json-punc">},</span>
+  <span class="json-key">"common_attributes"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+    <span class="json-key">"gender"</span><span class="json-punc">:</span>     <span class="json-str">"여성 | 남성 | 공용"</span><span class="json-punc">,</span>
+    <span class="json-key">"age_group"</span><span class="json-punc">:</span>  <span class="json-str">"10대 | 20대 | 30대 | ..."</span><span class="json-punc">,</span>
+    <span class="json-key">"season"</span><span class="json-punc">:</span>    <span class="json-str">"['봄', '여름', ...]"</span><span class="json-punc">,</span>
+    <span class="json-key">"color"</span><span class="json-punc">:</span>     <span class="json-str">"['골드', ...]"</span><span class="json-punc">,</span>
+    <span class="json-key">"closure"</span><span class="json-punc">:</span>   <span class="json-str">"포스트형 | 클립형 | ..."</span>
+  <span class="json-punc">},</span>
+  <span class="json-key">"tags"</span><span class="json-punc">:</span> <span class="json-str">["14k", "골드귀걸이", "드롭귀걸이", "봄귀걸이", "데이트룩", "플라워", "니켈프리", ...]</span><span class="json-punc">,</span>
+  <span class="json-key">"descriptions"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+    <span class="json-key">"situation"</span><span class="json-punc">:</span> <span class="json-str">"봄 데이트, 소풍, 브런치 카페 등 화사한 분위기의 일상 외출에 잘 어울립니다. ..."</span><span class="json-punc">,</span>
+    <span class="json-key">"material"</span><span class="json-punc">:</span>  <span class="json-str">"14k 골드 소재로 니켈프리 인증을 받아 민감한 피부에도 안전합니다. ..."</span><span class="json-punc">,</span>
+    <span class="json-key">"style"</span><span class="json-punc">:</span>     <span class="json-str">"플라워 모티프의 드롭형 디자인으로 여성스러운 실루엣을 연출합니다. ..."</span><span class="json-punc">,</span>
+    <span class="json-key">"persona"</span><span class="json-punc">:</span>   <span class="json-str">"심플한 코디에 포인트 액세서리를 즐기는 20-30대 여성에게 잘 어울립니다. ..."</span>
+  <span class="json-punc">},</span>
+  <span class="json-key">"images"</span><span class="json-punc">:</span> <span class="json-punc">[{</span><span class="json-key">"sha1"</span><span class="json-punc">:</span><span class="json-str">"..."</span><span class="json-punc">,</span> <span class="json-key">"type"</span><span class="json-punc">:</span><span class="json-str">"main|detail|wearing|..."</span><span class="json-punc">,</span> <span class="json-key">"url"</span><span class="json-punc">:</span><span class="json-str">"..."</span><span class="json-punc">}],</span>
+  <span class="json-key">"set_components"</span><span class="json-punc">:</span>        <span class="json-punc">[],</span>
+  <span class="json-key">"related_products"</span><span class="json-punc">:</span>      <span class="json-punc">[],</span>
+  <span class="json-key">"ignored_observations"</span><span class="json-punc">:</span>  <span class="json-punc">[],</span>
+  <span class="json-key">"trap_detection"</span><span class="json-punc">:</span>        <span class="json-punc">[]</span>
+<span class="json-punc">}</span></div>
+            </div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">출력 → product_enriched upsert</div>
+            <div class="code-block">
+<span class="comment">-- enrich_claude.py → upsert_enriched() → product_enriched 테이블</span>
+INSERT INTO product_enriched (
+    rv_product_id, advertiser_id,
+    category, brand, material,
+    gender, age_group, season, color,
+    tags,
+    desc_situation, desc_material, desc_style, desc_persona,
+    images, enrich_status, enriched_at
+) VALUES (
+    1234, 1,
+    <span class="json-str">'귀걸이'</span>,  <span class="comment">-- category (medium)</span>
+    <span class="json-str">'루브르파리'</span>,
+    <span class="json-str">'14k 골드'</span>,
+    <span class="json-str">'여성'</span>, <span class="json-str">'20대,30대'</span>, <span class="json-str">'{봄,여름}'</span>, <span class="json-str">'{골드}'</span>,
+    <span class="json-str">'{14k,골드귀걸이,드롭귀걸이,봄귀걸이,데이트룩,플라워,니켈프리}'</span>,
+    <span class="json-str">'봄 데이트, 소풍, 브런치 카페 등 화사한 분위기...'</span>,
+    <span class="json-str">'14k 골드 소재로 니켈프리 인증을 받아 민감한 피부에도...'</span>,
+    <span class="json-str">'플라워 모티프의 드롭형 디자인으로 여성스러운 실루엣...'</span>,
+    <span class="json-str">'심플한 코디에 포인트 액세서리를 즐기는 20-30대 여성...'</span>,
+    <span class="json-str">'[{"sha1":"a3f8...","type":"main","url":"..."}]'</span>::jsonb,
+    <span class="hl">'enriched'</span>,
+    NOW()
+) ON CONFLICT (rv_product_id) DO UPDATE SET ...;
+<span class="comment">-- enrich_status: 'enriched' → 다음 단계로</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>4관점 설명 (situation/material/style/persona) → BGE-M3 벡터화 → product_descriptions</span>
+      </div>
+    </div>
+
+    <!-- ENRICH STEP 5: BGE-M3 벡터화 -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-embed2">5</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-embed2">🔢</div>
+          <div class="stage-info">
+            <div class="stage-title">BGE-M3 벡터화 (embed_descriptions.py)</div>
+            <div class="stage-sub">4관점 설명 각각 → Dense 1024d + Sparse + 형태소 + ColBERT 토큰</div>
+            <div class="stage-tags">
+              <span class="stag embed">Dense 1024d</span>
+              <span class="stag embed">Sparse</span>
+              <span class="stag embed">형태소</span>
+              <span class="stag embed">ColBERT</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">~3s</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="sec-title">처리 과정</div>
+            <div class="code-block">
+<span class="comment"># embed_descriptions.py</span>
+<span class="comment"># product_enriched에서 enrich_status='enriched' 인 상품 조회</span>
+
+for product in pending_products:
+    descs = {
+        <span class="json-str">'situation'</span>: product.desc_situation,
+        <span class="json-str">'material'</span>:  product.desc_material,
+        <span class="json-str">'style'</span>:     product.desc_style,
+        <span class="json-str">'persona'</span>:   product.desc_persona,
+    }
+    for perspective, text in descs.items():
+        <span class="comment"># :8001/embed → dense 1024d</span>
+        dense_vec = call_embed_dense(text)          <span class="comment"># [0.023, -0.041, ...] (1024d)</span>
+        <span class="comment"># :8002/embed_sparse → BGE sparse vocab</span>
+        sparse_vec = call_embed_sparse(text)        <span class="comment"># {token_id: weight, ...}</span>
+        <span class="comment"># :8002/embed_morpheme → Kiwi TF-IDF</span>
+        morph_vec = call_embed_morpheme(text)       <span class="comment"># {token_id: weight, ...}</span>
+        <span class="comment"># :8003/embed_colbert → per-token 128d vecs</span>
+        colbert_vecs = call_embed_colbert(text)     <span class="comment"># N×128 행렬</span>
+
+        upsert_product_descriptions(
+            rv_product_id=product.id,
+            perspective=perspective,
+            description=text,
+            embedding_bge=dense_vec,
+            embedding_sparse=sparse_vec,
+            embedding_morpheme=morph_vec,
+            colbert_vecs=colbert_vecs,
+        )
+
+    <span class="comment"># 4관점 모두 완료 → enrich_status = 'embedded'</span>
+    update_enrich_status(product.id, <span class="hl">'embedded'</span>)</div>
+          </div>
+          <div class="stage-section">
+            <div class="sec-title">product_descriptions 저장 결과</div>
+            <div class="code-block">
+rv_product_id | perspective | description                    | embedding_bge | colbert_vecs
+──────────────────────────────────────────────────────────────────────────────────────────
+    1234      | situation   | "봄 데이트, 소풍, 브런치..."   | vector(1024)  | N×128 행렬
+    1234      | material    | "14k 골드 소재로 니켈프리..."  | vector(1024)  | N×128 행렬
+    1234      | style       | "플라워 모티프 드롭형 디자인..." | vector(1024)  | N×128 행렬
+    1234      | persona     | "심플한 코디에 포인트 액세서리..." | vector(1024)| N×128 행렬
+<span class="comment">-- 상품 1개 = 4개 행 삽입
+-- 이 벡터들이 검색 파이프라인 Stage 3에서 pgvector로 검색됨</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-line-dot"></div>
+      <div class="flow-arrow-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        <span>enrich_status = 'embedded' → 검색 가능 상태 완료</span>
+      </div>
+    </div>
+
+    <!-- ENRICH STEP 6: 완료 -->
+    <div class="flow-stage">
+      <div class="stage-num"><div class="stage-num-inner c-done">6</div></div>
+      <div class="stage-card">
+        <div class="stage-head" onclick="toggleStage(this)">
+          <div class="stage-icon s-done">✅</div>
+          <div class="stage-info">
+            <div class="stage-title">검색 가능 상태 완료</div>
+            <div class="stage-sub">enrich_status = 'embedded' · 검색 파이프라인 Stage 3에서 즉시 검색됨</div>
+            <div class="stage-tags">
+              <span class="stag db">pgvector 인덱스 반영</span>
+              <span class="stag db">이력 추적 가능</span>
+            </div>
+          </div>
+          <div class="stage-right">
+            <div class="stage-ms">즉시</div>
+            <div class="stage-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="stage-section">
+            <div class="sec-title">상태 흐름</div>
+            <div style="font-family:ui-monospace,monospace;font-size:12.5px;line-height:2.2;color:var(--text);">
+              <span style="background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;">pending</span>
+              &nbsp;→&nbsp;
+              <span style="background:#DBEAFE;color:#1D4ED8;padding:2px 8px;border-radius:4px;">scraping</span>
+              &nbsp;→&nbsp;
+              <span style="background:#FEE2E2;color:#B91C1C;padding:2px 8px;border-radius:4px;">enriched</span>
+              &nbsp;→&nbsp;
+              <span style="background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:4px;font-weight:700;">embedded ✓</span>
+            </div>
+            <p style="font-size:12.5px;color:#4B5563;margin:10px 0 0;line-height:1.8;">
+              <code>embedded</code> 상태가 되면 <b>검색 파이프라인 Tab 1의 Stage 3</b>에서
+              <code>product_descriptions</code> 조인 시 이 상품의 4관점 벡터가 검색에 포함됩니다.
+              오류 시 <code>error</code> 상태로 기록되며, 재시도 시 <code>pending</code>으로 초기화합니다.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.flow (enrich) -->
+
+  <!-- 비용 요약 (Tab 2) -->
+  <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-top:24px;box-shadow:0 1px 4px rgba(0,0,0,.04);">
+    <div style="font-size:12px;font-weight:700;color:var(--text-4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">상품 1개 처리 비용 (예시 기준)</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+      <div style="background:#FFF7ED;border-radius:8px;padding:10px 14px;">
+        <div style="font-size:11px;color:#C2410C;font-weight:700;">VLM (Groq, 4장)</div>
+        <div style="font-size:18px;font-weight:800;color:#EA580C;margin:4px 0 2px;font-family:monospace;">$0.0010</div>
+        <div style="font-size:11px;color:var(--text-4);">≈ ₩1.5</div>
+      </div>
+      <div style="background:#FAE8FF;border-radius:8px;padding:10px 14px;">
+        <div style="font-size:11px;color:#86198F;font-weight:700;">Pass 1 필터 (Haiku)</div>
+        <div style="font-size:18px;font-weight:800;color:#A21CAF;margin:4px 0 2px;font-family:monospace;">$0.0003</div>
+        <div style="font-size:11px;color:var(--text-4);">≈ ₩0.45</div>
+      </div>
+      <div style="background:#EDE9FE;border-radius:8px;padding:10px 14px;">
+        <div style="font-size:11px;color:#6D28D9;font-weight:700;">Pass 2 분석 (Sonnet)</div>
+        <div style="font-size:18px;font-weight:800;color:#7C3AED;margin:4px 0 2px;font-family:monospace;">$0.0150</div>
+        <div style="font-size:11px;color:var(--text-4);">≈ ₩22.5</div>
+      </div>
+      <div style="background:#EFF6FF;border-radius:8px;padding:10px 14px;">
+        <div style="font-size:11px;color:#1D4ED8;font-weight:700;">BGE-M3 임베딩 (로컬)</div>
+        <div style="font-size:18px;font-weight:800;color:#2563EB;margin:4px 0 2px;font-family:monospace;">$0.0000</div>
+        <div style="font-size:11px;color:var(--text-4);">자체 서버 (무료)</div>
+      </div>
+      <div style="background:#F9FAFB;border:1px solid var(--line);border-radius:8px;padding:10px 14px;">
+        <div style="font-size:11px;color:var(--text-4);font-weight:700;">합계</div>
+        <div style="font-size:18px;font-weight:800;color:var(--text);margin:4px 0 2px;font-family:monospace;">$0.0163</div>
+        <div style="font-size:11px;color:var(--text-4);">≈ ₩24.5 / 상품 1개</div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /#tab-enrich -->
+
+</main>
+</div><!-- /.shell -->
+<script src="partials.js"></script>
+<script>
+/* ── 예시 쿼리 데이터 ─────────────────────────── */
+const QUERIES = [
+  {
+    raw:       "봄에 데이트하기 좋은 14k 귀걸이 5만원대",
+    corrected: "봄에 데이트하기 좋은 14k 귀걸이 5만원대",
+    semantic:  "봄 데이트 14k 귀걸이",
+    cat:       "귀걸이",
+    persp:     "situation",
+    kw:        '"14k"',
+    pmin:      "45000",
+    pmax:      "55000",
+    notes:     "봄 데이트 상황 + 14k 소재 + 5만원대",
+    fCat:      "'%귀걸이%'",
+    fPrice:    "45000 AND 55000",
+    fKw:       "'%14k%'",
+    embedInput:'"봄 데이트 14k 귀걸이"',
+    corrNote:  "(교정 없음)",
+  },
+  {
+    raw:       "시원해 보이고 얇고 가벼운 악세사 리 추천해줘",
+    corrected: "시원해 보이고 얇고 가벼운 악세사리 추천해줘",
+    semantic:  "시원한 느낌 얇고 가벼운 악세사리",
+    cat:       "null",
+    persp:     "style",
+    kw:        '(없음)',
+    pmin:      "null",
+    pmax:      "null",
+    notes:     "오타 교정: '악세사 리'→'악세사리'. 악세사리는 포괄어 → category_contains=null",
+    fCat:      "(필터 없음)",
+    fPrice:    "(필터 없음)",
+    fKw:       "(필터 없음)",
+    embedInput:'"시원한 느낌 얇고 가벼운 악세사리"',
+    corrNote:  "✓ 오타 교정됨: '악세사 리' → '악세사리'",
+  },
+  {
+    raw:       "손예진 귀걸이",
+    corrected: "손예진 귀걸이",
+    semantic:  "손예진 귀걸이",
+    cat:       "귀걸이",
+    persp:     "null",
+    kw:        '"손예진"',
+    pmin:      "null",
+    pmax:      "null",
+    notes:     "특정 연예인 이름 직접 명시 → keyword_filters에 이름 추가",
+    fCat:      "'%귀걸이%'",
+    fPrice:    "(필터 없음)",
+    fKw:       "'%손예진%'",
+    embedInput:'"손예진 귀걸이"',
+    corrNote:  "(교정 없음)",
+  },
+];
+
+function switchQuery(idx) {
+  const q = QUERIES[parseInt(idx)];
+  document.getElementById('q-raw-sub').textContent  = 'raw_query: "' + q.raw + '"';
+  document.getElementById('q-req-query').textContent = '"' + q.raw + '"';
+  document.getElementById('q-corrected').textContent  = '"' + q.corrected + '"';
+  document.getElementById('q-semantic').textContent   = '"' + q.semantic + '"';
+  document.getElementById('q-cat').textContent        = q.cat === 'null' ? 'null' : '"' + q.cat + '"';
+  document.getElementById('q-persp').textContent      = q.persp === 'null' ? 'null' : '"' + q.persp + '"';
+  document.getElementById('q-kw').textContent         = q.kw;
+  document.getElementById('q-pmin').textContent       = q.pmin;
+  document.getElementById('q-pmax').textContent       = q.pmax;
+  document.getElementById('q-notes').textContent      = '"' + q.notes + '"';
+  document.getElementById('f-cat').textContent        = q.fCat;
+  document.getElementById('f-price').textContent      = q.fPrice;
+  document.getElementById('f-kw').textContent         = q.fKw;
+  document.getElementById('embed-input').textContent  = q.embedInput;
+}
+
+/* ── 스테이지 토글 ──────────────────────────────── */
+function toggleStage(headEl) {
+  const body   = headEl.closest('.stage-card').querySelector('.stage-body');
+  const toggle = headEl.querySelector('.stage-toggle');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  toggle.classList.toggle('open', !isOpen);
+}
+
+/* ── 프롬프트 토글 ──────────────────────────────── */
+function togglePrompt(btn, id) {
+  const block = document.getElementById(id);
+  const isOpen = block.classList.contains('open');
+  block.classList.toggle('open', !isOpen);
+  btn.classList.toggle('active', !isOpen);
+  btn.querySelector('svg + *') || btn;
+  const textNode = [...btn.childNodes].find(n => n.nodeType === 3);
+  // just toggle btn active state; text label stays
+}
+
+/* ── 탭 2 예시 선택 (확장용 stub) ───────────── */
+function switchEnrich(idx) { /* 추후 확장 */ }
+
+/* ── 탭 전환 ─────────────────────────────────── */
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ── 기본: 각 탭의 첫 2개 스테이지 열기 ─────── */
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('#tab-search .stage-card').forEach((card, i) => {
+    if (i < 3) {
+      card.querySelector('.stage-body').classList.add('open');
+      card.querySelector('.stage-toggle').classList.add('open');
+    }
+  });
+  document.querySelectorAll('#tab-enrich .stage-card').forEach((card, i) => {
+    if (i < 2) {
+      card.querySelector('.stage-body').classList.add('open');
+      card.querySelector('.stage-toggle').classList.add('open');
+    }
+  });
+});
+</script>
+</body>
+</html>

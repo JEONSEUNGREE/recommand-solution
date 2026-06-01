@@ -151,7 +151,13 @@ public class ProductEnrichService {
             throw new IllegalStateException("batchFetchApi: host_type must be makeshop");
         }
         java.util.List<String> uids = jdbc.queryForList(
-                "SELECT product_code FROM rv_products WHERE advertiser_id=? AND scrape_status IS NULL ORDER BY id ASC LIMIT ?",
+                "SELECT product_code FROM rv_products" +
+                " WHERE advertiser_id=? AND scrape_status IS NULL" +
+                "   AND (raw_payload IS NULL OR raw_payload->>'display' = 'Y')" +
+                "   AND product_name NOT LIKE '%고객님%'" +
+                "   AND product_name NOT LIKE '%결재창%'" +
+                "   AND product_name NOT LIKE '%결제창%'" +
+                " ORDER BY id ASC LIMIT ?",
                 String.class, advertiserId, count
         );
         java.util.List<String> nameSels = selectors.findEnabled(advertiserId, "name").stream().map(AdvertiserSelector::selector).toList();
@@ -294,7 +300,13 @@ public class ProductEnrichService {
         if (concurrency < 1) concurrency = 1;
         if (concurrency > 32) concurrency = 32;
         java.util.List<String> codes = jdbc.queryForList(
-                "SELECT product_code FROM rv_products WHERE advertiser_id=? AND scrape_status IS NULL ORDER BY id ASC LIMIT ?",
+                "SELECT product_code FROM rv_products" +
+                " WHERE advertiser_id=? AND scrape_status IS NULL" +
+                "   AND (raw_payload IS NULL OR raw_payload->>'display' = 'Y')" +
+                "   AND product_name NOT LIKE '%고객님%'" +
+                "   AND product_name NOT LIKE '%결재창%'" +
+                "   AND product_name NOT LIKE '%결제창%'" +
+                " ORDER BY id ASC LIMIT ?",
                 String.class, advertiserId, count
         );
         log.info("[BatchFetch] advertiser={} picked={} concurrency={} interval={}ms",
@@ -377,6 +389,11 @@ public class ProductEnrichService {
 
     /** 단일 상품 멀티모달 LLM enrich (즉시 동기 호출). 이미지 N장으로 1번 호출. */
     public JsonNode enrichLlm(long advertiserId, String productCode, String model, int imageLimit) throws IOException {
+        return enrichLlm(advertiserId, productCode, model, imageLimit, "cli");
+    }
+
+    /** backend 지정 버전 — "cli" (claude.exe) 또는 "api" (ANTHROPIC_API_KEY). */
+    public JsonNode enrichLlm(long advertiserId, String productCode, String model, int imageLimit, String backend) throws IOException {
         Long rvId = jdbc.queryForObject(
                 "SELECT id FROM rv_products WHERE advertiser_id=? AND product_code=?",
                 Long.class, advertiserId, productCode
@@ -387,6 +404,7 @@ public class ProductEnrichService {
         payload.put("model", model == null || model.isBlank() ? "haiku" : model);
         payload.put("image_limit", imageLimit < 1 ? 10 : Math.min(imageLimit, 100));
         payload.put("save_db", true);
+        payload.put("backend", backend == null || backend.isBlank() ? "cli" : backend);
         return call("/enrich-llm/run", mapper.writeValueAsString(payload));
     }
 
@@ -444,12 +462,25 @@ public class ProductEnrichService {
                                                        int concurrency,
                                                        long intervalMs,
                                                        String embedBackend) {
+        return batchEnrich(advertiserId, count, model, imageLimit, concurrency, intervalMs, embedBackend, "cli");
+    }
+
+    /** backend 지정 버전 — "cli" (claude.exe) 또는 "api" (ANTHROPIC_API_KEY). */
+    public java.util.Map<String, Object> batchEnrich(long advertiserId,
+                                                       int count,
+                                                       String model,
+                                                       int imageLimit,
+                                                       int concurrency,
+                                                       long intervalMs,
+                                                       String embedBackend,
+                                                       String backend) {
         if (concurrency < 1) concurrency = 1;
         if (concurrency > 8) concurrency = 8;
         if (imageLimit < 1) imageLimit = 1;
         if (imageLimit > 100) imageLimit = 100;
         if (model == null || model.isBlank()) model = "haiku";
         if (embedBackend == null || embedBackend.isBlank()) embedBackend = "bge";
+        if (backend == null || backend.isBlank()) backend = "cli";
 
         // 벡터화까지 완료 안 된 상품을 모두 — product_enriched에 없거나 enrich_status != 'embedded'
         java.util.List<Long> ids = jdbc.queryForList(
@@ -480,6 +511,7 @@ public class ProductEnrichService {
         final int fImageLimit = imageLimit;
         final long fIntervalMs = intervalMs;
         final String fEmbedBackend = embedBackend;
+        final String fBackend = backend;
 
         for (Long rvId : ids) {
             if (p.cancelFlag.get()) break;
@@ -495,6 +527,7 @@ public class ProductEnrichService {
                     payload.put("also_embed", true);
                     payload.put("embed_backend", fEmbedBackend);
                     payload.put("skip_enrich_if_done", true);
+                    payload.put("backend", fBackend);
                     String body = mapper.writeValueAsString(payload);
                     Request.Builder rb = new Request.Builder()
                             .url(embedderBase + "/enrich-llm/run")
